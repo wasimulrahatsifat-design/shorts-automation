@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
+import { Octokit } from 'octokit';
 
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -9,6 +10,11 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Initialize Gemini API
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+// Initialize Octokit
+const octokit = new Octokit({
+  auth: process.env.GITHUB_TOKEN,
+});
 
 export async function POST() {
   try {
@@ -49,6 +55,29 @@ export async function POST() {
 
     if (error) {
       throw error;
+    }
+
+    const videoId = dbData[0].id;
+    const owner = process.env.GITHUB_OWNER;
+    const repo = process.env.GITHUB_REPO;
+
+    if (!owner || !repo) {
+       console.warn('GITHUB_OWNER or GITHUB_REPO is not configured. Skipping workflow trigger.');
+    } else {
+      try {
+        await octokit.rest.actions.createWorkflowDispatch({
+          owner,
+          repo,
+          workflow_id: 'render-video.yml',
+          ref: 'main',
+          inputs: {
+            video_id: videoId,
+          },
+        });
+        console.log(`Successfully triggered GitHub Action for video_id: ${videoId}`);
+      } catch (ghError) {
+        console.error('Failed to trigger GitHub Action:', ghError);
+      }
     }
 
     return NextResponse.json({ success: true, data: dbData });
