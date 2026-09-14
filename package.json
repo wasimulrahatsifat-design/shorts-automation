@@ -17,7 +17,8 @@
     "octokit": "^5.0.5",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "remotion": "^4.0.524"
+    "remotion": "^4.0.524",
+    "zod": "4.5.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

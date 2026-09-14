@@ -40,7 +40,7 @@ async function main() {
   const outPath = path.join(process.cwd(), 'out.mp4');
   console.log('Rendering video...');
   try {
-    execSync(`npx remotion render remotion/Root.tsx DataComparison ${outPath} --props=${propsPath}`, { stdio: 'inherit' });
+    execSync(`npx remotion render remotion/index.ts DataComparison ${outPath} --props=${propsPath}`, { stdio: 'inherit' });
   } catch (error) {
     console.error('Failed to render video:', error);
     process.exit(1);
