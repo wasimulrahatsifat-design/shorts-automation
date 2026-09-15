@@ -19,9 +19,10 @@ const octokit = new Octokit({
 export async function POST() {
   try {
     const prompt = `Generate a unique "Data Comparison/Racing Bar Chart" topic (e.g., Most populated countries). 
-    Return a structured JSON object with two fields:
+    Return a structured JSON object with three fields:
     - "topic": The generated topic as a string.
-    - "data": An array of objects where each object has "label" (string), "value" (number), and "image_keyword" (string).
+    - "script": A short, fast-paced, highly engaging 10-15 second voiceover hook script for a YouTube Short.
+    - "items": An array of objects where each object has "label" (string), "value" (number), and "image_keyword" (string).
     Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
 
     const response = await ai.models.generateContent({
@@ -35,9 +36,9 @@ export async function POST() {
     const cleanedText = text.replace(/```json\n?|```/g, '').trim();
     const generatedData = JSON.parse(cleanedText);
 
-    const { topic, data } = generatedData;
+    const { topic, script, items } = generatedData;
 
-    if (!topic || !data || !Array.isArray(data)) {
+    if (!topic || !script || !items || !Array.isArray(items)) {
       throw new Error('Invalid data format returned from Gemini.');
     }
 
@@ -47,7 +48,10 @@ export async function POST() {
       .insert([
         {
           topic: topic,
-          data_json: data,
+          data_json: {
+            script: script,
+            items: items
+          },
           status: 'Pending',
         },
       ])
