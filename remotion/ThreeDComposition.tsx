@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
-import { AbsoluteFill, useVideoConfig, useCurrentFrame, spring, Sequence } from 'remotion';
+import { AbsoluteFill, useVideoConfig, useCurrentFrame, spring, Sequence, Audio } from 'remotion';
 import { ThreeCanvas } from '@remotion/three';
 import { Text, useTexture } from '@react-three/drei';
+import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { DataJson } from './Composition';
 
@@ -77,24 +78,34 @@ const Pillar = ({ item, index, maxVal, totalItems, fps, frame }: { item: any, in
   );
 };
 
-const Scene = ({ items, fps, frame }: { items: any[], fps: number, frame: number }) => {
-  const maxVal = Math.max(...(items || []).map(d => d.value), 1);
-  const totalItems = items.length;
-
-  // Camera Pan Animation
+const CameraController = ({ fps, frame }: { fps: number, frame: number }) => {
+  const { camera } = useThree();
+  
   const cameraProgress = spring({
-    frame: frame,
+    frame,
     fps,
     config: { damping: 200, stiffness: 10 },
   });
   
-  // Camera moves from left to right slightly to give a dynamic feel
   const startX = -3;
   const endX = 3;
   const cameraX = startX + (endX - startX) * cameraProgress;
+  
+  camera.position.x = cameraX;
+  camera.position.y = 4;
+  camera.position.z = 12;
+  camera.lookAt(0, 2, 0); // Look slightly up towards the pillars
+  
+  return null;
+};
+
+const Scene = ({ items, fps, frame }: { items: any[], fps: number, frame: number }) => {
+  const maxVal = Math.max(...(items || []).map(d => d.value), 1);
+  const totalItems = items.length;
 
   return (
     <>
+      <CameraController fps={fps} frame={frame} />
       <ambientLight intensity={0.5} />
       <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
       
@@ -116,7 +127,7 @@ export const ThreeDComposition: React.FC<{ topic: string, data_json: DataJson }>
   const { width, height, fps } = useVideoConfig();
   const frame = useCurrentFrame();
 
-  const { script, items, show_subtitles } = data_json || {};
+  const { script, items, show_subtitles, tts_url } = data_json || {};
 
   const titleOpacity = spring({
     frame,
@@ -130,15 +141,14 @@ export const ThreeDComposition: React.FC<{ topic: string, data_json: DataJson }>
     config: { damping: 12 },
   });
 
-  // Calculate dynamic camera pan based on frame
-  const cameraX = Math.sin(frame / 300) * 5;
-
   return (
     <AbsoluteFill style={{ backgroundColor: 'black' }}>
+      {/* Audio Track */}
+      {tts_url && <Audio src={tts_url} />}
+
       <ThreeCanvas
         width={width}
         height={height}
-        camera={{ position: [cameraX, 4, 12], fov: 45 }}
       >
         <Scene items={items || []} fps={fps} frame={frame} />
       </ThreeCanvas>
