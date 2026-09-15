@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig, interpolateColors, Sequence, Audio, Img } from 'remotion';
+import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig, interpolateColors, Sequence, Audio, Img, staticFile } from 'remotion';
 
 interface DataItem {
   label: string;
@@ -347,7 +347,8 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
           opacity: winnerOpacity,
           transform: `scale(${winnerScale})`
         }}>
-          {/* Winner Sound Effect (Disabled for now) */}
+          {/* Winner Sound Effect */}
+          <Audio src={staticFile('winner.mp3')} volume={1} />
 
           <h1 style={{
             fontSize: 80,
