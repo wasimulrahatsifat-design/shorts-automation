@@ -7,10 +7,10 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     // 1. Fetch the row to get URLs
     const { data: video, error: fetchError } = await supabase

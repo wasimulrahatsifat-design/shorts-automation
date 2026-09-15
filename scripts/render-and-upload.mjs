@@ -44,7 +44,7 @@ async function main() {
   const frames = durationSeconds * 30;
 
   try {
-    execSync(`npx remotion render remotion/index.ts DataComparison ${outPath} --props=${propsPath} --frames=${frames}`, { stdio: 'inherit' });
+    execSync(`npx remotion render remotion/index.ts DataComparison ${outPath} --props=${propsPath} --frames=0-${frames - 1}`, { stdio: 'inherit' });
   } catch (error) {
     console.error('Failed to render video:', error);
     process.exit(1);

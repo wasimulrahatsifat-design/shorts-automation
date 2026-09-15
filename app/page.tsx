@@ -182,7 +182,7 @@ function VideoCard({ video, onDelete, onRewrite }: { video: VideoItem, onDelete:
           <div className="flex-1">
             <label className="text-xs text-gray-500 font-medium block mb-1">Target Duration: {duration}s</label>
             <input 
-              type="range" min="15" max="60" step="5"
+              type="range" min="15" max="180" step="5"
               value={duration}
               onChange={(e) => setDuration(parseInt(e.target.value))}
               className="w-full accent-blue-600"
