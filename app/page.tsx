@@ -18,18 +18,28 @@ type VideoItem = {
 };
 
 export default function Home() {
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [loading, setLoading] = useState(false);
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
-  const [showSubtitles, setShowSubtitles] = useState(true);
-  const [videoFormat, setVideoFormat] = useState('Data Comparison');
 
-  // Poll for updates every 5 seconds
+  // Step 1 State
+  const [topic, setTopic] = useState('');
+  const [videoFormat, setVideoFormat] = useState('Data Comparison');
+  const [duration, setDuration] = useState(15);
+  const [showSubtitles, setShowSubtitles] = useState(true);
+
+  // Step 2 State
+  const [draftJson, setDraftJson] = useState('');
+
+  // Poll for updates every 5 seconds on Step 3
   useEffect(() => {
-    fetchVideos();
-    const interval = setInterval(fetchVideos, 5000);
-    return () => clearInterval(interval);
-  }, []);
+    if (step === 3) {
+      fetchVideos();
+      const interval = setInterval(fetchVideos, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [step]);
 
   const fetchVideos = async () => {
     const { data, error } = await supabase
@@ -41,24 +51,70 @@ export default function Home() {
     }
   };
 
-  const handleGenerate = async () => {
+  const handleSuggestTopic = () => {
+    const suggestions = [
+      "Growth of Tech Companies over 10 years",
+      "Most spoken languages over time",
+      "Would you rather: Time travel vs Teleportation",
+      "Trivia: World Capitals",
+      "Population growth of megacities"
+    ];
+    setTopic(suggestions[Math.floor(Math.random() * suggestions.length)]);
+  };
+
+  const handleGenerateDraft = async () => {
     setLoading(true);
     setMessage(null);
     try {
-      const response = await fetch('/api/generate-topic', { 
+      const response = await fetch('/api/draft-script', { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ showSubtitles, videoFormat })
+        body: JSON.stringify({ topic, videoFormat })
       });
       const data = await response.json();
       if (response.ok && data.success) {
-        setMessage({ type: 'success', text: 'Video topic generated and queued!' });
-        fetchVideos(); // Instantly update
+        setDraftJson(JSON.stringify(data.data, null, 2));
+        setStep(2);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to generate.' });
+        setMessage({ type: 'error', text: data.error || 'Failed to generate draft.' });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Unexpected error.' });
+      setMessage({ type: 'error', text: 'Unexpected error generating draft.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleQueueVideo = async () => {
+    setLoading(true);
+    setMessage(null);
+    try {
+      let parsedJson;
+      try {
+        parsedJson = JSON.parse(draftJson);
+      } catch (e) {
+        throw new Error('Invalid JSON format. Please check your syntax.');
+      }
+
+      const response = await fetch('/api/queue-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          data_json: parsedJson, 
+          showSubtitles, 
+          duration 
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setMessage({ type: 'success', text: 'Video queued successfully and rendering started!' });
+        setStep(3); // Move to rendering and live progress step
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to queue video.' });
+      }
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error.message || 'Unexpected error queueing video.' });
     } finally {
       setLoading(false);
     }
@@ -100,43 +156,14 @@ export default function Home() {
       <div className="max-w-4xl mx-auto space-y-8">
         
         {/* Header Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-8 border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row justify-between items-center">
+        <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-8 border border-gray-100 dark:border-gray-700 flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Shorts Dashboard</h1>
-            <p className="text-gray-500 dark:text-gray-400">Control Panel for Video Generation</p>
+            <p className="text-gray-500 dark:text-gray-400">Step {step} of 3</p>
           </div>
-          <div className="flex flex-col md:flex-row gap-4 mt-6 md:mt-0 items-center">
-            <label className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-medium cursor-pointer">
-              <input 
-                type="checkbox" 
-                checked={showSubtitles} 
-                onChange={(e) => setShowSubtitles(e.target.checked)} 
-                className="w-5 h-5 accent-blue-600 rounded cursor-pointer"
-              />
-              Show Subtitles
-            </label>
-            <select
-              value={videoFormat}
-              onChange={(e) => setVideoFormat(e.target.value)}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-            >
-              <option value="Data Comparison">Data Comparison</option>
-              <option value="Would You Rather">Would You Rather</option>
-              <option value="Quiz">Quiz</option>
-            </select>
-            <Link href="/admin" className="px-6 py-3 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-all text-center">
-              Admin View
-            </Link>
-            <button
-              onClick={handleGenerate}
-              disabled={loading}
-              className={`px-6 py-3 rounded-xl text-white font-semibold transition-all w-full md:w-auto ${
-                loading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 shadow-md active:scale-95'
-              }`}
-            >
-              {loading ? 'Generating...' : 'Generate New Topic'}
-            </button>
-          </div>
+          <Link href="/admin" className="px-6 py-3 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-all text-center">
+            Admin View
+          </Link>
         </div>
 
         {message && (
@@ -145,22 +172,142 @@ export default function Home() {
           </div>
         )}
 
-        {/* Video List */}
-        <div className="grid grid-cols-1 gap-6">
-          {videos.map(video => (
-            <VideoCard 
-              key={video.id} 
-              video={video} 
-              onDelete={handleDelete} 
-              onRewrite={handleRewrite} 
-            />
-          ))}
-          {videos.length === 0 && (
-            <div className="text-center p-12 text-gray-500 bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700">
-              No videos yet. Generate one above!
+        {/* --- STEP 1: Settings & Topic Input --- */}
+        {step === 1 && (
+          <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-8 border border-gray-100 dark:border-gray-700 space-y-6">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Step 1: Setup & Topic</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Video Format</label>
+                <select
+                  value={videoFormat}
+                  onChange={(e) => setVideoFormat(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
+                >
+                  <option value="Data Comparison">Data Comparison</option>
+                  <option value="Would You Rather">Would You Rather</option>
+                  <option value="Quiz">Quiz</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Duration (Seconds)</label>
+                <input 
+                  type="number" 
+                  value={duration} 
+                  onChange={(e) => setDuration(parseInt(e.target.value) || 15)}
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
+                />
+              </div>
             </div>
-          )}
-        </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Topic (Optional)</label>
+              <div className="flex gap-4">
+                <input 
+                  type="text" 
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value)}
+                  placeholder="Enter a specific topic or leave blank for AI magic..."
+                  className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
+                />
+                <button 
+                  onClick={handleSuggestTopic}
+                  className="px-6 py-3 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 rounded-xl font-medium transition-colors"
+                >
+                  Suggest Topic
+                </button>
+              </div>
+            </div>
+
+            <div className="pt-4 flex justify-between items-center">
+              <label className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-medium cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={showSubtitles} 
+                  onChange={(e) => setShowSubtitles(e.target.checked)} 
+                  className="w-5 h-5 accent-blue-600 rounded cursor-pointer"
+                />
+                Enable Subtitles
+              </label>
+
+              <button
+                onClick={handleGenerateDraft}
+                disabled={loading}
+                className={`px-8 py-3 rounded-xl text-white font-bold transition-all ${
+                  loading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 shadow-lg active:scale-95'
+                }`}
+              >
+                {loading ? 'Generating Draft...' : 'Next: Generate Script →'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* --- STEP 2: Script Generation & Editing --- */}
+        {step === 2 && (
+          <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-8 border border-gray-100 dark:border-gray-700 space-y-6">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Step 2: Review & Edit Script</h2>
+            <p className="text-gray-500">You can manually tweak the script, labels, or data values before rendering the final video.</p>
+            
+            <textarea
+              value={draftJson}
+              onChange={(e) => setDraftJson(e.target.value)}
+              className="w-full h-[500px] font-mono text-sm px-4 py-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 resize-none focus:ring-2 focus:ring-blue-500"
+            />
+
+            <div className="flex justify-between items-center pt-4">
+              <button 
+                onClick={() => setStep(1)}
+                className="px-6 py-3 bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600 rounded-xl font-medium transition-colors"
+              >
+                ← Back
+              </button>
+              <button
+                onClick={handleQueueVideo}
+                disabled={loading}
+                className={`px-8 py-3 rounded-xl text-white font-bold transition-all ${
+                  loading ? 'bg-green-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 shadow-lg active:scale-95'
+                }`}
+              >
+                {loading ? 'Queueing...' : 'Start Rendering Video →'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* --- STEP 3: Render & Live Progress --- */}
+        {step === 3 && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Step 3: Live Rendering Progress</h2>
+              <button 
+                onClick={() => { setStep(1); setTopic(''); }}
+                className="px-6 py-3 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-xl font-medium transition-colors"
+              >
+                + Create Another Video
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 gap-6">
+              {videos.map(video => (
+                <VideoCard 
+                  key={video.id} 
+                  video={video} 
+                  onDelete={handleDelete} 
+                  onRewrite={handleRewrite} 
+                />
+              ))}
+              {videos.length === 0 && (
+                <div className="text-center p-12 text-gray-500 bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700">
+                  No videos in queue.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
@@ -172,10 +319,11 @@ function VideoCard({ video, onDelete, onRewrite }: { video: VideoItem, onDelete:
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Pending': return 'bg-yellow-100 text-yellow-800';
-      case 'Needs_Approval': return 'bg-blue-100 text-blue-800';
-      case 'Approved': case 'Published': return 'bg-green-100 text-green-800';
-      case 'Rejected': return 'bg-red-100 text-red-800';
+      case 'Pending': return 'bg-yellow-100 text-yellow-800 animate-pulse';
+      case 'Rendering': return 'bg-blue-100 text-blue-800 animate-pulse';
+      case 'Needs_Approval': return 'bg-purple-100 text-purple-800';
+      case 'Approved': case 'Published': case 'Completed': return 'bg-green-100 text-green-800';
+      case 'Failed': case 'Rejected': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -185,8 +333,8 @@ function VideoCard({ video, onDelete, onRewrite }: { video: VideoItem, onDelete:
       <div className="flex-1 space-y-4">
         <div className="flex items-start justify-between">
           <div>
-            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-2 inline-block ${getStatusColor(video.status)}`}>
-              {video.status}
+            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-2 inline-block shadow-sm ${getStatusColor(video.status)}`}>
+              {video.status === 'Pending' ? 'Rendering / Pending' : video.status}
             </span>
             <h3 className="text-xl font-bold text-gray-900 dark:text-white">{video.topic || 'Untitled'}</h3>
           </div>
@@ -226,7 +374,14 @@ function VideoCard({ video, onDelete, onRewrite }: { video: VideoItem, onDelete:
         {video.video_url ? (
           <video src={video.video_url} controls className="w-full h-full object-cover" />
         ) : (
-          <div className="text-gray-500 text-sm font-medium">No video yet</div>
+          <div className="text-gray-500 text-sm font-medium flex flex-col items-center">
+            {video.status === 'Pending' ? (
+              <>
+                <svg className="animate-spin h-6 w-6 text-white mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                Processing...
+              </>
+            ) : 'No video yet'}
+          </div>
         )}
       </div>
     </div>
