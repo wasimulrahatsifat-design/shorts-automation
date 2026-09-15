@@ -51,7 +51,7 @@ async function main() {
   else if (formatType === 'Arena Clash') compName = 'ArenaClash';
 
   try {
-    execSync(`npx remotion render remotion/index.ts ${compName} ${outPath} --props=${propsPath} --frames=0-${frames - 1}`, { stdio: 'inherit' });
+    execSync(`npx remotion render remotion/index.ts ${compName} ${outPath} --props=${propsPath}`, { stdio: 'inherit' });
   } catch (error) {
     console.error('Failed to render video:', error);
     process.exit(1);
