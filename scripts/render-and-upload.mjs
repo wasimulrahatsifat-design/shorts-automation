@@ -39,8 +39,12 @@ async function main() {
   // 3. Render Video via Remotion CLI
   const outPath = path.join(process.cwd(), 'out.mp4');
   console.log('Rendering video...');
+  
+  const durationSeconds = row.data_json.duration_seconds || 15;
+  const frames = durationSeconds * 30;
+
   try {
-    execSync(`npx remotion render remotion/index.ts DataComparison ${outPath} --props=${propsPath}`, { stdio: 'inherit' });
+    execSync(`npx remotion render remotion/index.ts DataComparison ${outPath} --props=${propsPath} --frames=${frames}`, { stdio: 'inherit' });
   } catch (error) {
     console.error('Failed to render video:', error);
     process.exit(1);
