@@ -59,7 +59,7 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 30, flex: 1, justifyContent: 'center' }}>
-        {items.map((item, index) => {
+        {(items || []).map((item, index) => {
           // Snappy stagger for each row
           const delay = index * 10 + 20;
           
@@ -72,7 +72,7 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
             },
           });
           
-          const maxVal = Math.max(...items.map(d => d.value));
+          const maxVal = Math.max(...(items || []).map(d => d.value));
           const targetBarWidth = maxVal === 0 ? 0 : (item.value / maxVal) * 100;
           const currentBarWidth = progress * targetBarWidth;
           

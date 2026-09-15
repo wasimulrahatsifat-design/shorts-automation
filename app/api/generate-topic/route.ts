@@ -28,10 +28,10 @@ export async function POST(request: Request) {
       // Ignored if no body is passed
     }
     const prompt = `Generate a unique "Data Comparison/Racing Bar Chart" topic (e.g., Most populated countries). 
-    Return a structured JSON object with three fields:
+    Return a structured JSON object with EXACTLY three fields:
     - "topic": The generated topic as a string.
     - "script": A short, fast-paced, highly engaging 10-15 second voiceover hook script for a YouTube Short.
-    - "items": An array of objects where each object has "label" (string), "value" (number), and "image_keyword" (string).
+    - "items": A REQUIRED array of at least 3 objects where each object MUST have "label" (string), "value" (number), and "image_keyword" (string).
     Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
 
     const response = await ai.models.generateContent({

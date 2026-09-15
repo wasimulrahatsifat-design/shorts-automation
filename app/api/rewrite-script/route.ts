@@ -30,17 +30,38 @@ export async function POST(request: Request) {
     }
 
     const currentScript = row.data_json.script;
+    const currentItems = JSON.stringify(row.data_json.items || []);
     
     // 2. Rewrite script with Gemini
-    const prompt = `Rewrite this voiceover script to specifically fit a ${targetDuration}-second YouTube Short pacing. Make it engaging, fast-paced, and do not include any extra text other than the script itself.
-    Current script: "${currentScript}"`;
+    const prompt = `Rewrite this voiceover script to specifically fit a ${targetDuration}-second YouTube Short pacing. Make it engaging and fast-paced.
+    Current script: "${currentScript}"
+    
+    You MUST return a JSON object with EXACTLY two fields:
+    - "script": The rewritten voiceover script.
+    - "items": Keep this exact data array, or update the labels/values to match the new script: ${currentItems}
+    
+    Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3.6-flash',
       contents: prompt,
     });
 
-    const newScript = response.text.trim();
+    const text = response.text;
+    const cleanedText = text.replace(/```json\n?|```/g, '').trim();
+    let generatedData;
+    try {
+      generatedData = JSON.parse(cleanedText);
+    } catch (e) {
+      throw new Error('Failed to parse Gemini response as JSON.');
+    }
+
+    const newScript = generatedData.script;
+    const newItems = generatedData.items;
+
+    if (!newScript || !newItems || !Array.isArray(newItems)) {
+      throw new Error('Invalid JSON format returned from Gemini in rewrite-script.');
+    }
 
     // 3. Generate New TTS
     let tts_url = row.data_json.tts_url;
@@ -84,6 +105,7 @@ export async function POST(request: Request) {
     const updatedDataJson = {
       ...row.data_json,
       script: newScript,
+      items: newItems,
       tts_url: tts_url,
       duration_seconds: parseInt(targetDuration)
     };
