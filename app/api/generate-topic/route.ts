@@ -36,20 +36,48 @@ const getWikiImageUrl = async (query: string) => {
 export async function POST(request: Request) {
   try {
     let showSubtitles = true;
+    let videoFormat = 'Data Comparison';
     try {
       const body = await request.json();
       if (typeof body.showSubtitles === 'boolean') {
         showSubtitles = body.showSubtitles;
       }
+      if (body.videoFormat) {
+        videoFormat = body.videoFormat;
+      }
     } catch (e) {
       // Ignored if no body is passed
     }
-    const prompt = `Generate a unique "Data Comparison/Racing Bar Chart" topic (e.g., Most populated countries). 
-    Return a structured JSON object with EXACTLY three fields:
-    - "topic": The generated topic as a string.
-    - "script": A short, fast-paced, highly engaging 10-15 second voiceover hook script for a YouTube Short.
-    - "items": A REQUIRED array of at least 3 objects where each object MUST have "label" (string), "value" (number), and "image_keyword" (string).
-    Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
+
+    let prompt = '';
+    if (videoFormat === 'Would You Rather') {
+      prompt = `Generate a unique "Would You Rather" topic (e.g., Superpowers, Tech, Food). 
+      Return a structured JSON object with EXACTLY these fields:
+      - "topic": The generated topic as a string.
+      - "script": A short, fast-paced, highly engaging 10-15 second voiceover hook script for a YouTube Short reading the scenario.
+      - "scenario_a": String describing option A.
+      - "scenario_b": String describing option B.
+      - "image_keyword_a": A VERY SPECIFIC search keyword for Wikipedia to find an image for option A.
+      - "image_keyword_b": A VERY SPECIFIC search keyword for Wikipedia to find an image for option B.
+      Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
+    } else if (videoFormat === 'Quiz') {
+      prompt = `Generate a unique "Trivia Quiz" topic. 
+      Return a structured JSON object with EXACTLY these fields:
+      - "topic": The generated topic as a string.
+      - "script": A short, engaging 10-15 second voiceover hook script for a YouTube Short asking the question and building suspense.
+      - "question": The trivia question as a string.
+      - "options": An array of exactly 3 string options.
+      - "correct_answer": The exact string from the options array that is correct.
+      - "image_keyword": A VERY SPECIFIC search keyword for Wikipedia to find an image related to the question.
+      Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
+    } else {
+      prompt = `Generate a unique "Data Comparison/Racing Bar Chart" topic (e.g., Most populated countries). 
+      Return a structured JSON object with EXACTLY three fields:
+      - "topic": The generated topic as a string.
+      - "script": A short, fast-paced, highly engaging 10-15 second voiceover hook script for a YouTube Short.
+      - "items": A REQUIRED array of at least 3 objects where each object MUST have "label" (string), "value" (number), and "image_keyword" (string).
+      Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
+    }
 
     const response = await ai.models.generateContent({
       model: 'gemini-3.7-flash',
@@ -62,17 +90,27 @@ export async function POST(request: Request) {
     const cleanedText = text.replace(/```json\n?|```/g, '').trim();
     const generatedData = JSON.parse(cleanedText);
 
-    const { topic, script, items } = generatedData;
+    const { topic, script } = generatedData;
+    let dataPayload = { ...generatedData, type: videoFormat };
 
-    if (!topic || !script || !items || !Array.isArray(items)) {
+    if (!topic || !script) {
       throw new Error('Invalid data format returned from Gemini.');
     }
 
-    // Fetch images for all items
-    for (const item of items) {
-      if (item.image_keyword) {
-        const imgUrl = await getWikiImageUrl(item.image_keyword);
-        item.image_url = imgUrl; // Append resolved image URL
+    // Fetch images based on format
+    if (videoFormat === 'Would You Rather') {
+      if (dataPayload.image_keyword_a) dataPayload.image_url_a = await getWikiImageUrl(dataPayload.image_keyword_a);
+      if (dataPayload.image_keyword_b) dataPayload.image_url_b = await getWikiImageUrl(dataPayload.image_keyword_b);
+    } else if (videoFormat === 'Quiz') {
+      if (dataPayload.image_keyword) dataPayload.image_url = await getWikiImageUrl(dataPayload.image_keyword);
+    } else {
+      // Data Comparison
+      if (dataPayload.items && Array.isArray(dataPayload.items)) {
+        for (const item of dataPayload.items) {
+          if (item.image_keyword) {
+            item.image_url = await getWikiImageUrl(item.image_keyword);
+          }
+        }
       }
     }
 
@@ -123,8 +161,7 @@ export async function POST(request: Request) {
         {
           topic: topic,
           data_json: {
-            script: script,
-            items: items,
+            ...dataPayload,
             tts_url: tts_url,
             show_subtitles: showSubtitles
           },

@@ -1,6 +1,8 @@
 import React from 'react';
 import { Composition, Audio } from 'remotion';
 import { DataComparison } from './Composition';
+import { WouldYouRather } from './WouldYouRather';
+import { Quiz } from './Quiz';
 import { loadFont } from '@remotion/google-fonts/Montserrat';
 
 // Preload a bold, modern font for our text
@@ -28,6 +30,46 @@ export const RemotionRoot: React.FC = () => {
             show_subtitles: true,
           },
           topic: 'Example Topic',
+        }}
+      />
+      <Composition
+        id="WouldYouRather"
+        component={WouldYouRather}
+        durationInFrames={450}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={{
+          data_json: {
+            script: "Would you rather have flying cars or teleportation?",
+            scenario_a: "Flying Cars",
+            scenario_b: "Teleportation",
+            image_url_a: null,
+            image_url_b: null,
+            tts_url: null,
+            show_subtitles: true,
+          },
+          topic: 'Would You Rather',
+        }}
+      />
+      <Composition
+        id="Quiz"
+        component={Quiz}
+        durationInFrames={450}
+        fps={30}
+        width={1080}
+        height={1920}
+        defaultProps={{
+          data_json: {
+            script: "Can you guess this trivia question?",
+            question: "What is the largest planet in our solar system?",
+            options: ["Earth", "Jupiter", "Saturn"],
+            correct_answer: "Jupiter",
+            image_url: null,
+            tts_url: null,
+            show_subtitles: true,
+          },
+          topic: 'Trivia Time',
         }}
       />
     </>

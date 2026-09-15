@@ -43,8 +43,14 @@ async function main() {
   const durationSeconds = row.data_json.duration_seconds || 15;
   const frames = durationSeconds * 30;
 
+  // Determine which composition to render based on format type
+  const formatType = row.data_json.type || 'Data Comparison';
+  let compName = 'DataComparison';
+  if (formatType === 'Would You Rather') compName = 'WouldYouRather';
+  else if (formatType === 'Quiz') compName = 'Quiz';
+
   try {
-    execSync(`npx remotion render remotion/index.ts DataComparison ${outPath} --props=${propsPath} --frames=0-${frames - 1}`, { stdio: 'inherit' });
+    execSync(`npx remotion render remotion/index.ts ${compName} ${outPath} --props=${propsPath} --frames=0-${frames - 1}`, { stdio: 'inherit' });
   } catch (error) {
     console.error('Failed to render video:', error);
     process.exit(1);

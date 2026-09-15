@@ -22,6 +22,7 @@ export default function Home() {
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [showSubtitles, setShowSubtitles] = useState(true);
+  const [videoFormat, setVideoFormat] = useState('Data Comparison');
 
   // Poll for updates every 5 seconds
   useEffect(() => {
@@ -47,7 +48,7 @@ export default function Home() {
       const response = await fetch('/api/generate-topic', { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ showSubtitles })
+        body: JSON.stringify({ showSubtitles, videoFormat })
       });
       const data = await response.json();
       if (response.ok && data.success) {
@@ -114,6 +115,15 @@ export default function Home() {
               />
               Show Subtitles
             </label>
+            <select
+              value={videoFormat}
+              onChange={(e) => setVideoFormat(e.target.value)}
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+            >
+              <option value="Data Comparison">Data Comparison</option>
+              <option value="Would You Rather">Would You Rather</option>
+              <option value="Quiz">Quiz</option>
+            </select>
             <Link href="/admin" className="px-6 py-3 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-all text-center">
               Admin View
             </Link>
