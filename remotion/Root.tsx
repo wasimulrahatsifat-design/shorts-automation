@@ -14,10 +14,15 @@ export const RemotionRoot: React.FC = () => {
       <Composition
         id="DataComparison"
         component={DataComparison}
-        durationInFrames={450} // increased to 15s to fit TTS/Music
+        durationInFrames={450} // default
         fps={30}
         width={1080}
         height={1920}
+        calculateMetadata={({ props }: any) => {
+          return {
+            durationInFrames: props.data_json?.duration_seconds ? props.data_json.duration_seconds * 30 : 450
+          };
+        }}
         defaultProps={{
           data_json: {
             script: "Welcome to this racing line chart!",
@@ -40,6 +45,11 @@ export const RemotionRoot: React.FC = () => {
         fps={30}
         width={1080}
         height={1920}
+        calculateMetadata={({ props }: any) => {
+          return {
+            durationInFrames: props.data_json?.duration_seconds ? props.data_json.duration_seconds * 30 : 450
+          };
+        }}
         defaultProps={{
           data_json: {
             script: "Would you rather have flying cars or teleportation?",
@@ -60,6 +70,11 @@ export const RemotionRoot: React.FC = () => {
         fps={30}
         width={1080}
         height={1920}
+        calculateMetadata={({ props }: any) => {
+          return {
+            durationInFrames: props.data_json?.duration_seconds ? props.data_json.duration_seconds * 30 : 450
+          };
+        }}
         defaultProps={{
           data_json: {
             script: "Can you guess this trivia question?",
