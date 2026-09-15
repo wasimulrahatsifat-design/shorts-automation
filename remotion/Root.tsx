@@ -23,7 +23,8 @@ export const RemotionRoot: React.FC = () => {
               { label: 'Example A', value: 100, image_keyword: 'apple' },
               { label: 'Example B', value: 200, image_keyword: 'banana' },
               { label: 'Example C', value: 300, image_keyword: 'cherry' },
-            ]
+            ],
+            tts_url: null, // Placeholder for TTS URL
           },
           topic: 'Example Topic',
         }}

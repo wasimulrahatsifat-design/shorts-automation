@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
 import { Octokit } from 'octokit';
+import * as googleTTS from 'google-tts-api';
 
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -42,6 +43,35 @@ export async function POST() {
       throw new Error('Invalid data format returned from Gemini.');
     }
 
+    // Generate TTS Audio
+    let tts_url = null;
+    try {
+      const audioChunks = await googleTTS.getAllAudioBase64(script, {
+        lang: 'en',
+        slow: false,
+        host: 'https://translate.google.com',
+      });
+
+      const audioBuffer = Buffer.concat(audioChunks.map(chunk => Buffer.from(chunk.base64, 'base64')));
+      const ttsFileName = `tts_${crypto.randomUUID()}.mp3`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('shorts')
+        .upload(ttsFileName, audioBuffer, {
+          contentType: 'audio/mpeg',
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.error('Failed to upload TTS audio:', uploadError);
+      } else {
+        const { data: publicUrlData } = supabase.storage.from('shorts').getPublicUrl(ttsFileName);
+        tts_url = publicUrlData.publicUrl;
+      }
+    } catch (ttsError) {
+      console.error('TTS Generation failed:', ttsError);
+    }
+
     // Insert into Supabase
     const { data: dbData, error } = await supabase
       .from('shorts_queue')
@@ -50,7 +80,8 @@ export async function POST() {
           topic: topic,
           data_json: {
             script: script,
-            items: items
+            items: items,
+            tts_url: tts_url
           },
           status: 'Pending',
         },

@@ -10,6 +10,7 @@ interface DataItem {
 interface DataJson {
   script: string;
   items: DataItem[];
+  tts_url?: string;
 }
 
 export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = ({ data_json, topic }) => {
@@ -41,8 +42,8 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
       {/* Background Music (requires public/bg-music.mp3) */}
       {/* <Audio src={staticFile('bg-music.mp3')} volume={0.1} /> */}
       
-      {/* Voiceover Placeholder (requires public/voiceover.mp3) */}
-      {/* <Audio src={staticFile('voiceover.mp3')} volume={0.8} /> */}
+      {/* Dynamic Voiceover */}
+      {data_json.tts_url && <Audio src={data_json.tts_url} volume={0.9} />}
 
       <div style={{ 
         opacity: titleOpacity, 
