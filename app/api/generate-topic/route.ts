@@ -81,12 +81,26 @@ export async function POST(request: Request) {
       Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
     }
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.7-flash',
-      contents: prompt,
-    });
-
-    const text = response.text;
+    const fallbackModels = ['gemini-3.7-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro'];
+    let text = '';
+    
+    for (let i = 0; i < fallbackModels.length; i++) {
+      try {
+        console.log(`Attempting Gemini generation with model: ${fallbackModels[i]}`);
+        const response = await ai.models.generateContent({
+          model: fallbackModels[i],
+          contents: prompt,
+        });
+        text = response.text;
+        break; // Success! Break out of the fallback loop.
+      } catch (err: any) {
+        console.warn(`Model ${fallbackModels[i]} failed: ${err.message}`);
+        if (i === fallbackModels.length - 1) {
+          // If this was the last model, throw the error
+          throw new Error(`All Gemini models failed. Last error: ${err.message}`);
+        }
+      }
+    }
     
     // Parse the JSON. Remove markdown backticks if they are present.
     const cleanedText = text.replace(/```json\n?|```/g, '').trim();
