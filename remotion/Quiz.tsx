@@ -30,11 +30,11 @@ const QuizRound: React.FC<{ questionData: Question, roundDuration: number, topic
   const questionY = spring({ frame: frame - 15, fps, config: { damping: 14 } });
   
   // Timer circle/bar
-  // We want the 5-second timer to start after the voiceover finishes reading the question and options.
-  // Assuming voiceover takes about 3-5 seconds, we can start the timer roughly 4 seconds in.
-  const readingDuration = 4 * fps; 
+  // We know the round ends at `roundDuration`. We want the 5s timer to run until 2 seconds before the end, 
+  // so the last 2 seconds are for revealing the answer.
+  const revealDuration = 2 * fps;
   const timerDuration = 5 * fps;
-  const timerStartFrame = readingDuration; 
+  const timerStartFrame = Math.max(0, roundDuration - revealDuration - timerDuration);
   
   const timerProgress = interpolate(frame, [timerStartFrame, timerStartFrame + timerDuration], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   const isTimerDone = frame > timerStartFrame + timerDuration;
@@ -68,7 +68,7 @@ const QuizRound: React.FC<{ questionData: Question, roundDuration: number, topic
         marginBottom: 40
       }}>
         {image_url && (
-          <Img src={image_url} style={{ width: '100%', height: 300, objectFit: 'cover' }} />
+          <Img src={image_url} style={{ width: '100%', height: 450, objectFit: 'cover' }} />
         )}
         <div style={{ padding: '30px 40px', fontSize: 45, fontWeight: 800, color: '#2b2d42', textAlign: 'center' }}>
           {question}

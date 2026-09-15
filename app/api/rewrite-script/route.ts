@@ -99,7 +99,7 @@ export async function POST(request: Request) {
     
     if (videoFormat === 'Quiz') {
       const currentQuestions = JSON.stringify(row.data_json.questions || []);
-      prompt = `Rewrite this quiz voiceover script to specifically fit a ${targetDuration}-second YouTube Short pacing.
+      prompt = `Rewrite this quiz voiceover script to specifically fit a ${targetDuration}-second YouTube Short pacing. The questions should be of moderate difficulty—not too hard, but not too easy.
       Current script: "${currentScript}"
       
       You MUST return a JSON object with EXACTLY these fields:

@@ -42,6 +42,12 @@ export default function Home() {
     }
   }, [step]);
 
+  useEffect(() => {
+    if (videoFormat === 'Quiz') {
+      setDuration(75); // Quiz usually needs more time for 5 questions
+    }
+  }, [videoFormat]);
+
   const fetchVideos = async () => {
     const { data, error } = await supabase
       .from('shorts_queue')
