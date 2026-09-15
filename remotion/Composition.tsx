@@ -280,8 +280,7 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
           opacity: winnerOpacity,
           transform: `scale(${winnerScale})`
         }}>
-          {/* Winner Sound Effect */}
-          <Audio src="https://www.soundjay.com/misc/sounds/magic-chime-01.mp3" volume={1} />
+          {/* Winner Sound Effect (Disabled for now) */}
 
           <h1 style={{
             fontSize: 80,
