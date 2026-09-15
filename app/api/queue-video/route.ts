@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     const voiceId = 'pNInz6obpgDQGcFmaJgB'; // Adam
     
     try {
-      if (data_json.format === 'Quiz' && data_json.questions) {
+      if ((data_json.format === 'Quiz' || Array.isArray(data_json.questions)) && data_json.questions) {
         // Generate a separate audio file for each question for perfect sync
         const generateTTSForText = async (text: string) => {
           const elResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {

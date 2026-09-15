@@ -160,7 +160,7 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
   return (
     <AbsoluteFill style={{ backgroundColor: '#2b2d42', fontFamily: '"Montserrat", sans-serif', padding: '60px 40px', color: 'white' }}>
       {/* Background Audio Track - legacy fallback for single track */}
-      {tts_url && !tts_urls && <Audio src={tts_url} volume={0.9} />}
+      {tts_url && (!tts_urls || tts_urls.length === 0) && <Audio src={tts_url} volume={0.9} />}
 
       <Series>
         {questions.map((q, idx) => {

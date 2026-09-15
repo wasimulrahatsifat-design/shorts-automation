@@ -170,7 +170,7 @@ export async function POST(request: Request) {
     let tts_urls: string[] = [];
     const voiceId = 'pNInz6obpgDQGcFmaJgB'; // Adam
     try {
-      if (videoFormat === 'Quiz' && newItems && newItems.length > 0) {
+      if ((videoFormat === 'Quiz' || Array.isArray(newItems)) && newItems && newItems.length > 0 && newItems[0].question) {
         const generateTTSForText = async (text: string) => {
           const elResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
             method: 'POST',
