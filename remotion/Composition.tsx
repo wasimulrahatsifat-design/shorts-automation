@@ -5,6 +5,7 @@ interface DataItem {
   label: string;
   value: number;
   image_keyword: string;
+  image_url?: string;
 }
 
 interface DataJson {
@@ -82,32 +83,58 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
           return (
             <div key={index} style={{ 
               opacity: interpolate(progress, [0, 1], [0, 1]), 
-              transform: `translateY(${(1 - progress) * 50}px)` 
+              transform: `translateY(${(1 - progress) * 50}px)`,
+              display: 'flex',
+              alignItems: 'flex-end',
+              gap: 20
             }}>
-              <div style={{ 
-                fontSize: 45, 
-                fontWeight: 700, 
-                marginBottom: 12,
-                textShadow: '2px 2px 8px rgba(0,0,0,0.5)',
-                color: '#e9ecef'
-              }}>
-                {item.label}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-                <div style={{ 
-                  width: `${Math.max(currentBarWidth, 1)}%`, 
-                  height: 65, 
-                  background: `linear-gradient(90deg, hsl(${index * 45}, 85%, 65%), hsl(${index * 45 + 30}, 85%, 55%))`, 
-                  borderRadius: 15,
-                  boxShadow: '0 10px 20px rgba(0,0,0,0.3)'
-                }} />
+              
+              {/* Image Avatar */}
+              {item.image_url ? (
+                <div style={{
+                  width: 90,
+                  height: 90,
+                  borderRadius: '50%',
+                  overflow: 'hidden',
+                  flexShrink: 0,
+                  boxShadow: '0 8px 16px rgba(0,0,0,0.5)',
+                  transform: `scale(${interpolate(progress, [0, 1], [0.5, 1])})`,
+                  backgroundColor: '#333'
+                }}>
+                  <img src={item.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+              ) : (
+                <div style={{ width: 90, height: 90, flexShrink: 0 }} /> // Placeholder
+              )}
+
+              {/* Bar and Text Container */}
+              <div style={{ flex: 1 }}>
                 <div style={{ 
                   fontSize: 45, 
-                  fontWeight: 900,
-                  textShadow: '2px 2px 10px rgba(0,0,0,0.6)',
-                  minWidth: 150
+                  fontWeight: 700, 
+                  marginBottom: 12,
+                  textShadow: '2px 2px 8px rgba(0,0,0,0.5)',
+                  color: '#e9ecef',
+                  opacity: interpolate(progress, [0, 1], [0, 1])
                 }}>
-                  {displayValue.toLocaleString()}
+                  {item.label}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                  <div style={{ 
+                    width: `${Math.max(currentBarWidth, 1)}%`, 
+                    height: 65, 
+                    background: `linear-gradient(90deg, hsl(${index * 45}, 85%, 65%), hsl(${index * 45 + 30}, 85%, 55%))`, 
+                    borderRadius: 15,
+                    boxShadow: '0 10px 20px rgba(0,0,0,0.3)'
+                  }} />
+                  <div style={{ 
+                    fontSize: 45, 
+                    fontWeight: 900,
+                    textShadow: '2px 2px 10px rgba(0,0,0,0.6)',
+                    minWidth: 150
+                  }}>
+                    {displayValue.toLocaleString()}
+                  </div>
                 </div>
               </div>
             </div>

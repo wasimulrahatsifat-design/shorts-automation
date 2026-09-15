@@ -10,6 +10,24 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 
+const getWikiImageUrl = async (query: string) => {
+  try {
+    const searchRes = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&utf8=&format=json&origin=*`);
+    const searchData = await searchRes.json();
+    if (!searchData.query?.search?.length) return null;
+    const title = searchData.query.search[0].title;
+    
+    const imgRes = await fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages&format=json&pithumbsize=500&origin=*`);
+    const imgData = await imgRes.json();
+    const pages = imgData.query?.pages;
+    if (!pages) return null;
+    const pageId = Object.keys(pages)[0];
+    return pages[pageId]?.thumbnail?.source || null;
+  } catch (e) {
+    return null;
+  }
+};
+
 export async function POST(request: Request) {
   try {
     const { videoId, targetDuration } = await request.json();
@@ -61,6 +79,14 @@ export async function POST(request: Request) {
 
     if (!newScript || !newItems || !Array.isArray(newItems)) {
       throw new Error('Invalid JSON format returned from Gemini in rewrite-script.');
+    }
+
+    // Fetch images for items if they have an image_keyword but no image_url, or if it changed
+    for (const item of newItems) {
+      if (item.image_keyword && !item.image_url) {
+        const imgUrl = await getWikiImageUrl(item.image_keyword);
+        item.image_url = imgUrl; 
+      }
     }
 
     // 3. Generate New TTS

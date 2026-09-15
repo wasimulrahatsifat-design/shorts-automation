@@ -11,10 +11,27 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 // Initialize Gemini API
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// Initialize Octokit
 const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN,
 });
+
+const getWikiImageUrl = async (query: string) => {
+  try {
+    const searchRes = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&utf8=&format=json&origin=*`);
+    const searchData = await searchRes.json();
+    if (!searchData.query?.search?.length) return null;
+    const title = searchData.query.search[0].title;
+    
+    const imgRes = await fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages&format=json&pithumbsize=500&origin=*`);
+    const imgData = await imgRes.json();
+    const pages = imgData.query?.pages;
+    if (!pages) return null;
+    const pageId = Object.keys(pages)[0];
+    return pages[pageId]?.thumbnail?.source || null;
+  } catch (e) {
+    return null;
+  }
+};
 
 export async function POST(request: Request) {
   try {
@@ -49,6 +66,14 @@ export async function POST(request: Request) {
 
     if (!topic || !script || !items || !Array.isArray(items)) {
       throw new Error('Invalid data format returned from Gemini.');
+    }
+
+    // Fetch images for all items
+    for (const item of items) {
+      if (item.image_keyword) {
+        const imgUrl = await getWikiImageUrl(item.image_keyword);
+        item.image_url = imgUrl; // Append resolved image URL
+      }
     }
 
     // Generate TTS Audio
