@@ -68,7 +68,6 @@ export async function POST(request: Request) {
           tts_url = publicUrlData.publicUrl;
         }
       }
-      }
     } catch (ttsError) {
       console.error('TTS Generation failed:', ttsError);
     }
