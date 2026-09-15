@@ -20,13 +20,14 @@ export const RemotionRoot: React.FC = () => {
         height={1920}
         defaultProps={{
           data_json: {
-            script: "Did you know that some countries have thousands of active satellites in orbit? Let's take a look at the data!",
+            script: "Welcome to this racing line chart!",
+            timeline_labels: ["2018", "2019", "2020", "2021", "2022"],
             items: [
-              { label: 'Example A', value: 100, image_keyword: 'apple' },
-              { label: 'Example B', value: 200, image_keyword: 'banana' },
-              { label: 'Example C', value: 300, image_keyword: 'cherry' },
+              { label: 'Example A', image_keyword: 'apple', values: [10, 20, 30, 80, 150] },
+              { label: 'Example B', image_keyword: 'banana', values: [5, 15, 40, 60, 90] },
+              { label: 'Example C', image_keyword: 'orange', values: [12, 18, 25, 45, 110] },
             ],
-            tts_url: null, // Placeholder for TTS URL
+            tts_url: null,
             show_subtitles: true,
           },
           topic: 'Example Topic',

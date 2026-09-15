@@ -71,11 +71,13 @@ export async function POST(request: Request) {
       - "image_keyword": A VERY SPECIFIC search keyword for Wikipedia to find an image related to the question.
       Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
     } else {
-      prompt = `Generate a unique "Data Comparison/Racing Bar Chart" topic (e.g., Most populated countries). 
-      Return a structured JSON object with EXACTLY three fields:
+      prompt = `Generate a unique "Animated Racing Line Chart" topic (e.g., Growth of Tech Companies over 10 years, Population growth of cities). 
+      Return a structured JSON object with EXACTLY these fields:
       - "topic": The generated topic as a string.
       - "script": A short, fast-paced, highly engaging 10-15 second voiceover hook script for a YouTube Short.
-      - "items": A REQUIRED array of at least 3 objects where each object MUST have "label" (string), "value" (number), and "image_keyword" (string).
+      - "timeline_labels": An array of strings representing the time steps (e.g., ["2018", "2019", "2020", "2021", "2022"]). MUST have at least 5 items.
+      - "items": A REQUIRED array of at least 3 objects where each object MUST have "label" (string), "image_keyword" (string), and "values" (an array of numbers).
+      CRITICAL: The length of the "values" array for EACH item MUST perfectly match the length of the "timeline_labels" array.
       Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
     }
 
