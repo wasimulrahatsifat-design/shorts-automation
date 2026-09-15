@@ -42,25 +42,44 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
     return Math.max(1, ...normalizedItems.flatMap(i => i.values!));
   }, [normalizedItems]);
 
+  // Find the Winner (highest final value)
+  const winner = useMemo(() => {
+    let highest = -1;
+    let win = normalizedItems[0];
+    normalizedItems.forEach(item => {
+      const finalVal = item.values![item.values!.length - 1];
+      if (finalVal > highest) {
+        highest = finalVal;
+        win = item;
+      }
+    });
+    return { ...win, finalValue: highest };
+  }, [normalizedItems]);
+
   // Animate Background
   const gradientProgress = interpolate(frame, [0, durationInFrames], [0, 1], { extrapolateRight: 'clamp' });
   const color1 = interpolateColors(gradientProgress, [0, 1], ['#0f2027', '#2c5364']);
   const color2 = interpolateColors(gradientProgress, [0, 1], ['#203a43', '#0f2027']);
 
+  // Winner Reveal Timings
+  const winnerDuration = 90;
+  const chartDuration = durationInFrames - winnerDuration;
+
   // Title Animations
   const titleOpacity = interpolate(frame, [0, 15], [0, 1], { extrapolateRight: 'clamp' });
   const titleScale = spring({ frame, fps, config: { damping: 14 } });
   
-  const subtitleOpacity = interpolate(frame, [durationInFrames - 30, durationInFrames - 10], [1, 0], { extrapolateRight: 'clamp' });
+  const subtitleOpacity = interpolate(frame, [chartDuration - 30, chartDuration - 10], [1, 0], { extrapolateRight: 'clamp' });
+  const chartOpacity = interpolate(frame, [chartDuration - 15, chartDuration], [1, 0], { extrapolateRight: 'clamp', extrapolateLeft: 'clamp' });
 
   // Chart Layout Dimensions
   const chartX = 100;
   const chartY = 350;
   const chartW = width - 200;
-  const chartH = height - 800; // Leave room for title and bottom text
+  const chartH = height - 800;
 
-  // Progress animation: from 0 to labelsCount - 1 over the duration (stopping 30 frames early)
-  const animDuration = Math.max(1, durationInFrames - 30);
+  // Progress animation: finish drawing lines before the winner reveal
+  const animDuration = Math.max(1, chartDuration - 30);
   const progress = interpolate(frame, [15, animDuration], [0, labelsCount - 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp'
@@ -86,6 +105,10 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
   const currentIndex = Math.min(Math.floor(progress), labelsCount - 1);
   const currentLabel = labels[currentIndex];
 
+  // Winner Animations
+  const winnerScale = spring({ frame: frame - chartDuration, fps, config: { damping: 12 } });
+  const winnerOpacity = interpolate(frame, [chartDuration, chartDuration + 15], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+
   return (
     <AbsoluteFill style={{ 
       background: `linear-gradient(135deg, ${color1} 0%, ${color2} 100%)`, 
@@ -95,151 +118,223 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
       {/* Audio Track */}
       {data_json.tts_url && <Audio src={data_json.tts_url} volume={0.9} />}
 
-      {/* Header Topic */}
-      <div style={{ 
-        position: 'absolute',
-        top: 80,
-        width: '100%',
-        opacity: titleOpacity, 
-        transform: `scale(${titleScale})`, 
-        fontSize: 60, 
-        fontWeight: 900, 
-        textAlign: 'center',
-        textShadow: '4px 4px 15px rgba(0,0,0,0.6)',
-        color: '#f8f9fa'
-      }}>
-        {topic || "Animated Line Chart"}
-      </div>
-
-      {/* SVG Chart Layer */}
-      <svg width={width} height={height} style={{ position: 'absolute', top: 0, left: 0 }}>
-        {/* Grid Lines */}
-        <line x1={chartX} y1={chartY + chartH} x2={chartX + chartW} y2={chartY + chartH} stroke="rgba(255,255,255,0.3)" strokeWidth={4} />
-        <line x1={chartX} y1={chartY} x2={chartX} y2={chartY + chartH} stroke="rgba(255,255,255,0.3)" strokeWidth={4} />
-
-        {/* Data Lines */}
-        {paths.map((pathData, idx) => {
-          // Calculate length to animate dashoffset (rough estimation or just very large)
-          const totalLength = chartW * 3; // safe large number for strokeDasharray
-          const drawProgress = progress / Math.max(1, labelsCount - 1);
-          const drawnLength = drawProgress * totalLength;
-
-          return (
-            <path
-              key={idx}
-              d={pathData.d}
-              fill="none"
-              stroke={pathData.color}
-              strokeWidth={8}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeDasharray={totalLength}
-              strokeDashoffset={totalLength - drawnLength}
-              style={{ filter: `drop-shadow(0px 10px 10px ${pathData.color}88)` }}
-            />
-          );
-        })}
-      </svg>
-
-      {/* Moving Avatars and Values */}
-      {paths.map((pathData, idx) => {
-        const currI = Math.floor(progress);
-        const nextI = Math.min(currI + 1, labelsCount - 1);
-        const frac = progress - currI;
-
-        const p1 = pathData.points[currI];
-        const p2 = pathData.points[nextI];
-        
-        const curX = interpolate(frac, [0, 1], [p1.x, p2.x]);
-        const curY = interpolate(frac, [0, 1], [p1.y, p2.y]);
-        const curVal = interpolate(frac, [0, 1], [p1.val, p2.val]);
-
-        const avatarSize = 90;
-
-        return (
-          <div key={idx} style={{
+      <Sequence durationInFrames={chartDuration}>
+        <AbsoluteFill style={{ opacity: chartOpacity }}>
+          {/* Header Topic */}
+          <div style={{ 
             position: 'absolute',
-            left: curX - avatarSize / 2,
-            top: curY - avatarSize / 2,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            opacity: interpolate(frame, [15, 30], [0, 1], { extrapolateRight: 'clamp' })
+            top: 80,
+            width: '100%',
+            opacity: titleOpacity, 
+            transform: `scale(${titleScale})`, 
+            fontSize: 60, 
+            fontWeight: 900, 
+            textAlign: 'center',
+            textShadow: '4px 4px 15px rgba(0,0,0,0.6)',
+            color: '#f8f9fa'
           }}>
-            {/* Avatar Image */}
-            <div style={{
-              width: avatarSize,
-              height: avatarSize,
-              borderRadius: '50%',
-              backgroundColor: '#333',
-              border: `6px solid ${pathData.color}`,
-              boxShadow: '0 8px 16px rgba(0,0,0,0.6)',
-              overflow: 'hidden',
-              zIndex: 10
-            }}>
-              {pathData.item.image_url ? (
-                <Img src={pathData.item.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              ) : null}
-            </div>
-
-            {/* Label and Value */}
-            <div style={{
-              marginTop: 15,
-              backgroundColor: 'rgba(0,0,0,0.7)',
-              padding: '10px 20px',
-              borderRadius: 15,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              whiteSpace: 'nowrap'
-            }}>
-              <span style={{ fontSize: 24, fontWeight: 700, color: '#ccc' }}>{pathData.item.label}</span>
-              <span style={{ fontSize: 32, fontWeight: 900, color: pathData.color }}>
-                {Math.round(curVal).toLocaleString()}
-              </span>
-            </div>
+            {topic || "Animated Line Chart"}
           </div>
-        );
-      })}
 
-      {/* Dynamic Timeline Text */}
-      <div style={{
-        position: 'absolute',
-        bottom: 300,
-        width: '100%',
-        textAlign: 'center',
-        fontSize: 100,
-        fontWeight: 900,
-        color: 'rgba(255,255,255,0.2)',
-        textTransform: 'uppercase',
-        letterSpacing: '10px',
-        zIndex: 0
-      }}>
-        {currentLabel}
-      </div>
+          {/* SVG Chart Layer */}
+          <svg width={width} height={height} style={{ position: 'absolute', top: 0, left: 0 }}>
+            {/* Grid Lines */}
+            <line x1={chartX} y1={chartY + chartH} x2={chartX + chartW} y2={chartY + chartH} stroke="rgba(255,255,255,0.3)" strokeWidth={4} />
+            <line x1={chartX} y1={chartY} x2={chartX} y2={chartY + chartH} stroke="rgba(255,255,255,0.3)" strokeWidth={4} />
 
-      {/* Subtitles Area (Hook Script) */}
-      {data_json.show_subtitles !== false && (
-        <Sequence from={15}>
+            {/* Data Lines */}
+            {paths.map((pathData, idx) => {
+              const totalLength = chartW * 3; // safe large number for strokeDasharray
+              const drawProgress = progress / Math.max(1, labelsCount - 1);
+              const drawnLength = drawProgress * totalLength;
+
+              return (
+                <path
+                  key={idx}
+                  d={pathData.d}
+                  fill="none"
+                  stroke={pathData.color}
+                  strokeWidth={8}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeDasharray={totalLength}
+                  strokeDashoffset={totalLength - drawnLength}
+                  style={{ filter: `drop-shadow(0px 10px 10px ${pathData.color}88)` }}
+                />
+              );
+            })}
+          </svg>
+
+          {/* Moving Avatars and Values */}
+          {paths.map((pathData, idx) => {
+            const currI = Math.floor(progress);
+            const nextI = Math.min(currI + 1, labelsCount - 1);
+            const frac = progress - currI;
+
+            const p1 = pathData.points[currI];
+            const p2 = pathData.points[nextI];
+            
+            const curX = interpolate(frac, [0, 1], [p1.x, p2.x]);
+            const curY = interpolate(frac, [0, 1], [p1.y, p2.y]);
+            const curVal = interpolate(frac, [0, 1], [p1.val, p2.val]);
+
+            const avatarSize = 90;
+
+            return (
+              <div key={idx} style={{
+                position: 'absolute',
+                left: curX - avatarSize / 2,
+                top: curY - avatarSize / 2,
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 15,
+                opacity: interpolate(frame, [15, 30], [0, 1], { extrapolateRight: 'clamp' })
+              }}>
+                {/* Avatar Image */}
+                <div style={{
+                  width: avatarSize,
+                  height: avatarSize,
+                  borderRadius: '50%',
+                  backgroundColor: '#333',
+                  border: `6px solid ${pathData.color}`,
+                  boxShadow: '0 8px 16px rgba(0,0,0,0.6)',
+                  overflow: 'hidden',
+                  zIndex: 10,
+                  flexShrink: 0
+                }}>
+                  {pathData.item.image_url ? (
+                    <Img src={pathData.item.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : null}
+                </div>
+
+                {/* Label and Value grouped */}
+                <div style={{
+                  backgroundColor: 'rgba(0,0,0,0.6)',
+                  padding: '10px 20px',
+                  borderRadius: 20,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 10px rgba(0,0,0,0.5)',
+                  whiteSpace: 'nowrap',
+                  zIndex: 5
+                }}>
+                  <span style={{ fontSize: 24, fontWeight: 700, color: '#e0e0e0' }}>{pathData.item.label}</span>
+                  <span style={{ fontSize: 32, fontWeight: 900, color: pathData.color }}>
+                    {Math.round(curVal).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Dynamic Timeline Text */}
           <div style={{
             position: 'absolute',
-            bottom: 80,
-            left: 60,
-            right: 60,
+            bottom: 300,
+            width: '100%',
             textAlign: 'center',
-            fontSize: 50,
-            fontWeight: 800,
-            textShadow: '4px 4px 15px rgba(0,0,0,0.8)',
-            backgroundColor: 'rgba(0,0,0,0.6)',
-            padding: '25px',
-            borderRadius: 20,
-            border: '4px solid rgba(255,255,255,0.1)',
-            opacity: subtitleOpacity
+            fontSize: 100,
+            fontWeight: 900,
+            color: 'rgba(255,255,255,0.2)',
+            textTransform: 'uppercase',
+            letterSpacing: '10px',
+            zIndex: 0
           }}>
-            {script}
+            {currentLabel}
           </div>
-        </Sequence>
-      )}
+
+          {/* Subtitles Area (Hook Script) */}
+          {data_json.show_subtitles !== false && (
+            <Sequence from={15}>
+              <div style={{
+                position: 'absolute',
+                bottom: 80,
+                left: 60,
+                right: 60,
+                textAlign: 'center',
+                fontSize: 50,
+                fontWeight: 800,
+                textShadow: '4px 4px 15px rgba(0,0,0,0.8)',
+                backgroundColor: 'rgba(0,0,0,0.6)',
+                padding: '25px',
+                borderRadius: 20,
+                border: '4px solid rgba(255,255,255,0.1)',
+                opacity: subtitleOpacity
+              }}>
+                {script}
+              </div>
+            </Sequence>
+          )}
+        </AbsoluteFill>
+      </Sequence>
+
+      {/* Winner Reveal Sequence */}
+      <Sequence from={chartDuration}>
+        <AbsoluteFill style={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          opacity: winnerOpacity,
+          transform: `scale(${winnerScale})`
+        }}>
+          {/* Winner Sound Effect */}
+          <Audio src="https://www.soundjay.com/misc/sounds/magic-chime-01.mp3" volume={1} />
+
+          <h1 style={{
+            fontSize: 80,
+            fontWeight: 900,
+            color: '#f1c40f',
+            textShadow: '0 10px 20px rgba(0,0,0,0.8)',
+            marginBottom: 40,
+            textTransform: 'uppercase',
+            letterSpacing: '5px'
+          }}>
+            Winner!
+          </h1>
+
+          <div style={{
+            width: 350,
+            height: 350,
+            borderRadius: '50%',
+            backgroundColor: '#333',
+            border: `15px solid #f1c40f`,
+            boxShadow: '0 15px 40px rgba(241,196,15,0.6)',
+            overflow: 'hidden',
+            marginBottom: 50
+          }}>
+            {winner.image_url ? (
+              <Img src={winner.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : null}
+          </div>
+
+          <div style={{
+            fontSize: 70,
+            fontWeight: 900,
+            color: '#ffffff',
+            textShadow: '0 8px 15px rgba(0,0,0,0.6)',
+            textAlign: 'center',
+            marginBottom: 20
+          }}>
+            {winner.label}
+          </div>
+
+          <div style={{
+            fontSize: 60,
+            fontWeight: 800,
+            color: '#2ecc71',
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            padding: '15px 40px',
+            borderRadius: 30,
+            boxShadow: '0 8px 20px rgba(0,0,0,0.5)'
+          }}>
+            {Math.round(winner.finalValue).toLocaleString()}
+          </div>
+        </AbsoluteFill>
+      </Sequence>
+
     </AbsoluteFill>
   );
 };

@@ -11,20 +11,21 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 
 const getWikiImageUrl = async (query: string) => {
+  const fallbackUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(query + ' 3d icon isolated background')}`;
   try {
     const searchRes = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&utf8=&format=json&origin=*`);
     const searchData = await searchRes.json();
-    if (!searchData.query?.search?.length) return null;
+    if (!searchData.query?.search?.length) return fallbackUrl;
     const title = searchData.query.search[0].title;
     
     const imgRes = await fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages&format=json&pithumbsize=500&origin=*`);
     const imgData = await imgRes.json();
     const pages = imgData.query?.pages;
-    if (!pages) return null;
+    if (!pages) return fallbackUrl;
     const pageId = Object.keys(pages)[0];
-    return pages[pageId]?.thumbnail?.source || null;
+    return pages[pageId]?.thumbnail?.source || fallbackUrl;
   } catch (e) {
-    return null;
+    return fallbackUrl;
   }
 };
 
