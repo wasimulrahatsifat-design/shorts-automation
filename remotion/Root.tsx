@@ -25,6 +25,7 @@ export const RemotionRoot: React.FC = () => {
               { label: 'Example C', value: 300, image_keyword: 'cherry' },
             ],
             tts_url: null, // Placeholder for TTS URL
+            show_subtitles: true,
           },
           topic: 'Example Topic',
         }}

@@ -21,6 +21,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [showSubtitles, setShowSubtitles] = useState(true);
 
   // Poll for updates every 5 seconds
   useEffect(() => {
@@ -43,7 +44,11 @@ export default function Home() {
     setLoading(true);
     setMessage(null);
     try {
-      const response = await fetch('/api/generate-topic', { method: 'POST' });
+      const response = await fetch('/api/generate-topic', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ showSubtitles })
+      });
       const data = await response.json();
       if (response.ok && data.success) {
         setMessage({ type: 'success', text: 'Video topic generated and queued!' });
@@ -99,14 +104,23 @@ export default function Home() {
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Shorts Dashboard</h1>
             <p className="text-gray-500 dark:text-gray-400">Control Panel for Video Generation</p>
           </div>
-          <div className="flex gap-4 mt-4 md:mt-0">
-            <Link href="/admin" className="px-6 py-3 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-all">
+          <div className="flex flex-col md:flex-row gap-4 mt-6 md:mt-0 items-center">
+            <label className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-medium cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={showSubtitles} 
+                onChange={(e) => setShowSubtitles(e.target.checked)} 
+                className="w-5 h-5 accent-blue-600 rounded cursor-pointer"
+              />
+              Show Subtitles
+            </label>
+            <Link href="/admin" className="px-6 py-3 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-all text-center">
               Admin View
             </Link>
             <button
               onClick={handleGenerate}
               disabled={loading}
-              className={`px-6 py-3 rounded-xl text-white font-semibold transition-all ${
+              className={`px-6 py-3 rounded-xl text-white font-semibold transition-all w-full md:w-auto ${
                 loading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 shadow-md active:scale-95'
               }`}
             >

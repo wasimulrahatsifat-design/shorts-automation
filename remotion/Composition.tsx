@@ -116,25 +116,27 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
       </div>
       
       {/* Subtitles Area (Hook Script) */}
-      <Sequence from={15}>
-        <div style={{
-          position: 'absolute',
-          bottom: 100,
-          left: 60,
-          right: 60,
-          textAlign: 'center',
-          fontSize: 50,
-          fontWeight: 800,
-          textShadow: '4px 4px 15px rgba(0,0,0,0.8)',
-          backgroundColor: 'rgba(0,0,0,0.4)',
-          padding: '25px',
-          borderRadius: 20,
-          border: '4px solid rgba(255,255,255,0.1)',
-          opacity: subtitleOpacity
-        }}>
-          {script}
-        </div>
-      </Sequence>
+      {data_json.show_subtitles !== false && (
+        <Sequence from={15}>
+          <div style={{
+            position: 'absolute',
+            bottom: 100,
+            left: 60,
+            right: 60,
+            textAlign: 'center',
+            fontSize: 50,
+            fontWeight: 800,
+            textShadow: '4px 4px 15px rgba(0,0,0,0.8)',
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            padding: '25px',
+            borderRadius: 20,
+            border: '4px solid rgba(255,255,255,0.1)',
+            opacity: subtitleOpacity
+          }}>
+            {script}
+          </div>
+        </Sequence>
+      )}
       
     </AbsoluteFill>
   );

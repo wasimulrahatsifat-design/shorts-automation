@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
 import { Octokit } from 'octokit';
-import * as googleTTS from 'google-tts-api';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -46,13 +45,24 @@ export async function POST(request: Request) {
     // 3. Generate New TTS
     let tts_url = row.data_json.tts_url;
     try {
-      const audioChunks = await googleTTS.getAllAudioBase64(newScript, {
-        lang: 'en',
-        slow: false,
-        host: 'https://translate.google.com',
+      const voiceId = 'pNInz6obpgDQGcFmaJgB'; // Adam
+      const elResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'xi-api-key': process.env.ELEVENLABS_API_KEY || '',
+        },
+        body: JSON.stringify({
+          text: newScript,
+          model_id: 'eleven_multilingual_v2',
+        }),
       });
 
-      const audioBuffer = Buffer.concat(audioChunks.map(chunk => Buffer.from(chunk.base64, 'base64')));
+      if (!elResponse.ok) {
+        throw new Error(`ElevenLabs API error: ${elResponse.statusText}`);
+      }
+
+      const audioBuffer = Buffer.from(await elResponse.arrayBuffer());
       const ttsFileName = `tts_${crypto.randomUUID()}.mp3`;
 
       const { error: uploadError } = await supabase.storage
