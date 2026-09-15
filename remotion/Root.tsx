@@ -2,7 +2,6 @@ import React from 'react';
 import { Composition, Audio } from 'remotion';
 import { DataComparison } from './Composition';
 import { ThreeDComposition } from './ThreeDComposition';
-import './style.css';
 import { loadFont } from '@remotion/google-fonts/Montserrat';
 
 // Preload a bold, modern font for our text
