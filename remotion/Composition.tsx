@@ -287,7 +287,7 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
           {/* Bottom Avatars */}
           <div style={{
             position: 'absolute',
-            bottom: 220,
+            bottom: 180,
             width: '100%',
             display: 'flex',
             flexDirection: 'row',
@@ -298,16 +298,36 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
           }}>
             {paths.map((pathData, idx) => (
               <div key={idx} style={{
-                width: 60,
-                height: 60,
-                borderRadius: '50%',
-                border: `3px solid ${pathData.color}`,
-                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 5,
                 opacity: interpolate(frame, [15, 30], [0, 1], { extrapolateRight: 'clamp' })
               }}>
-                {pathData.item.image_url ? (
-                  <Img src={pathData.item.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                ) : null}
+                <div style={{
+                  width: 60,
+                  height: 60,
+                  borderRadius: '50%',
+                  border: `3px solid ${pathData.color}`,
+                  overflow: 'hidden'
+                }}>
+                  {pathData.item.image_url ? (
+                    <Img src={pathData.item.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : null}
+                </div>
+                <div style={{
+                  fontSize: 12,
+                  color: 'white',
+                  textAlign: 'center',
+                  lineHeight: 1.2,
+                  maxWidth: 70,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}>
+                  {pathData.item.label}
+                </div>
               </div>
             ))}
           </div>
