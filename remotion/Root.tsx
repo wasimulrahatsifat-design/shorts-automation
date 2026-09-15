@@ -3,6 +3,7 @@ import { Composition, Audio } from 'remotion';
 import { DataComparison } from './Composition';
 import { WouldYouRather } from './WouldYouRather';
 import { Quiz } from './Quiz';
+import { MazeRace } from './MazeRace';
 import { loadFont } from '@remotion/google-fonts/Montserrat';
 
 // Preload a bold, modern font for our text
@@ -86,6 +87,36 @@ export const RemotionRoot: React.FC = () => {
             show_subtitles: true,
           },
           topic: 'Trivia Time',
+        }}
+      />
+      <Composition
+        id="MazeRace"
+        component={MazeRace}
+        durationInFrames={450}
+        fps={30}
+        width={1080}
+        height={1920}
+        calculateMetadata={({ props }: any) => {
+          return {
+            durationInFrames: props.data_json?.duration_seconds ? props.data_json.duration_seconds * 30 : 450
+          };
+        }}
+        defaultProps={{
+          data_json: {
+            script: "And they're off in the Maze Race!",
+            format: "Maze Race",
+            track_length: 100,
+            racers: [
+              { id: "1", name: "Racer A", color: "#FF0000", speed_profile: [2, 5, 1, 8, 3] },
+              { id: "2", name: "Racer B", color: "#00FF00", speed_profile: [3, 2, 6, 2, 7] },
+              { id: "3", name: "Racer C", color: "#0000FF", speed_profile: [1, 8, 2, 4, 5] },
+              { id: "4", name: "Racer D", color: "#FFFF00", speed_profile: [5, 3, 4, 6, 2] }
+            ],
+            winner_id: "2",
+            tts_url: null,
+            show_subtitles: true,
+          },
+          topic: 'Maze Race Demo',
         }}
       />
     </>
