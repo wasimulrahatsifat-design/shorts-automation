@@ -94,15 +94,15 @@ export async function POST(request: Request) {
       - "correct_answer": The exact string from the options array that is correct.
       - "image_keyword": A VERY SPECIFIC search keyword for Wikipedia to find an image related to the question.
       Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
-    } else if (videoFormat === 'Maze Race') {
+    } else if (videoFormat === 'Arena Clash') {
       prompt = `${topicInstruction}
-      Return a structured JSON object for a 2D top-down puzzle racing animation with EXACTLY these fields:
+      Return a structured JSON object for a 2D circular arena battle royale animation with EXACTLY these fields:
       - "topic": The generated topic as a string.
-      - "format": "Maze Race".
-      - "script": A short, engaging 10-15 second voiceover hook script for a YouTube Short narrating the race.
-      - "track_length": 100
-      - "racers": An array of objects. Each object MUST have "id" (string), "name" (string), "color" (hex string like "#FF0000"), "speed_profile" (an array of exactly 5 numbers determining how fast they move at different segments of the track), and "image_keyword" (A VERY SPECIFIC search keyword for Wikipedia to find an image for this racer). Must have exactly 4 racers.
-      - "winner_id": The id string of the winning racer.
+      - "format": "Arena Clash".
+      - "script": A short, intense 10-15 second voiceover hook script for a YouTube Short narrating the battle.
+      - "contestants": An array of exactly 4 objects representing the fighters. Each object MUST have "id" (string), "name" (string), "color" (hex string like "#FF0000"), "image_keyword" (A VERY SPECIFIC search keyword for Wikipedia to find an image for this contestant), and "starting_health" (number, typically 100).
+      - "events": An array of battle events. Each object MUST have "frame" (number, between 50 and 350), "attacker" (string id), "defender" (string id), "damage" (number), and "item_used" (string, e.g., "Sword", "Magic").
+      - "winner_id": The id string of the last standing contestant.
       Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
     } else {
       prompt = `${topicInstruction} The current year is 2026. Make sure to include up-to-date statistical data and projections up to 2026 if applicable.
@@ -153,11 +153,11 @@ export async function POST(request: Request) {
       if (dataPayload.image_keyword_b) dataPayload.image_url_b = await getWikiImageUrl(dataPayload.image_keyword_b);
     } else if (videoFormat === 'Quiz') {
       if (dataPayload.image_keyword) dataPayload.image_url = await getWikiImageUrl(dataPayload.image_keyword);
-    } else if (videoFormat === 'Maze Race') {
-      if (dataPayload.racers && Array.isArray(dataPayload.racers)) {
-        for (const racer of dataPayload.racers) {
-          if (racer.image_keyword) {
-            racer.image_url = await getWikiImageUrl(racer.image_keyword);
+    } else if (videoFormat === 'Arena Clash') {
+      if (dataPayload.contestants && Array.isArray(dataPayload.contestants)) {
+        for (const contestant of dataPayload.contestants) {
+          if (contestant.image_keyword) {
+            contestant.image_url = await getWikiImageUrl(contestant.image_keyword);
           }
         }
       }

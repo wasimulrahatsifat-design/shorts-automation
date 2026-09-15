@@ -3,7 +3,7 @@ import { Composition, Audio } from 'remotion';
 import { DataComparison } from './Composition';
 import { WouldYouRather } from './WouldYouRather';
 import { Quiz } from './Quiz';
-import { MazeRace } from './MazeRace';
+import { ArenaClash } from './ArenaClash';
 import { loadFont } from '@remotion/google-fonts/Montserrat';
 
 // Preload a bold, modern font for our text
@@ -90,8 +90,8 @@ export const RemotionRoot: React.FC = () => {
         }}
       />
       <Composition
-        id="MazeRace"
-        component={MazeRace}
+        id="ArenaClash"
+        component={ArenaClash}
         durationInFrames={450}
         fps={30}
         width={1080}
@@ -103,20 +103,24 @@ export const RemotionRoot: React.FC = () => {
         }}
         defaultProps={{
           data_json: {
-            script: "And they're off in the Maze Race!",
-            format: "Maze Race",
-            track_length: 100,
-            racers: [
-              { id: "1", name: "Racer A", color: "#FF0000", speed_profile: [2, 5, 1, 8, 3] },
-              { id: "2", name: "Racer B", color: "#00FF00", speed_profile: [3, 2, 6, 2, 7] },
-              { id: "3", name: "Racer C", color: "#0000FF", speed_profile: [1, 8, 2, 4, 5] },
-              { id: "4", name: "Racer D", color: "#FFFF00", speed_profile: [5, 3, 4, 6, 2] }
+            script: "Welcome to the ultimate Battle Royale!",
+            format: "Arena Clash",
+            contestants: [
+              { id: "1", name: "Fighter A", color: "#FF0000", starting_health: 100 },
+              { id: "2", name: "Fighter B", color: "#0000FF", starting_health: 100 },
+              { id: "3", name: "Fighter C", color: "#00FF00", starting_health: 100 },
+              { id: "4", name: "Fighter D", color: "#FFFF00", starting_health: 100 }
             ],
-            winner_id: "2",
+            events: [
+              { frame: 60, attacker: "1", defender: "2", damage: 25, item_used: "Sword" },
+              { frame: 120, attacker: "3", defender: "1", damage: 40, item_used: "Fireball" },
+              { frame: 200, attacker: "4", defender: "3", damage: 100, item_used: "Sniper" }
+            ],
+            winner_id: "4",
             tts_url: null,
             show_subtitles: true,
           },
-          topic: 'Maze Race Demo',
+          topic: 'Arena Clash Demo',
         }}
       />
     </>

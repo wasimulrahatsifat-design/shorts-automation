@@ -48,7 +48,7 @@ async function main() {
   let compName = 'DataComparison';
   if (formatType === 'Would You Rather') compName = 'WouldYouRather';
   else if (formatType === 'Quiz') compName = 'Quiz';
-  else if (formatType === 'Maze Race') compName = 'MazeRace';
+  else if (formatType === 'Arena Clash') compName = 'ArenaClash';
 
   try {
     execSync(`npx remotion render remotion/index.ts ${compName} ${outPath} --props=${propsPath} --frames=0-${frames - 1}`, { stdio: 'inherit' });

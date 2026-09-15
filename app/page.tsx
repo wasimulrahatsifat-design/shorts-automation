@@ -214,7 +214,7 @@ export default function Home() {
                   <option value="Data Comparison">Data Comparison</option>
                   <option value="Would You Rather">Would You Rather</option>
                   <option value="Quiz">Quiz</option>
-                  <option value="Maze Race">Maze Race</option>
+                  <option value="Arena Clash">Arena Clash</option>
                 </select>
               </div>
 
