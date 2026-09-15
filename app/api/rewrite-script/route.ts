@@ -36,6 +36,20 @@ const getWikiImageUrl = async (keyword: string) => {
       return googleData.items[0].link;
     }
 
+    // Tier 3: Imagen 3 (Dedicated API Key)
+    if (process.env.GEMINI_IMAGE_API_KEY) {
+      const aiImage = new GoogleGenAI({ apiKey: process.env.GEMINI_IMAGE_API_KEY });
+      const imageResp = await aiImage.models.generateImages({
+        model: 'imagen-3.0-generate-001',
+        prompt: `${keyword} 3d icon isolated on solid background`,
+        numberOfImages: 1,
+        outputMimeType: 'image/jpeg',
+      });
+      if (imageResp.generatedImages && imageResp.generatedImages.length > 0) {
+        return `data:image/jpeg;base64,${imageResp.generatedImages[0].image.imageBytes}`;
+      }
+    }
+
     return null;
   } catch (e) {
     return null;
@@ -67,10 +81,15 @@ export async function POST(request: Request) {
     // 2. Rewrite script with Gemini
     const prompt = `Rewrite this voiceover script to specifically fit a ${targetDuration}-second YouTube Short pacing. Make it engaging and fast-paced.
     Current script: "${currentScript}"
+    The current year is 2026. Make sure to include up-to-date statistical data and projections up to 2026 if applicable.
     
-    You MUST return a JSON object with EXACTLY two fields:
+    You MUST return a JSON object with EXACTLY these fields:
     - "script": The rewritten voiceover script.
+    - "x_axis_label": Label for the X-axis (e.g. "Year", "Month").
+    - "y_axis_label": Label for the Y-axis (e.g. "Monthly Players", "Revenue").
+    - "timeline_labels": An array of strings representing the time steps (e.g., ["2018", "2019", "2020", "2021", "2022"]). MUST have at least 5 items.
     - "items": Keep this exact data array, or update the labels/values to match the new script: ${currentItems}
+    CRITICAL: The length of the "values" array for EACH item MUST perfectly match the length of the "timeline_labels" array.
     
     Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
 

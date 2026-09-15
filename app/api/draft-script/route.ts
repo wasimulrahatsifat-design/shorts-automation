@@ -30,6 +30,20 @@ const getWikiImageUrl = async (keyword: string) => {
       return googleData.items[0].link;
     }
 
+    // Tier 3: Imagen 3 (Dedicated API Key)
+    if (process.env.GEMINI_IMAGE_API_KEY) {
+      const aiImage = new GoogleGenAI({ apiKey: process.env.GEMINI_IMAGE_API_KEY });
+      const imageResp = await aiImage.models.generateImages({
+        model: 'imagen-3.0-generate-001',
+        prompt: `${keyword} 3d icon isolated on solid background`,
+        numberOfImages: 1,
+        outputMimeType: 'image/jpeg',
+      });
+      if (imageResp.generatedImages && imageResp.generatedImages.length > 0) {
+        return `data:image/jpeg;base64,${imageResp.generatedImages[0].image.imageBytes}`;
+      }
+    }
+
     return null;
   } catch (e) {
     return null;
@@ -66,10 +80,12 @@ export async function POST(request: Request) {
       - "image_keyword": A VERY SPECIFIC search keyword for Wikipedia to find an image related to the question.
       Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
     } else {
-      prompt = `${topicInstruction} 
+      prompt = `${topicInstruction} The current year is 2026. Make sure to include up-to-date statistical data and projections up to 2026 if applicable.
       Return a structured JSON object with EXACTLY these fields:
       - "topic": The generated topic as a string.
       - "script": A short, fast-paced, highly engaging 10-15 second voiceover hook script for a YouTube Short.
+      - "x_axis_label": Label for the X-axis (e.g. "Year", "Month").
+      - "y_axis_label": Label for the Y-axis (e.g. "Monthly Players", "Revenue").
       - "timeline_labels": An array of strings representing the time steps (e.g., ["2018", "2019", "2020", "2021", "2022"]). MUST have at least 5 items.
       - "items": A REQUIRED array of at least 3 objects where each object MUST have "label" (string), "image_keyword" (string), and "values" (an array of numbers).
       CRITICAL: The length of the "values" array for EACH item MUST perfectly match the length of the "timeline_labels" array.

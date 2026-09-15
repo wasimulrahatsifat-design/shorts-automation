@@ -11,6 +11,8 @@ interface DataItem {
 
 interface DataJson {
   script: string;
+  x_axis_label?: string;
+  y_axis_label?: string;
   timeline_labels?: string[];
   items: DataItem[];
   tts_url?: string;
@@ -21,7 +23,7 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
   const frame = useCurrentFrame();
   const { fps, durationInFrames, width, height } = useVideoConfig();
 
-  const { script, items, timeline_labels } = data_json;
+  const { script, items, timeline_labels, x_axis_label, y_axis_label } = data_json;
 
   // Fallback for old videos that didn't have timeline_labels or values arrays
   const isOldFormat = !timeline_labels || timeline_labels.length === 0 || !items[0].values;
@@ -73,10 +75,10 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
   const chartOpacity = interpolate(frame, [chartDuration - 15, chartDuration], [1, 0], { extrapolateRight: 'clamp', extrapolateLeft: 'clamp' });
 
   // Chart Layout Dimensions
-  const chartX = 100;
+  const chartX = 150;
   const chartY = 350;
-  const chartW = width - 200;
-  const chartH = height - 800;
+  const chartW = width - 300;
+  const chartH = height - 900;
 
   // Progress animation: finish drawing lines before the winner reveal
   const animDuration = Math.max(1, chartDuration - 30);
@@ -101,9 +103,21 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
     });
   }, [normalizedItems, labelsCount, maxVal, chartW, chartH, chartX, chartY]);
 
-  // Current Label Index
-  const currentIndex = Math.min(Math.floor(progress), labelsCount - 1);
-  const currentLabel = labels[currentIndex];
+  // Current Label Index and Interpolation for smoothly incrementing numbers
+  const currI = Math.min(Math.floor(progress), labelsCount - 1);
+  const nextI = Math.min(currI + 1, labelsCount - 1);
+  const frac = progress - currI;
+
+  // Parse labels as numbers to smoothly interpolate if possible (e.g. "2020" -> "2021")
+  const currLabelNum = parseFloat(labels[currI]);
+  const nextLabelNum = parseFloat(labels[nextI]);
+  let displayedLabel = labels[currI];
+  if (!isNaN(currLabelNum) && !isNaN(nextLabelNum)) {
+    displayedLabel = Math.round(interpolate(frac, [0, 1], [currLabelNum, nextLabelNum])).toString();
+  }
+
+  // Calculate current X across the chart to use for the clipPath (hides future paths)
+  const curX = interpolate(frac, [0, 1], [paths[0].points[currI].x, paths[0].points[nextI].x]);
 
   // Winner Animations
   const winnerScale = spring({ frame: frame - chartDuration, fps, config: { damping: 12 } });
@@ -138,44 +152,69 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
 
           {/* SVG Chart Layer */}
           <svg width={width} height={height} style={{ position: 'absolute', top: 0, left: 0 }}>
+            {/* Dynamic ClipPath for True Racing Feel */}
+            <clipPath id="racing-clip">
+              <rect x={0} y={0} width={curX + 15} height={height} />
+            </clipPath>
+
             {/* Grid Lines */}
             <line x1={chartX} y1={chartY + chartH} x2={chartX + chartW} y2={chartY + chartH} stroke="rgba(255,255,255,0.3)" strokeWidth={4} />
             <line x1={chartX} y1={chartY} x2={chartX} y2={chartY + chartH} stroke="rgba(255,255,255,0.3)" strokeWidth={4} />
 
-            {/* Data Lines */}
-            {paths.map((pathData, idx) => {
-              const totalLength = chartW * 3; // safe large number for strokeDasharray
-              const drawProgress = progress / Math.max(1, labelsCount - 1);
-              const drawnLength = drawProgress * totalLength;
-
-              return (
-                <path
-                  key={idx}
-                  d={pathData.d}
-                  fill="none"
-                  stroke={pathData.color}
-                  strokeWidth={8}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeDasharray={totalLength}
-                  strokeDashoffset={totalLength - drawnLength}
-                  style={{ filter: `drop-shadow(0px 10px 10px ${pathData.color}88)` }}
-                />
-              );
-            })}
+            {/* Data Lines mapped with ClipPath */}
+            {paths.map((pathData, idx) => (
+              <path
+                key={idx}
+                d={pathData.d}
+                fill="none"
+                stroke={pathData.color}
+                strokeWidth={8}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                clipPath="url(#racing-clip)"
+                style={{ filter: `drop-shadow(0px 10px 10px ${pathData.color}88)` }}
+              />
+            ))}
           </svg>
+
+          {/* Axis Labels */}
+          {y_axis_label && (
+            <div style={{
+              position: 'absolute',
+              top: chartY + chartH / 2,
+              left: 30,
+              transform: 'translate(-50%, -50%) rotate(-90deg)',
+              fontSize: 32,
+              fontWeight: 800,
+              color: 'rgba(255,255,255,0.6)',
+              letterSpacing: 2,
+              textTransform: 'uppercase'
+            }}>
+              {y_axis_label}
+            </div>
+          )}
+          {x_axis_label && (
+            <div style={{
+              position: 'absolute',
+              top: chartY + chartH + 20,
+              left: chartX + chartW / 2,
+              transform: 'translate(-50%, 0)',
+              fontSize: 32,
+              fontWeight: 800,
+              color: 'rgba(255,255,255,0.6)',
+              letterSpacing: 2,
+              textTransform: 'uppercase'
+            }}>
+              {x_axis_label}
+            </div>
+          )}
 
           {/* Moving Avatars and Values */}
           {paths.map((pathData, idx) => {
-            const currI = Math.floor(progress);
-            const nextI = Math.min(currI + 1, labelsCount - 1);
-            const frac = progress - currI;
-
             const p1 = pathData.points[currI];
             const p2 = pathData.points[nextI];
             
-            const curX = interpolate(frac, [0, 1], [p1.x, p2.x]);
-            const curY = interpolate(frac, [0, 1], [p1.y, p2.y]);
+            const currentY = interpolate(frac, [0, 1], [p1.y, p2.y]);
             const curVal = interpolate(frac, [0, 1], [p1.val, p2.val]);
 
             const avatarSize = 90;
@@ -184,7 +223,7 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
               <div key={idx} style={{
                 position: 'absolute',
                 left: curX - avatarSize / 2,
-                top: curY - avatarSize / 2,
+                top: currentY - avatarSize / 2,
                 display: 'flex',
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -229,7 +268,7 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
             );
           })}
 
-          {/* Dynamic Timeline Text */}
+          {/* Dynamic Timeline Text (Smooth Increment) */}
           <div style={{
             position: 'absolute',
             bottom: 300,
@@ -242,7 +281,35 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
             letterSpacing: '10px',
             zIndex: 0
           }}>
-            {currentLabel}
+            {displayedLabel}
+          </div>
+
+          {/* Bottom Avatars */}
+          <div style={{
+            position: 'absolute',
+            bottom: 220,
+            width: '100%',
+            display: 'flex',
+            flexDirection: 'row',
+            justifyContent: 'center',
+            gap: 20,
+            padding: '0 50px',
+            flexWrap: 'wrap'
+          }}>
+            {paths.map((pathData, idx) => (
+              <div key={idx} style={{
+                width: 60,
+                height: 60,
+                borderRadius: '50%',
+                border: `3px solid ${pathData.color}`,
+                overflow: 'hidden',
+                opacity: interpolate(frame, [15, 30], [0, 1], { extrapolateRight: 'clamp' })
+              }}>
+                {pathData.item.image_url ? (
+                  <Img src={pathData.item.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : null}
+              </div>
+            ))}
           </div>
 
           {/* Subtitles Area (Hook Script) */}
@@ -280,7 +347,8 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
           opacity: winnerOpacity,
           transform: `scale(${winnerScale})`
         }}>
-          {/* Winner Sound Effect (Disabled for now) */}
+          {/* Winner Sound Effect */}
+          <Audio src="https://actions.google.com/sounds/v1/magic/magic_chime.ogg" volume={1} />
 
           <h1 style={{
             fontSize: 80,
