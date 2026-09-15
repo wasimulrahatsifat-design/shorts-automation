@@ -31,6 +31,7 @@ export default function Home() {
 
   // Step 2 State
   const [draftJson, setDraftJson] = useState('');
+  const [magicInstruction, setMagicInstruction] = useState('');
 
   // Poll for updates every 5 seconds on Step 3
   useEffect(() => {
@@ -115,6 +116,31 @@ export default function Home() {
       }
     } catch (error: any) {
       setMessage({ type: 'error', text: error.message || 'Unexpected error queueing video.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMagicEdit = async () => {
+    if (!magicInstruction.trim()) return;
+    setLoading(true);
+    setMessage(null);
+    try {
+      const response = await fetch('/api/edit-script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentScript: draftJson, userInstruction: magicInstruction })
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setDraftJson(data.newScript);
+        setMagicInstruction('');
+        setMessage({ type: 'success', text: 'Script edited magically!' });
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to edit script.' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Unexpected error editing script.' });
     } finally {
       setLoading(false);
     }
@@ -256,6 +282,30 @@ export default function Home() {
               onChange={(e) => setDraftJson(e.target.value)}
               className="w-full h-[500px] font-mono text-sm px-4 py-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 resize-none focus:ring-2 focus:ring-blue-500"
             />
+
+            <div className="bg-indigo-50 dark:bg-indigo-900/30 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800 space-y-4">
+              <label className="block text-sm font-bold text-indigo-900 dark:text-indigo-200">
+                ✨ AI Copilot
+              </label>
+              <div className="flex gap-4">
+                <input 
+                  type="text" 
+                  value={magicInstruction}
+                  onChange={(e) => setMagicInstruction(e.target.value)}
+                  placeholder="Tell AI to change something (e.g., 'Make values higher', 'Add one more item')..."
+                  className="flex-1 px-4 py-3 border border-indigo-200 dark:border-indigo-700 rounded-xl bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
+                />
+                <button 
+                  onClick={handleMagicEdit}
+                  disabled={loading || !magicInstruction.trim()}
+                  className={`px-6 py-3 rounded-xl text-white font-bold transition-all whitespace-nowrap ${
+                    loading || !magicInstruction.trim() ? 'bg-indigo-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 shadow-md active:scale-95'
+                  }`}
+                >
+                  {loading ? 'Thinking...' : 'Rewrite'}
+                </button>
+              </div>
+            </div>
 
             <div className="flex justify-between items-center pt-4">
               <button 
