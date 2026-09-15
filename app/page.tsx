@@ -44,7 +44,7 @@ export default function Home() {
 
   useEffect(() => {
     if (videoFormat === 'Quiz') {
-      setDuration(75); // Quiz usually needs more time for 5 questions
+      setDuration(80); // 16 seconds per question * 5 questions = 80s
     }
   }, [videoFormat]);
 

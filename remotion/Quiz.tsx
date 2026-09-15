@@ -30,11 +30,11 @@ const QuizRound: React.FC<{ questionData: Question, roundDuration: number, topic
   const questionY = spring({ frame: frame - 15, fps, config: { damping: 14 } });
   
   // Timer circle/bar
-  // We know the round ends at `roundDuration`. We want the 5s timer to run until 2 seconds before the end, 
-  // so the last 2 seconds are for revealing the answer.
-  const revealDuration = 2 * fps;
+  // The user says timer starts before audio ends.
+  // We allocate 16s per round. Reading takes ~9s, timer takes 5s, reveal takes 2s.
+  // Let's hardcode the timer to start at exactly 9 seconds (9 * fps) into the round.
+  const timerStartFrame = 9 * fps;
   const timerDuration = 5 * fps;
-  const timerStartFrame = Math.max(0, roundDuration - revealDuration - timerDuration);
   
   const timerProgress = interpolate(frame, [timerStartFrame, timerStartFrame + timerDuration], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   const isTimerDone = frame > timerStartFrame + timerDuration;
@@ -65,12 +65,13 @@ const QuizRound: React.FC<{ questionData: Question, roundDuration: number, topic
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        marginBottom: 40
+        marginBottom: 40,
+        marginTop: 20
       }}>
         {image_url && (
-          <Img src={image_url} style={{ width: '100%', height: 450, objectFit: 'cover' }} />
+          <Img src={image_url} style={{ width: '100%', height: 400, objectFit: 'contain', backgroundColor: '#d8e2dc' }} />
         )}
-        <div style={{ padding: '30px 40px', fontSize: 45, fontWeight: 800, color: '#2b2d42', textAlign: 'center' }}>
+        <div style={{ padding: '20px 30px', fontSize: 40, fontWeight: 800, color: '#2b2d42', textAlign: 'center' }}>
           {question}
         </div>
       </div>
