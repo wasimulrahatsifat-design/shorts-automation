@@ -2,7 +2,7 @@ import React from 'react';
 import { Composition, Audio } from 'remotion';
 import { DataComparison } from './Composition';
 import { WouldYouRather } from './WouldYouRather';
-import { Quiz } from './Quiz';
+import { Quiz, getQuestionTiming } from './Quiz';
 import { ArenaClash } from './ArenaClash';
 import { loadFont } from '@remotion/google-fonts/Montserrat';
 
@@ -72,6 +72,14 @@ export const RemotionRoot: React.FC = () => {
         width={1080}
         height={1920}
         calculateMetadata={({ props }: any) => {
+          if (props.data_json?.questions && Array.isArray(props.data_json.questions)) {
+            let totalFrames = 0;
+            for (const q of props.data_json.questions) {
+              totalFrames += getQuestionTiming(q, 30).totalFrames;
+            }
+            // Add a little padding at the end
+            return { durationInFrames: totalFrames + 30 };
+          }
           return {
             durationInFrames: props.data_json?.duration_seconds ? props.data_json.duration_seconds * 30 : 450
           };
