@@ -78,11 +78,40 @@ export const RemotionRoot: React.FC = () => {
         }}
         defaultProps={{
           data_json: {
-            script: "Can you guess this trivia question?",
-            question: "What is the largest planet in our solar system?",
-            options: ["Earth", "Jupiter", "Saturn"],
-            correct_answer: "Jupiter",
-            image_url: null,
+            script: "What is the largest planet in our solar system? A, Earth, B, Jupiter, C, Saturn. <break time=\"5s\"/> Which element has the chemical symbol O? A, Gold, B, Oxygen, C, Osmium. <break time=\"5s\"/> What is the capital of Japan? A, Seoul, B, Beijing, C, Tokyo. <break time=\"5s\"/> Who wrote Hamlet? A, Charles Dickens, B, William Shakespeare, C, Jane Austen. <break time=\"5s\"/> What is the speed of light? A, 300,000 km/s, B, 150,000 km/s, C, 1,000,000 km/s. <break time=\"5s\"/>",
+            format: "Quiz",
+            questions: [
+              {
+                question: "What is the largest planet in our solar system?",
+                options: ["Earth", "Jupiter", "Saturn"],
+                correct_answer: "Jupiter",
+                image_keyword: "Jupiter"
+              },
+              {
+                question: "Which element has the chemical symbol O?",
+                options: ["Gold", "Oxygen", "Osmium"],
+                correct_answer: "Oxygen",
+                image_keyword: "Oxygen"
+              },
+              {
+                question: "What is the capital of Japan?",
+                options: ["Seoul", "Beijing", "Tokyo"],
+                correct_answer: "Tokyo",
+                image_keyword: "Tokyo"
+              },
+              {
+                question: "Who wrote Hamlet?",
+                options: ["Charles Dickens", "William Shakespeare", "Jane Austen"],
+                correct_answer: "William Shakespeare",
+                image_keyword: "William Shakespeare"
+              },
+              {
+                question: "What is the speed of light?",
+                options: ["300,000 km/s", "150,000 km/s", "1,000,000 km/s"],
+                correct_answer: "300,000 km/s",
+                image_keyword: "Speed of light"
+              }
+            ],
             tts_url: null,
             show_subtitles: true,
           },

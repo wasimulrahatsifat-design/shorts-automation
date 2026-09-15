@@ -88,11 +88,8 @@ export async function POST(request: Request) {
       prompt = `${topicInstruction}
       Return a structured JSON object with EXACTLY these fields:
       - "topic": The generated topic as a string.
-      - "script": A short, engaging 10-15 second voiceover hook script for a YouTube Short asking the question and building suspense.
-      - "question": The trivia question as a string.
-      - "options": An array of exactly 3 string options.
-      - "correct_answer": The exact string from the options array that is correct.
-      - "image_keyword": A VERY SPECIFIC search keyword for Wikipedia to find an image related to the question.
+      - "script": The voiceover script. DO NOT add any conversational fluff. The script MUST ONLY consist of reading the question followed by its options, for each of the 5 questions in order. CRITICAL: You MUST insert an SSML break tag <break time="5s"/> immediately after reading the options for each question to allow time for the timer.
+      - "questions": An array of exactly 5 objects. Each object MUST have "question" (string), "options" (array of exactly 3 strings), "correct_answer" (the exact string from options), and "image_keyword" (A VERY SPECIFIC search keyword for Wikipedia to find an image related to the question).
       Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
     } else if (videoFormat === 'Arena Clash') {
       prompt = `${topicInstruction}
@@ -152,7 +149,13 @@ export async function POST(request: Request) {
       if (dataPayload.image_keyword_a) dataPayload.image_url_a = await getWikiImageUrl(dataPayload.image_keyword_a);
       if (dataPayload.image_keyword_b) dataPayload.image_url_b = await getWikiImageUrl(dataPayload.image_keyword_b);
     } else if (videoFormat === 'Quiz') {
-      if (dataPayload.image_keyword) dataPayload.image_url = await getWikiImageUrl(dataPayload.image_keyword);
+      if (dataPayload.questions && Array.isArray(dataPayload.questions)) {
+        for (const q of dataPayload.questions) {
+          if (q.image_keyword) {
+            q.image_url = await getWikiImageUrl(q.image_keyword);
+          }
+        }
+      }
     } else if (videoFormat === 'Arena Clash') {
       if (dataPayload.contestants && Array.isArray(dataPayload.contestants)) {
         for (const contestant of dataPayload.contestants) {

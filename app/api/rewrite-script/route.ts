@@ -94,19 +94,33 @@ export async function POST(request: Request) {
     const currentItems = JSON.stringify(row.data_json.items || []);
     
     // 2. Rewrite script with Gemini
-    const prompt = `Rewrite this voiceover script to specifically fit a ${targetDuration}-second YouTube Short pacing. Make it engaging and fast-paced.
-    Current script: "${currentScript}"
-    The current year is 2026. Make sure to include up-to-date statistical data and projections up to 2026 if applicable.
+    const videoFormat = row.data_json.type || 'Data Comparison';
+    let prompt = '';
     
-    You MUST return a JSON object with EXACTLY these fields:
-    - "script": The rewritten voiceover script.
-    - "x_axis_label": Label for the X-axis (e.g. "Year", "Month").
-    - "y_axis_label": Label for the Y-axis (e.g. "Monthly Players", "Revenue").
-    - "timeline_labels": An array of strings representing the time steps (e.g., ["2018", "2019", "2020", "2021", "2022"]). MUST have at least 5 items.
-    - "items": Keep this exact data array, or update the labels/values to match the new script: ${currentItems}
-    CRITICAL: The length of the "values" array for EACH item MUST perfectly match the length of the "timeline_labels" array.
-    
-    Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
+    if (videoFormat === 'Quiz') {
+      const currentQuestions = JSON.stringify(row.data_json.questions || []);
+      prompt = `Rewrite this quiz voiceover script to specifically fit a ${targetDuration}-second YouTube Short pacing.
+      Current script: "${currentScript}"
+      
+      You MUST return a JSON object with EXACTLY these fields:
+      - "script": The rewritten voiceover script. DO NOT add any conversational fluff. The script MUST ONLY consist of reading the question followed by its options, for each of the 5 questions in order. CRITICAL: You MUST insert an SSML break tag <break time="5s"/> immediately after reading the options for each question to allow time for the timer.
+      - "questions": Keep this exact questions array or update it if you changed the script: ${currentQuestions}
+      Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
+    } else {
+      prompt = `Rewrite this voiceover script to specifically fit a ${targetDuration}-second YouTube Short pacing. Make it engaging and fast-paced.
+      Current script: "${currentScript}"
+      The current year is 2026. Make sure to include up-to-date statistical data and projections up to 2026 if applicable.
+      
+      You MUST return a JSON object with EXACTLY these fields:
+      - "script": The rewritten voiceover script.
+      - "x_axis_label": Label for the X-axis (e.g. "Year", "Month").
+      - "y_axis_label": Label for the Y-axis (e.g. "Monthly Players", "Revenue").
+      - "timeline_labels": An array of strings representing the time steps (e.g., ["2018", "2019", "2020", "2021", "2022"]). MUST have at least 5 items.
+      - "items": Keep this exact data array, or update the labels/values to match the new script: ${currentItems}
+      CRITICAL: The length of the "values" array for EACH item MUST perfectly match the length of the "timeline_labels" array.
+      
+      Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
+    }
 
     const fallbackModels = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-flash-latest'];
     let text = '';
@@ -137,7 +151,7 @@ export async function POST(request: Request) {
     }
 
     const newScript = generatedData.script;
-    const newItems = generatedData.items;
+    const newItems = generatedData.items || generatedData.questions;
 
     if (!newScript || !newItems || !Array.isArray(newItems)) {
       throw new Error('Invalid JSON format returned from Gemini in rewrite-script.');

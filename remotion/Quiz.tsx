@@ -1,21 +1,26 @@
 import React from 'react';
-import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig, Sequence, Audio, Img } from 'remotion';
+import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig, Sequence, Audio, Img, Series } from 'remotion';
 
-interface QuizJson {
-  script: string;
+interface Question {
   question: string;
   options: string[];
   correct_answer: string;
+  image_keyword?: string;
   image_url?: string;
+}
+
+interface QuizJson {
+  script: string;
+  questions: Question[];
   tts_url?: string;
   show_subtitles?: boolean;
 }
 
-export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_json, topic }) => {
+const QuizRound: React.FC<{ questionData: Question, roundDuration: number, topic: string }> = ({ questionData, roundDuration, topic }) => {
   const frame = useCurrentFrame();
-  const { fps, durationInFrames } = useVideoConfig();
+  const { fps } = useVideoConfig();
 
-  const { script, question, options, correct_answer, image_url, tts_url, show_subtitles } = data_json;
+  const { question, options, correct_answer, image_url } = questionData;
 
   // Title Animations
   const titleOpacity = interpolate(frame, [0, 15], [0, 1], { extrapolateRight: 'clamp' });
@@ -24,19 +29,18 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
   // Question entrance
   const questionY = spring({ frame: frame - 15, fps, config: { damping: 14 } });
   
-  // Timer circle
+  // Timer circle/bar
+  // We want the 5-second timer to start after the voiceover finishes reading the question and options.
+  // Assuming voiceover takes about 3-5 seconds, we can start the timer roughly 4 seconds in.
+  const readingDuration = 4 * fps; 
   const timerDuration = 5 * fps;
-  const timerStartFrame = 60; // Start timer after 2 seconds
-  const timerProgress = interpolate(frame, [timerStartFrame, timerStartFrame + timerDuration], [0, 1], { extrapolateRight: 'clamp' });
+  const timerStartFrame = readingDuration; 
+  
+  const timerProgress = interpolate(frame, [timerStartFrame, timerStartFrame + timerDuration], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   const isTimerDone = frame > timerStartFrame + timerDuration;
 
-  const subtitleOpacity = interpolate(frame, [durationInFrames - 30, durationInFrames - 10], [1, 0], { extrapolateRight: 'clamp' });
-
   return (
-    <AbsoluteFill style={{ backgroundColor: '#2b2d42', fontFamily: '"Montserrat", sans-serif', padding: '60px 40px', color: 'white' }}>
-      {/* Audio Track */}
-      {tts_url && <Audio src={tts_url} volume={0.9} />}
-
+    <AbsoluteFill style={{ display: 'flex', flexDirection: 'column' }}>
       {/* Header Topic */}
       <div style={{ 
         opacity: titleOpacity, 
@@ -64,15 +68,15 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
         marginBottom: 40
       }}>
         {image_url && (
-          <Img src={image_url} style={{ width: '100%', height: 350, objectFit: 'cover' }} />
+          <Img src={image_url} style={{ width: '100%', height: 300, objectFit: 'cover' }} />
         )}
-        <div style={{ padding: '40px', fontSize: 50, fontWeight: 800, color: '#2b2d42', textAlign: 'center' }}>
+        <div style={{ padding: '30px 40px', fontSize: 45, fontWeight: 800, color: '#2b2d42', textAlign: 'center' }}>
           {question}
         </div>
       </div>
 
       {/* Options */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 25, flex: 1 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20, flex: 1 }}>
         {options.map((opt, index) => {
           const optEntrance = spring({ frame: frame - (30 + index * 10), fps, config: { damping: 14 } });
           const isCorrect = opt === correct_answer;
@@ -86,9 +90,9 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
               transform: `translateX(${(1 - optEntrance) * -100}px)`,
               opacity: fadeIncorrect ? 0.3 : optEntrance,
               backgroundColor: highlightCorrect ? '#2a9d8f' : '#8d99ae',
-              padding: '30px',
+              padding: '25px',
               borderRadius: 20,
-              fontSize: 45,
+              fontSize: 40,
               fontWeight: 700,
               boxShadow: highlightCorrect ? '0 0 40px #2a9d8f' : 'none',
               transition: 'all 0.5s',
@@ -107,7 +111,9 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
         height: 20,
         backgroundColor: '#8d99ae',
         borderRadius: 10,
-        overflow: 'hidden'
+        overflow: 'hidden',
+        opacity: timerProgress > 0 ? 1 : 0.3, // Dim before starting
+        transition: 'opacity 0.3s'
       }}>
         <div style={{
           width: `${(1 - timerProgress) * 100}%`,
@@ -115,30 +121,72 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
           backgroundColor: '#ef233c'
         }} />
       </div>
+    </AbsoluteFill>
+  );
+};
 
-      {/* Subtitles Area */}
+export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_json, topic }) => {
+  const { fps, durationInFrames } = useVideoConfig();
+  const frame = useCurrentFrame();
+
+  const { script, questions = [], tts_url, show_subtitles } = data_json;
+
+  // Fallback if no questions are provided
+  if (!questions || questions.length === 0) {
+    return (
+      <AbsoluteFill style={{ backgroundColor: '#2b2d42', justifyContent: 'center', alignItems: 'center', color: 'white' }}>
+        <h1>No Questions Found</h1>
+      </AbsoluteFill>
+    );
+  }
+
+  // Divide total duration equally among questions
+  const roundDuration = Math.floor(durationInFrames / questions.length);
+
+  const subtitleOpacity = interpolate(frame, [durationInFrames - 30, durationInFrames - 10], [1, 0], { extrapolateRight: 'clamp' });
+
+  return (
+    <AbsoluteFill style={{ backgroundColor: '#2b2d42', fontFamily: '"Montserrat", sans-serif', padding: '60px 40px', color: 'white' }}>
+      {/* Background Audio Track - single track spanning all questions */}
+      {tts_url && <Audio src={tts_url} volume={0.9} />}
+
+      <Series>
+        {questions.map((q, idx) => {
+          // If it's the last question, give it whatever remaining frames exist so we don't end early due to flooring
+          const isLast = idx === questions.length - 1;
+          const dur = isLast ? durationInFrames - (roundDuration * (questions.length - 1)) : roundDuration;
+          
+          return (
+            <Series.Sequence key={idx} durationInFrames={dur}>
+              <QuizRound questionData={q} roundDuration={dur} topic={topic} />
+            </Series.Sequence>
+          );
+        })}
+      </Series>
+
+      {/* Subtitles Area (Optional) */}
       {show_subtitles !== false && (
-        <Sequence from={15}>
-          <div style={{
-            position: 'absolute',
-            bottom: 150,
-            left: 40,
-            right: 40,
-            textAlign: 'center',
-            fontSize: 45,
-            fontWeight: 800,
-            textShadow: '4px 4px 15px rgba(0,0,0,0.8)',
-            backgroundColor: 'rgba(0,0,0,0.6)',
-            padding: '20px',
-            borderRadius: 15,
-            border: '2px solid rgba(255,255,255,0.1)',
-            opacity: subtitleOpacity,
-            color: 'white',
-            zIndex: 20
-          }}>
-            {script}
-          </div>
-        </Sequence>
+        <div style={{
+          position: 'absolute',
+          bottom: 150,
+          left: 40,
+          right: 40,
+          textAlign: 'center',
+          fontSize: 35,
+          fontWeight: 800,
+          textShadow: '4px 4px 15px rgba(0,0,0,0.8)',
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          padding: '20px',
+          borderRadius: 15,
+          border: '2px solid rgba(255,255,255,0.1)',
+          opacity: subtitleOpacity,
+          color: 'white',
+          zIndex: 20
+        }}>
+          {/* Subtitles can be tricky with SSML breaks, we might need a dedicated subtitle parser 
+              if the text gets too long, but for now we just show a static or simple scrolling view if needed */}
+          Trivia Challenge!
+        </div>
       )}
     </AbsoluteFill>
   );
