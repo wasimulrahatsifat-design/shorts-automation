@@ -86,7 +86,7 @@ export const RemotionRoot: React.FC = () => {
         }}
         defaultProps={{
           data_json: {
-            script: "What is the largest planet in our solar system? A, Earth, B, Jupiter, C, Saturn. <break time=\"5s\"/> Which element has the chemical symbol O? A, Gold, B, Oxygen, C, Osmium. <break time=\"5s\"/> What is the capital of Japan? A, Seoul, B, Beijing, C, Tokyo. <break time=\"5s\"/> Who wrote Hamlet? A, Charles Dickens, B, William Shakespeare, C, Jane Austen. <break time=\"5s\"/> What is the speed of light? A, 300,000 km/s, B, 150,000 km/s, C, 1,000,000 km/s. <break time=\"5s\"/>",
+            script: "What is the largest planet in our solar system? A, Earth, B, Jupiter, C, Saturn. <break time='5s'/> Which element has the chemical symbol O? A, Gold, B, Oxygen, C, Osmium. <break time='5s'/> What is the capital of Japan? A, Seoul, B, Beijing, C, Tokyo. <break time='5s'/> Who wrote Hamlet? A, Charles Dickens, B, William Shakespeare, C, Jane Austen. <break time='5s'/> What is the speed of light? A, 300,000 km/s, B, 150,000 km/s, C, 1,000,000 km/s. <break time='5s'/>",
             format: "Quiz",
             questions: [
               {

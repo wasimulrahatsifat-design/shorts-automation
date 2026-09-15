@@ -103,7 +103,7 @@ export async function POST(request: Request) {
       Current script: "${currentScript}"
       
       You MUST return a JSON object with EXACTLY these fields:
-      - "script": The rewritten voiceover script. DO NOT add any conversational fluff. The script MUST ONLY consist of reading the question followed by its options, for each of the 5 questions in order. CRITICAL: You MUST insert an SSML break tag <break time="5s"/> immediately after reading the options for each question to allow time for the timer.
+      - "script": The rewritten voiceover script. DO NOT add any conversational fluff. The script MUST ONLY consist of reading the question followed by its options, for each of the 5 questions in order. CRITICAL: You MUST insert an SSML break tag <break time='5s'/> (USE SINGLE QUOTES FOR 5s) immediately after reading the options for each question to allow time for the timer.
       - "questions": Keep this exact questions array or update it if you changed the script: ${currentQuestions}
       Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
     } else {
