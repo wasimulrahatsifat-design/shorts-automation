@@ -9,10 +9,12 @@ interface Question {
   image_url?: string;
 }
 
-interface QuizJson {
+export interface QuizJson {
   script: string;
-  questions: Question[];
-  tts_url?: string;
+  format?: string;
+  questions?: Question[];
+  tts_url?: string | null;
+  tts_urls?: string[] | null;
   show_subtitles?: boolean;
 }
 
@@ -142,7 +144,7 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
   const { fps, durationInFrames } = useVideoConfig();
   const frame = useCurrentFrame();
 
-  const { script, questions = [], tts_url, show_subtitles } = data_json;
+  const { script, questions = [], tts_url, tts_urls, show_subtitles } = data_json;
 
   // Fallback if no questions are provided
   if (!questions || questions.length === 0) {
@@ -157,8 +159,8 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#2b2d42', fontFamily: '"Montserrat", sans-serif', padding: '60px 40px', color: 'white' }}>
-      {/* Background Audio Track - single track spanning all questions */}
-      {tts_url && <Audio src={tts_url} volume={0.9} />}
+      {/* Background Audio Track - legacy fallback for single track */}
+      {tts_url && !tts_urls && <Audio src={tts_url} volume={0.9} />}
 
       <Series>
         {questions.map((q, idx) => {
@@ -166,6 +168,8 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
           
           return (
             <Series.Sequence key={idx} durationInFrames={totalFrames}>
+              {/* Play individual audio for this specific question */}
+              {tts_urls && tts_urls[idx] && <Audio src={tts_urls[idx]} volume={0.9} />}
               <QuizRound questionData={q} topic={topic} />
             </Series.Sequence>
           );

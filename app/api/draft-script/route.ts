@@ -88,7 +88,7 @@ export async function POST(request: Request) {
       prompt = `${topicInstruction}
       Return a structured JSON object with EXACTLY these fields:
       - "topic": The generated topic as a string.
-      - "script": The voiceover script. DO NOT add any conversational fluff. The script MUST ONLY consist of reading the question followed by its options, for each of the 5 questions in order. CRITICAL: You MUST insert an SSML break tag <break time='5s'/> (USE SINGLE QUOTES FOR 5s) immediately after reading the options for each question to allow time for the timer.
+      - "script": The voiceover script. DO NOT add any conversational fluff.
       - "questions": An array of exactly 5 objects. The first 3 questions MUST be general knowledge (easy level) so most people can answer them. The last 2 can be of moderate difficulty. Ensure all questions and options are very short so they can be read aloud in under 8 seconds. Each object MUST have "question" (string), "options" (array of exactly 3 strings), "correct_answer" (the exact string from options), and "image_keyword" (A VERY SPECIFIC search keyword for Wikipedia to find an image related to the question).
       Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
     } else if (videoFormat === 'Arena Clash') {

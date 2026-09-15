@@ -103,7 +103,7 @@ export async function POST(request: Request) {
       Current script: "${currentScript}"
       
       You MUST return a JSON object with EXACTLY these fields:
-      - "script": The rewritten voiceover script. DO NOT add any conversational fluff. The script MUST ONLY consist of reading the question followed by its options, for each of the 5 questions in order. CRITICAL: You MUST insert an SSML break tag <break time='5s'/> (USE SINGLE QUOTES FOR 5s) immediately after reading the options for each question to allow time for the timer.
+      - "script": The rewritten voiceover script. DO NOT add any conversational fluff.
       - "questions": Keep this exact questions array or update it if you changed the script: ${currentQuestions}
       Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
     } else {
@@ -166,38 +166,45 @@ export async function POST(request: Request) {
     }
 
     // 3. Generate New TTS
-    let tts_url = row.data_json.tts_url;
+    let tts_url = null;
+    let tts_urls: string[] = [];
+    const voiceId = 'pNInz6obpgDQGcFmaJgB'; // Adam
     try {
-      const voiceId = 'pNInz6obpgDQGcFmaJgB'; // Adam
-      const elResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'xi-api-key': process.env.ELEVENLABS_API_KEY || '',
-        },
-        body: JSON.stringify({
-          text: newScript,
-          model_id: 'eleven_multilingual_v2',
-        }),
-      });
+      if (videoFormat === 'Quiz' && newItems && newItems.length > 0) {
+        const generateTTSForText = async (text: string) => {
+          const elResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'xi-api-key': process.env.ELEVENLABS_API_KEY || '' },
+            body: JSON.stringify({ text, model_id: 'eleven_multilingual_v2' }),
+          });
+          if (!elResponse.ok) throw new Error(`ElevenLabs API error`);
+          const audioBuffer = Buffer.from(await elResponse.arrayBuffer());
+          const ttsFileName = `tts_${crypto.randomUUID()}.mp3`;
+          await supabase.storage.from('shorts').upload(ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
+          const { data: publicUrlData } = supabase.storage.from('shorts').getPublicUrl(ttsFileName);
+          return publicUrlData.publicUrl;
+        };
 
-      if (!elResponse.ok) {
-        throw new Error(`ElevenLabs API error: ${elResponse.statusText}`);
-      }
-
-      const audioBuffer = Buffer.from(await elResponse.arrayBuffer());
-      const ttsFileName = `tts_${crypto.randomUUID()}.mp3`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('shorts')
-        .upload(ttsFileName, audioBuffer, {
-          contentType: 'audio/mpeg',
-          upsert: true,
+        const promises = newItems.map((q: any) => {
+          const text = `${q.question} A, ${q.options[0]}, B, ${q.options[1]}, C, ${q.options[2]}.`;
+          return generateTTSForText(text);
         });
-
-      if (!uploadError) {
-        const { data: publicUrlData } = supabase.storage.from('shorts').getPublicUrl(ttsFileName);
-        tts_url = publicUrlData.publicUrl;
+        
+        tts_urls = await Promise.all(promises);
+      } else {
+        const elResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'xi-api-key': process.env.ELEVENLABS_API_KEY || '' },
+          body: JSON.stringify({ text: newScript, model_id: 'eleven_multilingual_v2' }),
+        });
+        if (!elResponse.ok) throw new Error(`ElevenLabs API error: ${elResponse.statusText}`);
+        const audioBuffer = Buffer.from(await elResponse.arrayBuffer());
+        const ttsFileName = `tts_${crypto.randomUUID()}.mp3`;
+        const { error: uploadError } = await supabase.storage.from('shorts').upload(ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
+        if (!uploadError) {
+          const { data: publicUrlData } = supabase.storage.from('shorts').getPublicUrl(ttsFileName);
+          tts_url = publicUrlData.publicUrl;
+        }
       }
     } catch (ttsError) {
       console.error('TTS Generation failed:', ttsError);
@@ -209,6 +216,7 @@ export async function POST(request: Request) {
       script: newScript,
       items: newItems,
       tts_url: tts_url,
+      tts_urls: tts_urls,
       duration_seconds: parseInt(targetDuration)
     };
 
