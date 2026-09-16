@@ -59,7 +59,7 @@ export async function POST(request: Request) {
       Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
     }
 
-    const fallbackModels = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-flash-latest'];
+    const fallbackModels = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-flash'];
     let text = '';
     
     const generateWithKey = async (client: any, keyIndex: number) => {

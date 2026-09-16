@@ -306,10 +306,10 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
                 opacity: interpolate(frame, [15, 30], [0, 1], { extrapolateRight: 'clamp' })
               }}>
                 <div style={{
-                  width: 60,
-                  height: 60,
+                  width: 90,
+                  height: 90,
                   borderRadius: '50%',
-                  border: `3px solid ${pathData.color}`,
+                  border: `4px solid ${pathData.color}`,
                   overflow: 'hidden'
                 }}>
                   {pathData.item.image_url ? (
@@ -317,11 +317,12 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
                   ) : null}
                 </div>
                 <div style={{
-                  fontSize: 12,
+                  fontSize: 26,
+                  fontWeight: 'bold',
                   color: 'white',
                   textAlign: 'center',
                   lineHeight: 1.2,
-                  maxWidth: 70,
+                  maxWidth: 140,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap'
