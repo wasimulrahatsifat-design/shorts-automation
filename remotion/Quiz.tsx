@@ -1,5 +1,5 @@
 import React from 'react';
-import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig, Sequence, Audio, Img, Series } from 'remotion';
+import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig, Sequence, Audio, Img, Series, staticFile } from 'remotion';
 
 interface Question {
   question: string;
@@ -120,6 +120,13 @@ const QuizRound: React.FC<{ questionData: Question, topic: string }> = ({ questi
         })}
       </div>
 
+      {/* Timer Sound */}
+      {frame >= startOfTimer && frame < endOfTimer && (
+        <Sequence from={startOfTimer} durationInFrames={endOfTimer - startOfTimer}>
+          <Audio src={staticFile('timer.mp3')} volume={0.6} />
+        </Sequence>
+      )}
+
       {/* Timer Bar */}
       <div style={{
         marginTop: 40,
@@ -174,6 +181,18 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
             </Series.Sequence>
           );
         })}
+        
+        {/* Outro Sequence */}
+        <Series.Sequence durationInFrames={3 * fps}>
+          {tts_urls && tts_urls[questions.length] && (
+            <Audio src={tts_urls[questions.length]} volume={0.9} />
+          )}
+          <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center' }}>
+            <div style={{ fontSize: 80, fontWeight: 'bold', textShadow: '0px 10px 30px rgba(0,0,0,0.8)' }}>
+              Thanks for watching!
+            </div>
+          </AbsoluteFill>
+        </Series.Sequence>
       </Series>
 
       {/* Subtitles Area (Optional) */}

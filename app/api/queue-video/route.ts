@@ -51,6 +51,10 @@ export async function POST(request: Request) {
           tts_urls.push(url);
         }
         
+        // Add "Thanks for watching" outro TTS
+        const outroUrl = await generateTTSForText("Thanks for watching!");
+        tts_urls.push(outroUrl);
+        
       } else {
         // Standard single TTS logic
         const elResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {

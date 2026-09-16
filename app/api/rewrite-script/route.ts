@@ -23,31 +23,7 @@ const getWikiImageUrl = async (keyword: string) => {
   };
 
   try {
-    // Tier 1: Wikipedia API
-    const searchRes = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(keyword)}&utf8=&format=json&origin=*`);
-    const searchData = await searchRes.json();
-    
-    if (searchData.query?.search?.length) {
-      const title = searchData.query.search[0].title;
-      const imgRes = await fetch(`https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=pageimages&format=json&pithumbsize=500&origin=*`);
-      const imgData = await imgRes.json();
-      const pages = imgData.query?.pages;
-      if (pages) {
-        const pageId = Object.keys(pages)[0];
-        if (pages[pageId]?.thumbnail?.source) {
-          return pages[pageId].thumbnail.source;
-        }
-      }
-    }
-
-    // Tier 2: Google Custom Search API
-    const googleRes = await fetch(`https://www.googleapis.com/customsearch/v1?q=${encodeURIComponent(keyword)}&cx=${process.env.GOOGLE_CX}&key=${process.env.GOOGLE_API_KEY}&searchType=image&num=1`);
-    const googleData = await googleRes.json();
-    if (googleData.items && googleData.items.length > 0) {
-      return googleData.items[0].link;
-    }
-
-    // Tier 3: Imagen 3 (Dedicated API Key)
+    // Generate AI Image (Imagen 3)
     if (process.env.GEMINI_IMAGE_API_KEY) {
       try {
         const aiImage = new GoogleGenAI({ apiKey: process.env.GEMINI_IMAGE_API_KEY });
@@ -64,11 +40,12 @@ const getWikiImageUrl = async (keyword: string) => {
         console.error("Imagen 3 Failed for keyword:", keyword, err.message);
       }
     }
-
-    return generateSvgAvatar(keyword);
-  } catch (e) {
-    return generateSvgAvatar(keyword);
+  } catch (err) {
+    console.error("Error generating image:", err);
   }
+
+  // Fallback to SVG if Imagen fails
+  return generateSvgAvatar(keyword);
 };
 
 export async function POST(request: Request) {
@@ -190,6 +167,10 @@ export async function POST(request: Request) {
           const url = await generateTTSForText(text);
           tts_urls.push(url);
         }
+        
+        // Add "Thanks for watching" outro TTS
+        const outroUrl = await generateTTSForText("Thanks for watching!");
+        tts_urls.push(outroUrl);
       } else {
         const elResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
           method: 'POST',
