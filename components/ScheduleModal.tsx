@@ -15,8 +15,14 @@ export const ScheduleModal: React.FC<ScheduleModalProps> = ({ isOpen, onClose, o
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (scheduledTime) {
-      // Convert local datetime string to UTC ISO string so backend correctly understands it
-      const isoString = new Date(scheduledTime).toISOString();
+      // scheduledTime format: YYYY-MM-DDTHH:mm
+      // Safely parse as local time
+      const [datePart, timePart] = scheduledTime.split('T');
+      const [year, month, day] = datePart.split('-');
+      const [hour, minute] = timePart.split(':');
+      const dateObj = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
+      
+      const isoString = dateObj.toISOString();
       onSubmit(isoString);
     }
   };

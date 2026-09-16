@@ -35,6 +35,35 @@ async function main() {
     process.exit(0);
   }
 
+  // Initialize YouTube OAuth2 Client
+  console.log('Authenticating with YouTube API...');
+  const oauth2Client = new google.auth.OAuth2(
+    clientId,
+    clientSecret,
+    'https://developers.google.com/oauthplayground'
+  );
+
+  oauth2Client.setCredentials({
+    refresh_token: refreshToken
+  });
+
+  try {
+    const { token } = await oauth2Client.getAccessToken();
+    if (!token) throw new Error('OAuth client returned an empty access token.');
+    console.log('Successfully refreshed YouTube access token.');
+  } catch (authError) {
+    console.error('\n=============================================');
+    console.error('YOUTUBE AUTHENTICATION FAILED (401 Unauthorized)');
+    console.error('The YOUTUBE_REFRESH_TOKEN is expired, invalid, or has been revoked.');
+    console.error('=============================================\n');
+    process.exit(1);
+  }
+
+  const youtube = google.youtube({
+    version: 'v3',
+    auth: oauth2Client
+  });
+
   console.log(`Found ${videos.length} videos to publish.`);
 
   for (const video of videos) {
