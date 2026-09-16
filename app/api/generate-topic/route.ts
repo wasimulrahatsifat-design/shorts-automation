@@ -110,8 +110,11 @@ export async function POST(request: Request) {
     const { topic, script } = generatedData;
     let dataPayload = { ...generatedData, type: videoFormat };
 
-    if (!topic || !script) {
-      throw new Error('Invalid data format returned from Gemini.');
+    if (!topic) {
+      throw new Error('Invalid data format returned from Gemini: missing topic.');
+    }
+    if (videoFormat !== 'Would You Rather' && !script) {
+      throw new Error('Invalid data format returned from Gemini: missing script.');
     }
 
     // Fetch images based on format
