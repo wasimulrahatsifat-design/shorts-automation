@@ -47,18 +47,33 @@ export const RemotionRoot: React.FC = () => {
         width={1080}
         height={1920}
         calculateMetadata={({ props }: any) => {
-          return {
-            durationInFrames: props.data_json?.duration_seconds ? props.data_json.duration_seconds * 30 : 450
-          };
+          if (props.data_json?.scenarios && Array.isArray(props.data_json.scenarios)) {
+            let totalFrames = 0;
+            for (const s of props.data_json.scenarios) {
+              // Assume we need a helper or just rough estimate if getWyrTiming isn't exported directly here
+              // (Wait, I didn't import getWyrTiming, so I'll just calculate it roughly or import it)
+              const textLength = s.option_a.length + s.option_b.length + 20;
+              const readingSeconds = (textLength / 15) + 1;
+              const readingFrames = Math.round(readingSeconds * 30);
+              totalFrames += readingFrames + (5 * 30); // timer 3s + reveal 2s
+            }
+            return { durationInFrames: totalFrames + (3 * 30) }; // + outro
+          }
+          return { durationInFrames: 450 };
         }}
         defaultProps={{
           data_json: {
-            script: "Would you rather have flying cars or teleportation?",
-            scenario_a: "Flying Cars",
-            scenario_b: "Teleportation",
-            image_url_a: null,
-            image_url_b: null,
-            tts_url: null,
+            scenarios: [
+              {
+                option_a: "Control water",
+                option_b: "Control fire",
+                image_keyword_a: "water",
+                image_keyword_b: "fire",
+                percent_a: 68,
+                percent_b: 32
+              }
+            ],
+            tts_urls: null,
             show_subtitles: true,
           },
           topic: 'Would You Rather',

@@ -70,6 +70,25 @@ export async function POST(request: Request) {
         const outroUrl = await generateTTSForText("Thanks for watching!");
         tts_urls.push(outroUrl);
         
+      } else if (data_json.format === 'Would You Rather' && data_json.scenarios) {
+        const generateTTSForText = async (text: string) => {
+          const elResponse = await fetchElevenLabs(text);
+          const audioBuffer = Buffer.from(await elResponse.arrayBuffer());
+          const ttsFileName = `tts_${crypto.randomUUID()}.mp3`;
+          await supabase.storage.from('shorts').upload(ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
+          const { data: publicUrlData } = supabase.storage.from('shorts').getPublicUrl(ttsFileName);
+          return publicUrlData.publicUrl;
+        };
+
+        for (const s of data_json.scenarios) {
+          const text = `Would you rather ${s.option_a} or ${s.option_b}?`;
+          const url = await generateTTSForText(text);
+          tts_urls.push(url);
+        }
+        
+        // Add "Thanks for watching" outro TTS
+        const outroUrl = await generateTTSForText("Thanks for watching!");
+        tts_urls.push(outroUrl);
       } else {
         // Standard single TTS logic
         const elResponse = await fetchElevenLabs(script);

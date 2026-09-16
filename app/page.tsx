@@ -46,8 +46,12 @@ export default function Home() {
       if (parsed.questions) parsed.questions.forEach((q: any) => addKeyword(q.image_keyword));
       if (parsed.items) parsed.items.forEach((item: any) => addKeyword(item.image_keyword));
       if (parsed.contestants) parsed.contestants.forEach((c: any) => addKeyword(c.image_keyword));
-      if (parsed.image_keyword_a) addKeyword(parsed.image_keyword_a);
-      if (parsed.image_keyword_b) addKeyword(parsed.image_keyword_b);
+      if (parsed.scenarios) {
+        parsed.scenarios.forEach((s: any) => {
+          addKeyword(s.image_keyword_a);
+          addKeyword(s.image_keyword_b);
+        });
+      }
 
       setRequiredImages(prev => {
         return Array.from(keywords).map(kw => {
@@ -82,8 +86,12 @@ export default function Home() {
         if (parsed.contestants) {
           parsed.contestants.forEach((c: any) => { if (c.image_keyword === keyword) c.image_url = base64Url; });
         }
-        if (parsed.image_keyword_a === keyword) parsed.image_url_a = base64Url;
-        if (parsed.image_keyword_b === keyword) parsed.image_url_b = base64Url;
+        if (parsed.scenarios) {
+          parsed.scenarios.forEach((s: any) => {
+            if (s.image_keyword_a === keyword) s.image_url_a = base64Url;
+            if (s.image_keyword_b === keyword) s.image_url_b = base64Url;
+          });
+        }
 
         setDraftJson(JSON.stringify(parsed, null, 2));
       } catch(e) {}
