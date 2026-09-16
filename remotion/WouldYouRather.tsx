@@ -99,7 +99,7 @@ const WyrRound: React.FC<{ scenarioData: Scenario, topic: string }> = ({ scenari
         {/* Black gradient to make text readable */}
         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '60%', background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)', zIndex: 1 }} />
         
-        <h2 style={{ fontSize: 60, fontWeight: 900, color: 'white', textShadow: '2px 2px 10px rgba(0,0,0,0.8)', zIndex: 2, textAlign: 'center', padding: '0 40px' }}>
+        <h2 style={{ fontSize: 60, fontWeight: 900, color: 'white', textShadow: '2px 2px 10px rgba(0,0,0,0.8)', zIndex: 2, textAlign: 'center', padding: '0 80px' }}>
           {option_a}
         </h2>
       </div>
@@ -125,7 +125,7 @@ const WyrRound: React.FC<{ scenarioData: Scenario, topic: string }> = ({ scenari
         {/* Black gradient to make text readable */}
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '60%', background: 'linear-gradient(to bottom, rgba(0,0,0,0.9), transparent)', zIndex: 1 }} />
         
-        <h2 style={{ fontSize: 60, fontWeight: 900, color: 'white', textShadow: '2px 2px 10px rgba(0,0,0,0.8)', zIndex: 2, textAlign: 'center', padding: '0 40px' }}>
+        <h2 style={{ fontSize: 60, fontWeight: 900, color: 'white', textShadow: '2px 2px 10px rgba(0,0,0,0.8)', zIndex: 2, textAlign: 'center', padding: '0 80px' }}>
           {option_b}
         </h2>
       </div>

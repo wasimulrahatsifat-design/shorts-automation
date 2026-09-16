@@ -54,8 +54,8 @@ const QuizRound: React.FC<{ questionData: Question, topic: string }> = ({ questi
   const isTimerDone = frame > timerStartFrame + timerFrames;
 
   return (
-    <AbsoluteFill style={{ display: 'flex', flexDirection: 'column' }}>
-      {/* Header Topic */}
+    <AbsoluteFill style={{ backgroundColor: '#2b2d42', padding: '60px 100px', color: 'white', display: 'flex', flexDirection: 'column' }}>
+      {/* Question Number */}
       <div style={{ 
         opacity: titleOpacity, 
         transform: `scale(${titleScale})`, 
@@ -217,8 +217,8 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
         <div style={{
           position: 'absolute',
           bottom: 150,
-          left: 40,
-          right: 40,
+          left: 100,
+          right: 100,
           textAlign: 'center',
           fontSize: 35,
           fontWeight: 800,

@@ -182,7 +182,7 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
             <div style={{
               position: 'absolute',
               top: chartY + chartH / 2,
-              left: 30,
+              left: 80,
               transform: 'translate(-50%, -50%) rotate(-90deg)',
               fontSize: 32,
               fontWeight: 800,
@@ -293,7 +293,7 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
             flexDirection: 'row',
             justifyContent: 'center',
             gap: 20,
-            padding: '0 50px',
+            padding: '0 100px',
             flexWrap: 'wrap'
           }}>
             {paths.map((pathData, idx) => (
@@ -339,8 +339,8 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
               <div style={{
                 position: 'absolute',
                 bottom: 80,
-                left: 60,
-                right: 60,
+                left: 100,
+                right: 100,
                 textAlign: 'center',
                 fontSize: 50,
                 fontWeight: 800,
