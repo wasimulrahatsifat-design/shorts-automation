@@ -16,11 +16,14 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { data_json, showSubtitles, duration } = body;
 
-    if (!data_json || !data_json.topic || !data_json.script) {
-      throw new Error('Invalid data payload. Must contain topic and script.');
+    if (!data_json || !data_json.topic) {
+      throw new Error('Invalid data payload. Must contain topic.');
+    }
+    if (data_json.format !== 'Would You Rather' && !data_json.script) {
+      throw new Error('Invalid data payload. Must contain script.');
     }
 
-    const script = data_json.script;
+    const script = data_json.script || '';
     const topic = data_json.topic;
 
     // Generate TTS Audio
