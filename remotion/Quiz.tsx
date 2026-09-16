@@ -127,6 +127,13 @@ const QuizRound: React.FC<{ questionData: Question, topic: string }> = ({ questi
         </Sequence>
       )}
 
+      {/* Correct Answer Sound */}
+      {frame >= endOfTimer && (
+        <Sequence from={endOfTimer} durationInFrames={30}>
+          <Audio src={staticFile('correct.mp3')} volume={0.8} />
+        </Sequence>
+      )}
+
       {/* Timer Bar */}
       <div style={{
         marginTop: 40,
