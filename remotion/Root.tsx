@@ -162,6 +162,7 @@ export const RemotionRoot: React.FC = () => {
         }}
         defaultProps={{
           data_json: {
+            topic: 'Arena Clash Demo',
             script: "Welcome to the ultimate Battle Royale!",
             format: "Arena Clash",
             contestants: [

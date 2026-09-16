@@ -25,8 +25,8 @@ export default function Home() {
 
   // Step 1 State
   const [topic, setTopic] = useState('');
-  const [videoFormat, setVideoFormat] = useState('Data Comparison');
-  const [duration, setDuration] = useState(15);
+  const [videoFormat, setVideoFormat] = useState('Arena Clash');
+  const [duration, setDuration] = useState(30);
   const [showSubtitles, setShowSubtitles] = useState(true);
   const [filterFormat, setFilterFormat] = useState('All');
 
@@ -127,11 +127,11 @@ export default function Home() {
 
   const handleSuggestTopic = () => {
     const suggestions = [
-      "Growth of Tech Companies over 10 years",
-      "Most spoken languages over time",
-      "Would you rather: Time travel vs Teleportation",
-      "Trivia: World Capitals",
-      "Population growth of megacities"
+      "Godzilla vs King Kong",
+      "Batman vs Superman",
+      "Goku vs Naruto",
+      "T-Rex vs Megalodon",
+      "Hacker vs AI"
     ];
     setTopic(suggestions[Math.floor(Math.random() * suggestions.length)]);
   };
@@ -257,7 +257,7 @@ export default function Home() {
         {/* Header Section */}
         <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-8 border border-gray-100 dark:border-gray-700 flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Shorts Automation</h1>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Arena Clash Game</h1>
             <p className="text-gray-500 dark:text-gray-400">Step {step} of 3</p>
           </div>
           <div className="flex gap-4">
@@ -285,17 +285,23 @@ export default function Home() {
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Step 1: Setup & Topic</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Video Format</label>
-                <select
-                  value={videoFormat}
-                  onChange={(e) => setVideoFormat(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
-                >
-                  <option value="Data Comparison">Data Comparison</option>
-                  <option value="Would You Rather">Would You Rather</option>
-                  <option value="Quiz">Quiz</option>
-                </select>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Topic / Battle</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                    placeholder="e.g. Godzilla vs King Kong"
+                    className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
+                  />
+                  <button 
+                    onClick={handleSuggestTopic}
+                    className="px-4 py-3 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-all"
+                  >
+                    Suggest
+                  </button>
+                </div>
               </div>
 
               <div>
@@ -306,25 +312,6 @@ export default function Home() {
                   onChange={(e) => setDuration(parseInt(e.target.value) || 15)}
                   className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
                 />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Topic (Optional)</label>
-              <div className="flex gap-4">
-                <input 
-                  type="text" 
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
-                  placeholder="Enter a specific topic or leave blank for AI magic..."
-                  className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
-                />
-                <button 
-                  onClick={handleSuggestTopic}
-                  className="px-6 py-3 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 rounded-xl font-medium transition-colors"
-                >
-                  Suggest Topic
-                </button>
               </div>
             </div>
 
@@ -460,12 +447,9 @@ export default function Home() {
                 <select
                   value={filterFormat}
                   onChange={(e) => setFilterFormat(e.target.value)}
-                  className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white outline-none"
+                  className="px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 border-none"
                 >
-                  <option value="All">All Categories</option>
-                  <option value="Data Comparison">Data Comparison</option>
-                  <option value="Would You Rather">Would You Rather</option>
-                  <option value="Quiz">Quiz</option>
+                  <option value="All">All Formats</option>
                   <option value="Arena Clash">Arena Clash</option>
                 </select>
                 <button 
