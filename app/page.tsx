@@ -32,6 +32,64 @@ export default function Home() {
   // Step 2 State
   const [draftJson, setDraftJson] = useState('');
   const [magicInstruction, setMagicInstruction] = useState('');
+  const [requiredImages, setRequiredImages] = useState<{keyword: string, file: string | null}[]>([]);
+
+  // Parse draftJson for unique image keywords
+  useEffect(() => {
+    if (!draftJson || step !== 2) return;
+    try {
+      const parsed = JSON.parse(draftJson);
+      const keywords = new Set<string>();
+      
+      const addKeyword = (kw: string) => { if (kw) keywords.add(kw); }
+
+      if (parsed.questions) parsed.questions.forEach((q: any) => addKeyword(q.image_keyword));
+      if (parsed.items) parsed.items.forEach((item: any) => addKeyword(item.image_keyword));
+      if (parsed.contestants) parsed.contestants.forEach((c: any) => addKeyword(c.image_keyword));
+      if (parsed.image_keyword_a) addKeyword(parsed.image_keyword_a);
+      if (parsed.image_keyword_b) addKeyword(parsed.image_keyword_b);
+
+      setRequiredImages(prev => {
+        return Array.from(keywords).map(kw => {
+          const existing = prev.find(r => r.keyword === kw);
+          return { keyword: kw, file: existing?.file || null };
+        });
+      });
+    } catch (e) {
+      // invalid json, ignore
+    }
+  }, [draftJson, step]);
+
+  const handleFileUpload = (keyword: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64Url = reader.result as string;
+      
+      setRequiredImages(prev => prev.map(img => img.keyword === keyword ? { ...img, file: base64Url } : img));
+
+      try {
+        const parsed = JSON.parse(draftJson);
+        
+        if (parsed.questions) {
+          parsed.questions.forEach((q: any) => { if (q.image_keyword === keyword) q.image_url = base64Url; });
+        }
+        if (parsed.items) {
+          parsed.items.forEach((item: any) => { if (item.image_keyword === keyword) item.image_url = base64Url; });
+        }
+        if (parsed.contestants) {
+          parsed.contestants.forEach((c: any) => { if (c.image_keyword === keyword) c.image_url = base64Url; });
+        }
+        if (parsed.image_keyword_a === keyword) parsed.image_url_a = base64Url;
+        if (parsed.image_keyword_b === keyword) parsed.image_url_b = base64Url;
+
+        setDraftJson(JSON.stringify(parsed, null, 2));
+      } catch(e) {}
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Poll for updates every 5 seconds on Step 3
   useEffect(() => {
@@ -287,8 +345,51 @@ export default function Home() {
             <textarea
               value={draftJson}
               onChange={(e) => setDraftJson(e.target.value)}
-              className="w-full h-[500px] font-mono text-sm px-4 py-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 resize-none focus:ring-2 focus:ring-blue-500"
+              className="w-full h-[300px] font-mono text-sm px-4 py-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 resize-none focus:ring-2 focus:ring-blue-500"
             />
+
+            {/* Manual Image Uploads */}
+            {requiredImages.length > 0 && (
+              <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border border-blue-100 dark:border-blue-800 space-y-4">
+                <h3 className="font-bold text-lg text-blue-900 dark:text-blue-100 mb-2">Required Images</h3>
+                <p className="text-sm text-blue-700 dark:text-blue-300 mb-4">
+                  Please upload an image for each keyword below. You only need to upload it once, and it will be applied automatically everywhere!
+                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {requiredImages.map((req, idx) => (
+                    <div key={idx} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col items-center text-center gap-3">
+                      <span className="font-bold text-gray-800 dark:text-gray-200 text-sm">
+                        {req.keyword}
+                      </span>
+                      
+                      {req.file ? (
+                        <div className="relative w-24 h-24 rounded-lg overflow-hidden border-2 border-green-500">
+                          <img src={req.file} alt={req.keyword} className="w-full h-full object-cover" />
+                          <div className="absolute top-0 right-0 bg-green-500 text-white rounded-bl-lg p-1 text-xs">
+                            ✓
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="w-24 h-24 rounded-lg bg-gray-100 dark:bg-gray-700 border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400">
+                          No Image
+                        </div>
+                      )}
+                      
+                      <label className="cursor-pointer bg-blue-100 hover:bg-blue-200 text-blue-800 text-xs font-semibold px-4 py-2 rounded-lg transition-colors w-full">
+                        {req.file ? 'Change Image' : 'Upload Image'}
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          className="hidden" 
+                          onChange={(e) => handleFileUpload(req.keyword, e)}
+                        />
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="bg-indigo-50 dark:bg-indigo-900/30 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800 space-y-4">
               <label className="block text-sm font-bold text-indigo-900 dark:text-indigo-200">

@@ -10,43 +10,7 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 
-const getWikiImageUrl = async (keyword: string) => {
-  const generateSvgAvatar = (kw: string) => {
-    const letter = kw ? kw.charAt(0).toUpperCase() : '?';
-    let hash = 0;
-    for (let i = 0; i < kw.length; i++) {
-      hash = kw.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const color = `hsl(${Math.abs(hash) % 360}, 70%, 40%)`;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="${color}"/><text x="50" y="50" text-anchor="middle" dominant-baseline="central" fill="white" font-family="sans-serif" font-size="50" font-weight="bold">${letter}</text></svg>`;
-    return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
-  };
-
-  try {
-    // Generate AI Image (Imagen 3)
-    if (process.env.GEMINI_IMAGE_API_KEY) {
-      try {
-        const aiImage = new GoogleGenAI({ apiKey: process.env.GEMINI_IMAGE_API_KEY });
-        const imageResp = await aiImage.models.generateImages({
-          model: 'imagen-3.0-generate-001',
-          prompt: `${keyword} 3d icon isolated on solid background`,
-          numberOfImages: 1,
-          outputMimeType: 'image/jpeg',
-        });
-        if (imageResp.generatedImages && imageResp.generatedImages.length > 0) {
-          return `data:image/jpeg;base64,${imageResp.generatedImages[0].image.imageBytes}`;
-        }
-      } catch (err: any) {
-        console.error("Imagen 3 Failed for keyword:", keyword, err.message);
-      }
-    }
-  } catch (err) {
-    console.error("Error generating image:", err);
-  }
-
-  // Fallback to SVG if Imagen fails
-  return generateSvgAvatar(keyword);
-};
+// No image generation logic here anymore
 
 export async function POST(request: Request) {
   try {
@@ -132,14 +96,6 @@ export async function POST(request: Request) {
 
     if (!newScript || !newItems || !Array.isArray(newItems)) {
       throw new Error('Invalid JSON format returned from Gemini in rewrite-script.');
-    }
-
-    // Fetch images for items if they have an image_keyword but no image_url, or if it changed
-    for (const item of newItems) {
-      if (item.image_keyword && !item.image_url) {
-        const imgUrl = await getWikiImageUrl(item.image_keyword);
-        item.image_url = imgUrl; 
-      }
     }
 
     // 3. Generate New TTS
