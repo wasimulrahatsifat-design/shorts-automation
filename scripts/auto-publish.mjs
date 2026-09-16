@@ -72,6 +72,23 @@ async function main() {
     refresh_token: refreshToken
   });
 
+  try {
+    // Force a token refresh to verify the refresh token is still valid
+    const { token } = await oauth2Client.getAccessToken();
+    if (!token) {
+      throw new Error('OAuth client returned an empty access token.');
+    }
+    console.log('Successfully refreshed YouTube access token.');
+  } catch (authError) {
+    console.error('\n=============================================');
+    console.error('YOUTUBE AUTHENTICATION FAILED (401 Unauthorized)');
+    console.error('The YOUTUBE_REFRESH_TOKEN is expired, invalid, or has been revoked.');
+    console.error('Please generate a new refresh token (e.g., via OAuth Playground) and update your secrets.');
+    console.error('Error Details:', authError.message || authError);
+    console.error('=============================================\n');
+    process.exit(1);
+  }
+
   const youtube = google.youtube({
     version: 'v3',
     auth: oauth2Client
