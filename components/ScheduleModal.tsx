@@ -15,7 +15,9 @@ export const ScheduleModal: React.FC<ScheduleModalProps> = ({ isOpen, onClose, o
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (scheduledTime) {
-      onSubmit(scheduledTime);
+      // Convert local datetime string to UTC ISO string so backend correctly understands it
+      const isoString = new Date(scheduledTime).toISOString();
+      onSubmit(isoString);
     }
   };
 
