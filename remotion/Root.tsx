@@ -177,7 +177,6 @@ export const RemotionRoot: React.FC = () => {
             ],
             winner_id: "4",
             tts_url: undefined,
-            show_subtitles: true,
           },
           topic: 'Arena Clash Demo',
         }}

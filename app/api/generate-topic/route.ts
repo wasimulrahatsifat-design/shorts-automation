@@ -68,21 +68,38 @@ export async function POST(request: Request) {
     const fallbackModels = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-flash-latest'];
     let text = '';
     
-    for (let i = 0; i < fallbackModels.length; i++) {
-      try {
-        console.log(`Attempting Gemini generation with model: ${fallbackModels[i]}`);
-        const response = await ai.models.generateContent({
-          model: fallbackModels[i],
-          contents: prompt,
-        });
-        text = response.text || '';
-        break; // Success! Break out of the fallback loop.
-      } catch (err: any) {
-        console.warn(`Model ${fallbackModels[i]} failed: ${err.message}`);
-        if (i === fallbackModels.length - 1) {
-          // If this was the last model, throw the error
-          throw new Error(`All Gemini models failed. Last error: ${err.message}`);
+    const generateWithKey = async (client: any, keyIndex: number) => {
+      for (let i = 0; i < fallbackModels.length; i++) {
+        try {
+          console.log(`Attempting Gemini generation with model: ${fallbackModels[i]} (Key ${keyIndex})`);
+          const response = await client.models.generateContent({
+            model: fallbackModels[i],
+            contents: prompt,
+          });
+          return response.text || '';
+        } catch (err: any) {
+          console.warn(`Model ${fallbackModels[i]} failed with Key ${keyIndex}: ${err.message}`);
+          if (i === fallbackModels.length - 1) {
+            throw err;
+          }
         }
+      }
+      return '';
+    };
+
+    try {
+      text = await generateWithKey(ai, 1);
+    } catch (err: any) {
+      if (process.env.GEMINI_API_KEY_2) {
+        console.log('Falling back to GEMINI_API_KEY_2');
+        const ai2 = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY_2 });
+        try {
+          text = await generateWithKey(ai2, 2);
+        } catch (err2: any) {
+           throw new Error(`Both Gemini keys failed. Last error: ${err2.message}`);
+        }
+      } else {
+        throw new Error(`All Gemini models failed. Last error: ${err.message}`);
       }
     }
     
@@ -179,6 +196,25 @@ export async function POST(request: Request) {
       console.error('TTS Generation failed:', ttsError);
     }
 
+    let finalDuration = 15;
+    if (videoFormat === 'Would You Rather' && dataPayload.scenarios) {
+      let totalSeconds = 0;
+      for (const s of dataPayload.scenarios) {
+        const textLength = s.option_a.length + s.option_b.length + 20;
+        const readingSeconds = (textLength / 15) + 1;
+        totalSeconds += readingSeconds + 5; // timer 3s + reveal 2s
+      }
+      finalDuration = Math.round(totalSeconds + 3); // + outro
+    } else if (videoFormat === 'Quiz' && dataPayload.questions) {
+      let totalSeconds = 0;
+      for (const q of dataPayload.questions) {
+        const textLength = q.question.length + q.options.join('').length + 10;
+        const readingSeconds = (textLength / 15) + 1;
+        totalSeconds += readingSeconds + 7;
+      }
+      finalDuration = Math.round(totalSeconds + 3);
+    }
+
     // Insert into Supabase
     const { data: dbData, error } = await supabase
       .from('shorts_queue')
@@ -189,7 +225,8 @@ export async function POST(request: Request) {
             ...dataPayload,
             tts_url: tts_url,
             tts_urls: tts_urls,
-            show_subtitles: true
+            show_subtitles: true,
+            duration_seconds: finalDuration
           },
           status: 'Pending',
         },

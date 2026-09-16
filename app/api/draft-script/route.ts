@@ -61,20 +61,38 @@ export async function POST(request: Request) {
     const fallbackModels = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-flash-latest'];
     let text = '';
     
-    for (let i = 0; i < fallbackModels.length; i++) {
-      try {
-        console.log(`Attempting Gemini generation with model: ${fallbackModels[i]}`);
-        const response = await ai.models.generateContent({
-          model: fallbackModels[i],
-          contents: prompt,
-        });
-        text = response.text || '';
-        break;
-      } catch (err: any) {
-        console.warn(`Model ${fallbackModels[i]} failed: ${err.message}`);
-        if (i === fallbackModels.length - 1) {
-          throw new Error(`All Gemini models failed. Last error: ${err.message}`);
+    const generateWithKey = async (client: any, keyIndex: number) => {
+      for (let i = 0; i < fallbackModels.length; i++) {
+        try {
+          console.log(`Attempting Gemini generation with model: ${fallbackModels[i]} (Key ${keyIndex})`);
+          const response = await client.models.generateContent({
+            model: fallbackModels[i],
+            contents: prompt,
+          });
+          return response.text || '';
+        } catch (err: any) {
+          console.warn(`Model ${fallbackModels[i]} failed with Key ${keyIndex}: ${err.message}`);
+          if (i === fallbackModels.length - 1) {
+            throw err;
+          }
         }
+      }
+      return '';
+    };
+
+    try {
+      text = await generateWithKey(ai, 1);
+    } catch (err: any) {
+      if (process.env.GEMINI_API_KEY_2) {
+        console.log('Falling back to GEMINI_API_KEY_2');
+        const ai2 = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY_2 });
+        try {
+          text = await generateWithKey(ai2, 2);
+        } catch (err2: any) {
+           throw new Error(`Both Gemini keys failed. Last error: ${err2.message}`);
+        }
+      } else {
+        throw new Error(`All Gemini models failed. Last error: ${err.message}`);
       }
     }
     

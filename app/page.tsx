@@ -28,6 +28,7 @@ export default function Home() {
   const [videoFormat, setVideoFormat] = useState('Data Comparison');
   const [duration, setDuration] = useState(15);
   const [showSubtitles, setShowSubtitles] = useState(true);
+  const [filterFormat, setFilterFormat] = useState('All');
 
   // Step 2 State
   const [draftJson, setDraftJson] = useState('');
@@ -256,12 +257,20 @@ export default function Home() {
         {/* Header Section */}
         <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-8 border border-gray-100 dark:border-gray-700 flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Shorts Dashboard</h1>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Shorts Automation</h1>
             <p className="text-gray-500 dark:text-gray-400">Step {step} of 3</p>
           </div>
-          <Link href="/admin" className="px-6 py-3 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-all text-center">
-            Admin View
-          </Link>
+          <div className="flex gap-4">
+            <button 
+              onClick={() => { setStep(3); fetchVideos(); }}
+              className="px-6 py-3 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-all text-center"
+            >
+              Dashboard
+            </button>
+            <Link href="/admin" className="px-6 py-3 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-all text-center">
+              Admin View
+            </Link>
+          </div>
         </div>
 
         {message && (
@@ -446,18 +455,31 @@ export default function Home() {
         {/* --- STEP 3: Render & Live Progress --- */}
         {step === 3 && (
           <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Step 3: Live Rendering Progress</h2>
-              <button 
-                onClick={() => { setStep(1); setTopic(''); }}
-                className="px-6 py-3 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-xl font-medium transition-colors"
-              >
-                + Create Another Video
-              </button>
+            <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Videos Dashboard</h2>
+              <div className="flex gap-4 w-full md:w-auto">
+                <select
+                  value={filterFormat}
+                  onChange={(e) => setFilterFormat(e.target.value)}
+                  className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white outline-none"
+                >
+                  <option value="All">All Categories</option>
+                  <option value="Data Comparison">Data Comparison</option>
+                  <option value="Would You Rather">Would You Rather</option>
+                  <option value="Quiz">Quiz</option>
+                  <option value="Arena Clash">Arena Clash</option>
+                </select>
+                <button 
+                  onClick={() => { setStep(1); setTopic(''); }}
+                  className="px-6 py-3 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-xl font-medium transition-colors whitespace-nowrap"
+                >
+                  + Create Video
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 gap-6">
-              {videos.map(video => (
+              {videos.filter(v => filterFormat === 'All' || v.data_json?.format === filterFormat).map(video => (
                 <VideoCard 
                   key={video.id} 
                   video={video} 
@@ -465,9 +487,9 @@ export default function Home() {
                   onRewrite={handleRewrite} 
                 />
               ))}
-              {videos.length === 0 && (
+              {videos.filter(v => filterFormat === 'All' || v.data_json?.format === filterFormat).length === 0 && (
                 <div className="text-center p-12 text-gray-500 bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700">
-                  No videos in queue.
+                  No videos found for this category.
                 </div>
               )}
             </div>

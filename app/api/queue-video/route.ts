@@ -105,6 +105,25 @@ export async function POST(request: Request) {
       console.error('TTS Generation failed:', ttsError);
     }
 
+    let finalDuration = duration;
+    if (data_json.format === 'Would You Rather' && data_json.scenarios) {
+      let totalSeconds = 0;
+      for (const s of data_json.scenarios) {
+        const textLength = s.option_a.length + s.option_b.length + 20;
+        const readingSeconds = (textLength / 15) + 1;
+        totalSeconds += readingSeconds + 5; // timer 3s + reveal 2s
+      }
+      finalDuration = Math.round(totalSeconds + 3); // + outro
+    } else if (data_json.format === 'Quiz' && data_json.questions) {
+      let totalSeconds = 0;
+      for (const q of data_json.questions) {
+        const textLength = q.question.length + q.options.join('').length + 10;
+        const readingSeconds = (textLength / 15) + 1;
+        totalSeconds += readingSeconds + 7;
+      }
+      finalDuration = Math.round(totalSeconds + 3);
+    }
+
     // Insert into Supabase
     const { data: dbData, error } = await supabase
       .from('shorts_queue')
@@ -116,7 +135,7 @@ export async function POST(request: Request) {
             tts_url: tts_url,
             tts_urls: tts_urls,
             show_subtitles: showSubtitles,
-            duration_seconds: duration
+            duration_seconds: finalDuration
           },
           status: 'Pending', // Status is Pending until GitHub Action picks it up
         },
