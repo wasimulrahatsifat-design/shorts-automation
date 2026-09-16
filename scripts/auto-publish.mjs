@@ -23,8 +23,7 @@ async function main() {
     .from('shorts_queue')
     .select('*')
     .eq('status', 'Scheduled')
-    .lte('scheduled_time', new Date().toISOString())
-    .limit(1);
+    .lte('scheduled_time', new Date().toISOString());
 
   if (fetchError) {
     console.error('Error fetching scheduled videos:', fetchError);
@@ -36,105 +35,75 @@ async function main() {
     process.exit(0);
   }
 
-  const video = videos[0];
-  console.log(`Found video to publish: [${video.id}] ${video.topic}`);
+  console.log(`Found ${videos.length} videos to publish.`);
 
-  if (!video.video_url) {
-    console.error('Scheduled video does not have a video_url. Aborting.');
-    process.exit(1);
-  }
+  for (const video of videos) {
+    console.log(`\n--- Processing video: [${video.id}] ${video.topic} ---`);
 
-  // 2. Download the MP4 from Supabase Storage
-  console.log('Downloading video file from Supabase...');
-  const fileName = `${video.id}.mp4`;
-  const { data: fileData, error: downloadError } = await supabase.storage
-    .from('shorts')
-    .download(fileName);
-
-  if (downloadError) {
-    console.error('Failed to download video:', downloadError);
-    process.exit(1);
-  }
-
-  const localFilePath = path.join(process.cwd(), fileName);
-  fs.writeFileSync(localFilePath, Buffer.from(await fileData.arrayBuffer()));
-  console.log(`Video downloaded to ${localFilePath}`);
-
-  // 3. Initialize YouTube OAuth2 Client
-  console.log('Authenticating with YouTube API...');
-  const oauth2Client = new google.auth.OAuth2(
-    clientId,
-    clientSecret,
-    'https://developers.google.com/oauthplayground' // Redirect URI for playground
-  );
-
-  oauth2Client.setCredentials({
-    refresh_token: refreshToken
-  });
-
-  try {
-    // Force a token refresh to verify the refresh token is still valid
-    const { token } = await oauth2Client.getAccessToken();
-    if (!token) {
-      throw new Error('OAuth client returned an empty access token.');
+    if (!video.video_url) {
+      console.error('Scheduled video does not have a video_url. Skipping.');
+      continue;
     }
-    console.log('Successfully refreshed YouTube access token.');
-  } catch (authError) {
-    console.error('\n=============================================');
-    console.error('YOUTUBE AUTHENTICATION FAILED (401 Unauthorized)');
-    console.error('The YOUTUBE_REFRESH_TOKEN is expired, invalid, or has been revoked.');
-    console.error('Please generate a new refresh token (e.g., via OAuth Playground) and update your secrets.');
-    console.error('Error Details:', authError.message || authError);
-    console.error('=============================================\n');
-    process.exit(1);
-  }
 
-  const youtube = google.youtube({
-    version: 'v3',
-    auth: oauth2Client
-  });
+    // 2. Download the MP4 from Supabase Storage
+    console.log('Downloading video file from Supabase...');
+    const fileName = `${video.id}.mp4`;
+    const { data: fileData, error: downloadError } = await supabase.storage
+      .from('shorts')
+      .download(fileName);
 
-  // 4. Upload to YouTube
-  console.log('Uploading to YouTube...');
-  try {
-    const res = await youtube.videos.insert({
-      part: 'snippet,status',
-      requestBody: {
-        snippet: {
-          title: video.topic,
-          description: `${video.topic}\n\n#shorts #data #comparison`,
-          tags: ['shorts', 'data', 'comparison'],
-          categoryId: '24' // Entertainment
+    if (downloadError) {
+      console.error('Failed to download video:', downloadError);
+      continue;
+    }
+
+    const localFilePath = path.join(process.cwd(), fileName);
+    fs.writeFileSync(localFilePath, Buffer.from(await fileData.arrayBuffer()));
+    console.log(`Video downloaded to ${localFilePath}`);
+
+    // 3. Upload to YouTube
+    console.log('Uploading to YouTube...');
+    try {
+      const res = await youtube.videos.insert({
+        part: 'snippet,status',
+        requestBody: {
+          snippet: {
+            title: video.topic,
+            description: `${video.topic}\n\n#shorts #data #comparison`,
+            tags: ['shorts', 'data', 'comparison'],
+            categoryId: '24' // Entertainment
+          },
+          status: {
+            privacyStatus: 'private', // Set to 'public' when ready
+            selfDeclaredMadeForKids: false
+          }
         },
-        status: {
-          privacyStatus: 'private', // Set to 'public' when ready
-          selfDeclaredMadeForKids: false
+        media: {
+          body: fs.createReadStream(localFilePath)
         }
-      },
-      media: {
-        body: fs.createReadStream(localFilePath)
-      }
-    });
+      });
 
-    console.log('YouTube Upload successful! Video ID:', res.data.id);
-  } catch (error) {
-    console.error('YouTube API upload failed:', error);
-    process.exit(1);
+      console.log('YouTube Upload successful! Video ID:', res.data.id);
+    } catch (error) {
+      console.error('YouTube API upload failed:', error);
+      continue;
+    }
+
+    // 4. Update Supabase Row to 'Published'
+    console.log('Updating database status to Published...');
+    const { error: updateError } = await supabase
+      .from('shorts_queue')
+      .update({ status: 'Published' })
+      .eq('id', video.id);
+
+    if (updateError) {
+      console.error('Failed to update status in database:', updateError);
+    } else {
+      console.log(`Successfully published video: ${video.id}`);
+    }
   }
 
-  // 5. Update Supabase Row to 'Published'
-  console.log('Updating database status to Published...');
-  const { error: updateError } = await supabase
-    .from('shorts_queue')
-    .update({ status: 'Published' })
-    .eq('id', video.id);
-
-  if (updateError) {
-    console.error('Failed to update status in database:', updateError);
-    process.exit(1);
-  }
-
-  console.log('Auto-publish workflow completed successfully!');
+  console.log('\nAuto-publish workflow completed successfully!');
 }
 
 main().catch(err => {
