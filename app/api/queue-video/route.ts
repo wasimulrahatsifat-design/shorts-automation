@@ -45,12 +45,11 @@ export async function POST(request: Request) {
           return publicUrlData.publicUrl;
         };
 
-        const promises = data_json.questions.map((q: any) => {
+        for (const q of data_json.questions) {
           const text = `${q.question} A, ${q.options[0]}, B, ${q.options[1]}, C, ${q.options[2]}.`;
-          return generateTTSForText(text);
-        });
-        
-        tts_urls = await Promise.all(promises);
+          const url = await generateTTSForText(text);
+          tts_urls.push(url);
+        }
         
       } else {
         // Standard single TTS logic

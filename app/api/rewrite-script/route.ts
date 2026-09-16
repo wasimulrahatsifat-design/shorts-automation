@@ -185,12 +185,11 @@ export async function POST(request: Request) {
           return publicUrlData.publicUrl;
         };
 
-        const promises = newItems.map((q: any) => {
+        for (const q of newItems) {
           const text = `${q.question} A, ${q.options[0]}, B, ${q.options[1]}, C, ${q.options[2]}.`;
-          return generateTTSForText(text);
-        });
-        
-        tts_urls = await Promise.all(promises);
+          const url = await generateTTSForText(text);
+          tts_urls.push(url);
+        }
       } else {
         const elResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
           method: 'POST',
