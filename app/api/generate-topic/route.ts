@@ -36,13 +36,17 @@ export async function POST(request: Request) {
     let prompt = '';
     if (videoFormat === 'Would You Rather') {
       prompt = `Generate a unique "Would You Rather" topic (e.g., Superpowers, Tech, Food). 
+      IMPORTANT: Generate completely random, creative, and highly engaging scenarios each time. Avoid repeating common or boring ones.
       Return a structured JSON object with EXACTLY these fields:
       - "topic": The generated topic as a string.
-      - "script": A short, fast-paced, highly engaging 10-15 second voiceover hook script for a YouTube Short reading the scenario.
-      - "scenario_a": String describing option A.
-      - "scenario_b": String describing option B.
-      - "image_keyword_a": A VERY SPECIFIC search keyword for Wikipedia to find an image for option A.
-      - "image_keyword_b": A VERY SPECIFIC search keyword for Wikipedia to find an image for option B.
+      - "format": "Would You Rather".
+      - "scenarios": An array of EXACTLY 5 objects. Each object MUST have:
+        - "option_a": String. KEEP THIS EXTREMELY SHORT (e.g., "never feel pain again", "unlimited money", "be able to fly"). Do NOT include "Would you rather" in this string.
+        - "option_b": String. KEEP THIS EXTREMELY SHORT (e.g., "never feel sadness again", "unlimited time", "breathe underwater"). Do NOT include "or" in this string.
+        - "image_keyword_a": A VERY SPECIFIC search keyword for Wikipedia to find an image for option A.
+        - "image_keyword_b": A VERY SPECIFIC search keyword for Wikipedia to find an image for option B.
+        - "percent_a": Number between 1 and 99 representing the percentage of people who would choose option A.
+        - "percent_b": Number between 1 and 99 representing the percentage of people who would choose option B. (percent_a + percent_b MUST equal 100).
       Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
     } else if (videoFormat === 'Quiz') {
       prompt = `Generate a unique "Trivia Quiz" topic. 

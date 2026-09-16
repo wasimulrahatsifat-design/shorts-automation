@@ -17,12 +17,13 @@ export async function POST(request: Request) {
 
     if (videoFormat === 'Would You Rather') {
       prompt = `${topicInstruction} (e.g., Superpowers, Tech, Food). 
+      IMPORTANT: Generate completely random, creative, and highly engaging scenarios each time. Avoid repeating common or boring ones.
       Return a structured JSON object with EXACTLY these fields:
       - "topic": The generated topic as a string.
       - "format": "Would You Rather".
       - "scenarios": An array of EXACTLY 5 objects. Each object MUST have:
-        - "option_a": String (e.g., "Control water")
-        - "option_b": String (e.g., "Control fire")
+        - "option_a": String. KEEP THIS EXTREMELY SHORT (e.g., "never feel pain again", "unlimited money", "be able to fly"). Do NOT include "Would you rather" in this string.
+        - "option_b": String. KEEP THIS EXTREMELY SHORT (e.g., "never feel sadness again", "unlimited time", "breathe underwater"). Do NOT include "or" in this string.
         - "image_keyword_a": A VERY SPECIFIC search keyword for option A.
         - "image_keyword_b": A VERY SPECIFIC search keyword for option B.
         - "percent_a": Number between 1 and 99 representing the percentage of people who would choose option A.
