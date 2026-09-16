@@ -82,9 +82,19 @@ const QuizRound: React.FC<{ questionData: Question, topic: string }> = ({ questi
         marginBottom: 30,
         marginTop: 40
       }}>
-        {image_url && (
-          <Img src={image_url} style={{ width: '100%', height: 380, objectFit: 'contain', backgroundColor: '#d8e2dc', paddingTop: 20 }} />
-        )}
+        <div style={{ width: '100%', height: 380, backgroundColor: '#d8e2dc', display: 'flex', justifyContent: 'center', alignItems: 'center', paddingTop: 20 }}>
+          {isTimerDone ? (
+            image_url ? <Img src={image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : null
+          ) : (
+            <div style={{ 
+              fontSize: 160, 
+              transform: `rotate(${Math.sin(frame / 8) * 15}deg) scale(${1 + Math.sin(frame / 6) * 0.1})`,
+              filter: 'drop-shadow(0px 10px 20px rgba(0,0,0,0.3))'
+            }}>
+              🤔
+            </div>
+          )}
+        </div>
         <div style={{ padding: '25px 30px', fontSize: 40, fontWeight: 800, color: '#2b2d42', textAlign: 'center' }}>
           {question}
         </div>

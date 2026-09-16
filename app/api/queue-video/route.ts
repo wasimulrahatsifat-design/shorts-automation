@@ -28,16 +28,31 @@ export async function POST(request: Request) {
     let tts_urls = [];
     const voiceId = 'pNInz6obpgDQGcFmaJgB'; // Adam
     
+    const fetchElevenLabs = async (text: string) => {
+      const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
+      const payload = JSON.stringify({ text, model_id: 'eleven_multilingual_v2' });
+      let res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'xi-api-key': process.env.ELEVENLABS_API_KEY || '' },
+        body: payload,
+      });
+      if (!res.ok && (res.status === 429 || res.status === 401) && process.env.ELEVENLABS_API_KEY_2) {
+        console.log('Falling back to ELEVENLABS_API_KEY_2');
+        res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'xi-api-key': process.env.ELEVENLABS_API_KEY_2 || '' },
+          body: payload,
+        });
+      }
+      if (!res.ok) throw new Error(`ElevenLabs API error: ${res.statusText}`);
+      return res;
+    };
+
     try {
       if ((data_json.format === 'Quiz' || Array.isArray(data_json.questions)) && data_json.questions) {
         // Generate a separate audio file for each question for perfect sync
         const generateTTSForText = async (text: string) => {
-          const elResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'xi-api-key': process.env.ELEVENLABS_API_KEY || '' },
-            body: JSON.stringify({ text, model_id: 'eleven_multilingual_v2' }),
-          });
-          if (!elResponse.ok) throw new Error(`ElevenLabs API error`);
+          const elResponse = await fetchElevenLabs(text);
           const audioBuffer = Buffer.from(await elResponse.arrayBuffer());
           const ttsFileName = `tts_${crypto.randomUUID()}.mp3`;
           await supabase.storage.from('shorts').upload(ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
@@ -57,11 +72,7 @@ export async function POST(request: Request) {
         
       } else {
         // Standard single TTS logic
-        const elResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'xi-api-key': process.env.ELEVENLABS_API_KEY || '' },
-          body: JSON.stringify({ text: script, model_id: 'eleven_multilingual_v2' }),
-        });
+        const elResponse = await fetchElevenLabs(script);
         if (!elResponse.ok) throw new Error(`ElevenLabs API error: ${elResponse.statusText}`);
         const audioBuffer = Buffer.from(await elResponse.arrayBuffer());
         const ttsFileName = `tts_${crypto.randomUUID()}.mp3`;
