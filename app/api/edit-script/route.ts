@@ -13,7 +13,7 @@ export async function POST(request: Request) {
 
     const prompt = `You are an AI script editor. Here is the current JSON script for a video: ${currentScript}. The user wants to modify it with this instruction: ${userInstruction}. Apply the changes perfectly and return ONLY the updated JSON structure. Do not wrap in markdown blocks, just raw JSON.`;
 
-    const fallbackModels = ['gemini-1.5-flash', 'gemini-1.5-pro'];
+    const fallbackModels = ['gemini-1.5-flash-8b', 'gemini-1.5-flash-latest', 'gemini-1.5-pro-latest'];
     let text = '';
     
     const generateWithKey = async (client: any, keyIndex: number) => {
