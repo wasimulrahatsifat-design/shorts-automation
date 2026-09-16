@@ -33,7 +33,7 @@ export const RemotionRoot: React.FC = () => {
               { label: 'Example B', image_keyword: 'banana', values: [5, 15, 40, 60, 90] },
               { label: 'Example C', image_keyword: 'orange', values: [12, 18, 25, 45, 110] },
             ],
-            tts_url: null,
+            tts_url: undefined,
             show_subtitles: true,
           },
           topic: 'Example Topic',
@@ -176,7 +176,7 @@ export const RemotionRoot: React.FC = () => {
               { frame: 200, attacker: "4", defender: "3", damage: 100, item_used: "Sniper" }
             ],
             winner_id: "4",
-            tts_url: null,
+            tts_url: undefined,
             show_subtitles: true,
           },
           topic: 'Arena Clash Demo',

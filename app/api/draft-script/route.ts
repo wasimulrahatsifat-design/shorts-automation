@@ -68,7 +68,7 @@ export async function POST(request: Request) {
           model: fallbackModels[i],
           contents: prompt,
         });
-        text = response.text;
+        text = response.text || '';
         break;
       } catch (err: any) {
         console.warn(`Model ${fallbackModels[i]} failed: ${err.message}`);

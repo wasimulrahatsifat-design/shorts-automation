@@ -75,7 +75,7 @@ export async function POST(request: Request) {
           model: fallbackModels[i],
           contents: prompt,
         });
-        text = response.text;
+        text = response.text || '';
         break; // Success! Break out of the fallback loop.
       } catch (err: any) {
         console.warn(`Model ${fallbackModels[i]} failed: ${err.message}`);
@@ -189,8 +189,7 @@ export async function POST(request: Request) {
             ...dataPayload,
             tts_url: tts_url,
             tts_urls: tts_urls,
-            show_subtitles: true,
-            duration_seconds: duration
+            show_subtitles: true
           },
           status: 'Pending',
         },

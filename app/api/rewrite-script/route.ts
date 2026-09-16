@@ -73,7 +73,7 @@ export async function POST(request: Request) {
           model: fallbackModels[i],
           contents: prompt,
         });
-        text = response.text;
+        text = response.text || '';
         break; // Success! Break out of the fallback loop.
       } catch (err: any) {
         console.warn(`Model ${fallbackModels[i]} failed: ${err.message}`);
@@ -143,7 +143,7 @@ export async function POST(request: Request) {
         // Add "Thanks for watching" outro TTS
         const outroUrl = await generateTTSForText("Thanks for watching!");
         tts_urls.push(outroUrl);
-      } else if (videoFormat === 'Would You Rather' && dataPayload.scenarios) {
+      } else if (videoFormat === 'Would You Rather' && newItems && newItems.length > 0 && newItems[0].option_a) {
         const generateTTSForText = async (text: string) => {
           const elResponse = await fetchElevenLabs(text);
           const audioBuffer = Buffer.from(await elResponse.arrayBuffer());
@@ -153,7 +153,7 @@ export async function POST(request: Request) {
           return publicUrlData.publicUrl;
         };
 
-        for (const s of dataPayload.scenarios) {
+        for (const s of newItems) {
           const text = `Would you rather ${s.option_a} or ${s.option_b}?`;
           const url = await generateTTSForText(text);
           tts_urls.push(url);
