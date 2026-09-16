@@ -121,15 +121,15 @@ const QuizRound: React.FC<{ questionData: Question, topic: string }> = ({ questi
       </div>
 
       {/* Timer Sound */}
-      {frame >= startOfTimer && frame < endOfTimer && (
-        <Sequence from={startOfTimer} durationInFrames={endOfTimer - startOfTimer}>
+      {frame >= timerStartFrame && frame < timerStartFrame + timerFrames && (
+        <Sequence from={timerStartFrame} durationInFrames={timerFrames}>
           <Audio src={staticFile('timer.mp3')} volume={0.6} />
         </Sequence>
       )}
 
       {/* Correct Answer Sound */}
-      {frame >= endOfTimer && (
-        <Sequence from={endOfTimer} durationInFrames={30}>
+      {frame >= timerStartFrame + timerFrames && (
+        <Sequence from={timerStartFrame + timerFrames} durationInFrames={30}>
           <Audio src={staticFile('correct.mp3')} volume={0.8} />
         </Sequence>
       )}
