@@ -14,6 +14,7 @@ export interface ArenaClashData {
   events?: any[];
   winner_id?: string;
   duration_seconds?: number;
+  seed?: number;
   contestants: {
     id: string;
     name: string;
@@ -36,13 +37,14 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
 
   const contestants = data_json.contestants || [];
   const headline = topic || data_json.topic || 'ARENA CLASH';
+  const seed = data_json.seed || 42;
 
   // Run 100% deterministic simulation and sound event generation
   const simResult = useMemo(() => {
-    return generateArenaSimulation(contestants, 1800, 42);
-  }, [contestants]);
+    return generateArenaSimulation(contestants, 1800, seed);
+  }, [contestants, seed]);
 
-  const { frames, soundEvents, winner } = simResult;
+  const { frames, soundEvents } = simResult;
   const current = frames[frame] || frames[frames.length - 1] || {
     fighters: [],
     items: [],
@@ -53,7 +55,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
     aliveCount: contestants.length,
   };
 
-  const { fighters, items, bullets, floatingTexts, particles } = current;
+  const { fighters, items, bullets, floatingTexts, particles, winner: frameWinner } = current;
 
   // Render Dual-Sided Healthbars below the larger Arena (y = 1220 to 1880)
   const renderHealthBars = () => {
@@ -532,8 +534,8 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
       {/* Dual-Sided Live Healthbars below the Arena */}
       {renderHealthBars()}
 
-      {/* Full Victory Celebration Screen Overlay */}
-      {winner && (
+      {/* Full Victory Celebration Screen Overlay (Only shown on game conclusion) */}
+      {frameWinner && (
         <div
           style={{
             position: 'absolute',
@@ -554,7 +556,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
               width: 160,
               height: 160,
               borderRadius: 28,
-              backgroundColor: winner.color,
+              backgroundColor: frameWinner.color,
               border: '8px solid #facc15',
               boxShadow: '0 0 50px #eab308',
               overflow: 'hidden',
@@ -564,17 +566,17 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
               marginBottom: 24,
             }}
           >
-            {winner.image_url ? (
-              <Img src={winner.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            {frameWinner.image_url ? (
+              <Img src={frameWinner.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             ) : (
               <span
                 style={{
                   fontSize: 74,
                   fontWeight: 900,
-                  color: winner.color === '#ffffff' ? '#000' : '#fff',
+                  color: frameWinner.color === '#ffffff' ? '#000' : '#fff',
                 }}
               >
-                {winner.name.charAt(0).toUpperCase()}
+                {frameWinner.name.charAt(0).toUpperCase()}
               </span>
             )}
           </div>
@@ -599,7 +601,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
               textTransform: 'uppercase',
             }}
           >
-            {winner.name} WINS!
+            {frameWinner.name} WINS!
           </div>
         </div>
       )}

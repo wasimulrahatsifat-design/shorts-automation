@@ -15,7 +15,12 @@ import {
   ARENA_RADIUS,
   BOX_SIZE,
 } from './types';
-import { generateArenaSimulation } from '../../lib/arena-physics';
+import {
+  generateArenaSimulation,
+  SimulationResult,
+  SimFrameState,
+  SimFighter,
+} from '../../lib/arena-physics';
 
 export { SPECIAL_POWERS, COLOR_SWATCHES };
 export type { ContestantConfig };
@@ -54,14 +59,11 @@ export default function GamePage() {
   const loadedImagesRef = useRef<Map<string, HTMLImageElement>>(new Map());
 
   // Simulation State Refs
-  const fightersRef = useRef<LiveFighter[]>([]);
-  const itemsRef = useRef<ArenaItem[]>([]);
-  const bulletsRef = useRef<Bullet[]>([]);
-  const particlesRef = useRef<Particle[]>([]);
-  const floatingTextsRef = useRef<FloatingText[]>([]);
+  const battleSeedRef = useRef<number>(Math.floor(Math.random() * 1000000));
+  const simResultRef = useRef<SimulationResult | null>(null);
+  const currentFrameRef = useRef<number>(0);
+  const lastSoundFrameRef = useRef<number>(-1);
   const screenShakeRef = useRef(0);
-  const nextItemSpawnRef = useRef<number>(60); // 2s initial spawn
-  const frameCountRef = useRef<number>(0);
 
   // 1. Initialize Contestants
   useEffect(() => {
@@ -216,490 +218,62 @@ export default function GamePage() {
     } catch (e) {}
   };
 
-  // 3. Reset Simulation
-  const resetSimulation = () => {
-    setIsPlaying(false);
-    setWinner(null);
-    setAliveCount(contestants.length);
-    particlesRef.current = [];
-    floatingTextsRef.current = [];
-    itemsRef.current = [];
-    bulletsRef.current = [];
-    screenShakeRef.current = 0;
-    nextItemSpawnRef.current = 60; // 2 seconds initial
+  // 3. Initialize & Precompute Simulation
+  const initSimulation = (rollNewSeed = false) => {
+    if (rollNewSeed) {
+      battleSeedRef.current = Math.floor(Math.random() * 1000000);
+    }
 
-    const count = contestants.length;
-    const fighters: LiveFighter[] = [];
-
-    contestants.forEach((c, idx) => {
-      const angle = (idx / count) * Math.PI * 2 - Math.PI / 2;
-      const spawnRadius = ARENA_RADIUS * 0.62;
-      const x = ARENA_CENTER.x + Math.cos(angle) * spawnRadius;
-      const y = ARENA_CENTER.y + Math.sin(angle) * spawnRadius;
-
-      let speed = c.speed || 6.8;
-      if (c.special_power === 'speedster') speed *= 1.35;
-
-      const moveAngle = angle + Math.PI + (Math.random() - 0.5) * 0.7;
-      const vx = Math.cos(moveAngle) * speed;
-      const vy = Math.sin(moveAngle) * speed;
-
-      let imgObj: HTMLImageElement | null = null;
-      if (c.image_url) {
-        if (loadedImagesRef.current.has(c.image_url)) {
-          imgObj = loadedImagesRef.current.get(c.image_url)!;
-        } else {
-          imgObj = new Image();
-          imgObj.src = c.image_url;
-          loadedImagesRef.current.set(c.image_url, imgObj);
-        }
+    // Preload image elements if any
+    contestants.forEach((c) => {
+      if (c.image_url && !loadedImagesRef.current.has(c.image_url)) {
+        const img = new Image();
+        img.src = c.image_url;
+        loadedImagesRef.current.set(c.image_url, img);
       }
+    });
 
-      fighters.push({
+    const sim = generateArenaSimulation(
+      contestants.map((c) => ({
         id: c.id,
         name: c.name,
         color: c.color,
-        image: imgObj,
-        x,
-        y,
-        vx,
-        vy,
-        size: BOX_SIZE, // 120px
-        health: c.starting_health || 100,
-        maxHealth: c.starting_health || 100,
-        damage: c.damage || 25,
-        baseSpeed: speed,
-        specialPower: c.special_power || 'none',
-        isDead: false,
-        hitFlash: 0,
-        invulnerableTimer: 0,
-        phoenixUsed: false,
-        hasShield: false,
-        hasDagger: false,
-        daggerTimer: 0,
-        daggerActivated: false,
-        gunBullets: 0,
-        speedBoostTimer: 0,
-      });
-    });
+        image_url: c.image_url,
+        starting_health: c.starting_health,
+        damage: c.damage,
+        speed: c.speed,
+        special_power: c.special_power,
+      })),
+      1800,
+      battleSeedRef.current
+    );
 
-    fightersRef.current = fighters;
-    drawFrame();
+    simResultRef.current = sim;
+    currentFrameRef.current = 0;
+    lastSoundFrameRef.current = -1;
+    setWinner(null);
+    setAliveCount(contestants.length);
+
+    if (sim.frames.length > 0) {
+      drawFrame(sim.frames[0]);
+    }
   };
 
   useEffect(() => {
-    resetSimulation();
-  }, [contestants]);
+    initSimulation(false);
+  }, [contestants, topic]);
 
-  // 4. Random Item Spawner (Only 1 item on field, next spawns 8s after collected)
-  const spawnRandomItem = () => {
-    const itemPool: { type: ArenaItem['type']; icon: string; name: string; color: string }[] = [
-      { type: 'health', icon: '💚', name: '+30 HP Medkit', color: '#22c55e' },
-      { type: 'dagger', icon: '🗡️', name: '2x DMG Dagger', color: '#f59e0b' },
-      { type: 'gun', icon: '🔫', name: 'Blaster (5 Shots)', color: '#38bdf8' },
-      { type: 'shield', icon: '🛡️', name: 'Energy Shield', color: '#a855f7' },
-      { type: 'speed', icon: '⚡', name: 'Hyper Speed', color: '#eab308' },
-    ];
-
-    const pick = itemPool[Math.floor(Math.random() * itemPool.length)];
-    const angle = Math.random() * Math.PI * 2;
-    const r = Math.random() * (ARENA_RADIUS - 90);
-
-    itemsRef.current.push({
-      id: `item_${Date.now()}_${Math.random()}`,
-      type: pick.type,
-      x: ARENA_CENTER.x + Math.cos(angle) * r,
-      y: ARENA_CENTER.y + Math.sin(angle) * r,
-      icon: pick.icon,
-      name: pick.name,
-      color: pick.color,
-      spawnTime: 0,
-      bobOffset: Math.random() * Math.PI * 2,
-    });
-
-    playSound('item');
-
-    for (let i = 0; i < 15; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const s = Math.random() * 4 + 1;
-      particlesRef.current.push({
-        x: ARENA_CENTER.x + Math.cos(angle) * r,
-        y: ARENA_CENTER.y + Math.sin(angle) * r,
-        vx: Math.cos(a) * s,
-        vy: Math.sin(a) * s,
-        color: pick.color,
-        radius: Math.random() * 4 + 2,
-        alpha: 1,
-        decay: 0.03,
-      });
-    }
-  };
-
-  // 5. Physics & Simulation Engine
-  const updatePhysics = () => {
-    const fighters = fightersRef.current;
-    const items = itemsRef.current;
-    const bullets = bulletsRef.current;
-    const particles = particlesRef.current;
-    const floatingTexts = floatingTextsRef.current;
-    const { x: cx, y: cy } = ARENA_CENTER;
-
-    if (screenShakeRef.current > 0) {
-      screenShakeRef.current = Math.max(0, screenShakeRef.current - 0.7);
-    }
-
-    frameCountRef.current += simSpeed;
-
-    // Item Spawn: Only when field is clear and 8s cooldown elapsed!
-    if (items.length === 0 && !winner) {
-      nextItemSpawnRef.current -= simSpeed;
-      if (nextItemSpawnRef.current <= 0) {
-        spawnRandomItem();
-      }
-    }
-
-    const aliveFighters = fighters.filter((f) => !f.isDead);
-
-    // Victory Check
-    if (aliveFighters.length === 1 && !winner && fighters.length > 1) {
-      setWinner(aliveFighters[0]);
-      setIsPlaying(false);
-      playSound('victory');
-      for (let i = 0; i < 80; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const spd = Math.random() * 8 + 3;
-        particles.push({
-          x: aliveFighters[0].x,
-          y: aliveFighters[0].y,
-          vx: Math.cos(angle) * spd,
-          vy: Math.sin(angle) * spd - 2,
-          color: COLOR_SWATCHES[Math.floor(Math.random() * COLOR_SWATCHES.length)].hex,
-          radius: Math.random() * 5 + 3,
-          alpha: 1,
-          decay: 0.015,
-        });
-      }
-    } else if (aliveFighters.length === 0 && !winner && fighters.length > 1) {
-      const survivor = fighters[0];
-      survivor.isDead = false;
-      survivor.health = 10;
-      setWinner(survivor);
-      setIsPlaying(false);
-      playSound('victory');
-      for (let i = 0; i < 80; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const spd = Math.random() * 8 + 3;
-        particles.push({
-          x: survivor.x,
-          y: survivor.y,
-          vx: Math.cos(angle) * spd,
-          vy: Math.sin(angle) * spd - 2,
-          color: COLOR_SWATCHES[Math.floor(Math.random() * COLOR_SWATCHES.length)].hex,
-          radius: Math.random() * 5 + 3,
-          alpha: 1,
-          decay: 0.015,
-        });
-      }
-    }
-
-    // Move Fighters & Circular Arena Bounce
-    aliveFighters.forEach((f) => {
-      if (f.invulnerableTimer > 0) f.invulnerableTimer--;
-      if (f.hitFlash > 0) f.hitFlash--;
-
-      if (f.daggerActivated && f.daggerTimer > 0) {
-        f.daggerTimer -= simSpeed;
-        if (f.daggerTimer <= 0) {
-          f.hasDagger = false;
-          f.daggerActivated = false;
-        }
-      }
-
-      if (f.speedBoostTimer > 0) f.speedBoostTimer -= simSpeed;
-
-      // Combat Steering: After 5 seconds, fighters actively steer towards opponents
-      if (frameCountRef.current > 150 && aliveFighters.length > 1 && !winner) {
-        let nearestDist = Infinity;
-        let nearestTarget: LiveFighter | null = null;
-        for (const opp of aliveFighters) {
-          if (opp.id === f.id) continue;
-          const distToOpp = Math.hypot(opp.x - f.x, opp.y - f.y);
-          if (distToOpp < nearestDist) {
-            nearestDist = distToOpp;
-            nearestTarget = opp;
-          }
-        }
-
-        if (nearestTarget) {
-          const steerRate = 0.18 + Math.min(0.35, (frameCountRef.current - 150) / 1000);
-          const angleToTarget = Math.atan2(nearestTarget.y - f.y, nearestTarget.x - f.x);
-          f.vx += Math.cos(angleToTarget) * steerRate;
-          f.vy += Math.sin(angleToTarget) * steerRate;
-
-          // Normalize speed
-          const curSpd = Math.hypot(f.vx, f.vy);
-          const baseSpd = f.speedBoostTimer > 0 ? 10.5 : 7.2;
-          if (curSpd > 0.1) {
-            f.vx = (f.vx / curSpd) * Math.min(13, Math.max(baseSpd * 0.8, curSpd));
-            f.vy = (f.vy / curSpd) * Math.min(13, Math.max(baseSpd * 0.8, curSpd));
-          }
-        }
-      }
-
-      const speedMult = f.speedBoostTimer > 0 ? 1.4 : 1;
-      f.x += f.vx * simSpeed * speedMult;
-      f.y += f.vy * simSpeed * speedMult;
-
-      const dx = f.x - cx;
-      const dy = f.y - cy;
-      const dist = Math.hypot(dx, dy);
-      const halfSize = (f.size / 2) * 1.02;
-
-      if (dist + halfSize >= ARENA_RADIUS) {
-        const nx = -dx / dist;
-        const ny = -dy / dist;
-
-        f.x = cx - nx * (ARENA_RADIUS - halfSize);
-        f.y = cy - ny * (ARENA_RADIUS - halfSize);
-
-        const dot = f.vx * nx + f.vy * ny;
-        f.vx = f.vx - 2 * dot * nx;
-        f.vy = f.vy - 2 * dot * ny;
-
-        playSound('bounce');
-
-        for (let i = 0; i < 4; i++) {
-          particles.push({
-            x: f.x,
-            y: f.y,
-            vx: nx * (Math.random() * 3 + 1) + (Math.random() - 0.5) * 3,
-            vy: ny * (Math.random() * 3 + 1) + (Math.random() - 0.5) * 3,
-            color: '#38bdf8',
-            radius: Math.random() * 3 + 2,
-            alpha: 1,
-            decay: 0.05,
-          });
-        }
-      }
-
-      // Gun Shooting (5 Bullets capacity)
-      if (f.gunBullets > 0 && Math.random() < 0.05) {
-        f.gunBullets--;
-        playSound('gun');
-        const vLen = Math.hypot(f.vx, f.vy) || 1;
-        bullets.push({
-          x: f.x + (f.vx / vLen) * 60,
-          y: f.y + (f.vy / vLen) * 60,
-          vx: (f.vx / vLen) * 16,
-          vy: (f.vy / vLen) * 16,
-          ownerId: f.id,
-          color: '#38bdf8',
-          damage: 5,
-          life: 90,
-        });
-      }
-    });
-
-    // Item Pickup Collision
-    for (let i = items.length - 1; i >= 0; i--) {
-      const item = items[i];
-      item.spawnTime += 0.05 * simSpeed;
-
-      for (const f of aliveFighters) {
-        if (Math.hypot(f.x - item.x, f.y - item.y) < f.size / 2 + 25) {
-          playSound('item');
-
-          if (item.type === 'health') {
-            f.health = Math.min(f.maxHealth, f.health + 30);
-            playSound('heal');
-            floatingTexts.push({ x: f.x, y: f.y - 50, text: '+30 HP', color: '#22c55e', alpha: 1, vy: -2.5, scale: 1.3 });
-          } else if (item.type === 'dagger') {
-            f.hasDagger = true;
-            f.daggerActivated = false;
-            f.daggerTimer = 90;
-            floatingTexts.push({ x: f.x, y: f.y - 50, text: '🗡️ 2X DMG', color: '#f59e0b', alpha: 1, vy: -2.5, scale: 1.2 });
-          } else if (item.type === 'gun') {
-            f.gunBullets = 5; // 5 bullets as requested!
-            floatingTexts.push({ x: f.x, y: f.y - 50, text: '🔫 5 BULLETS', color: '#38bdf8', alpha: 1, vy: -2.5, scale: 1.2 });
-          } else if (item.type === 'shield') {
-            f.hasShield = true;
-            floatingTexts.push({ x: f.x, y: f.y - 50, text: '🛡️ SHIELD', color: '#a855f7', alpha: 1, vy: -2.5, scale: 1.2 });
-          } else if (item.type === 'speed') {
-            f.speedBoostTimer = 120;
-            floatingTexts.push({ x: f.x, y: f.y - 50, text: '⚡ SPEED', color: '#eab308', alpha: 1, vy: -2.5, scale: 1.2 });
-          }
-
-          items.splice(i, 1);
-          // 8 SECONDS COOLDOWN BEFORE NEXT ITEM SPAWNS!
-          nextItemSpawnRef.current = 240;
-          break;
-        }
-      }
-    }
-
-    // Bullets Hit
-    for (let i = bullets.length - 1; i >= 0; i--) {
-      const b = bullets[i];
-      b.x += b.vx * simSpeed;
-      b.y += b.vy * simSpeed;
-      b.life -= simSpeed;
-
-      if (Math.hypot(b.x - cx, b.y - cy) >= ARENA_RADIUS || b.life <= 0) {
-        bullets.splice(i, 1);
-        continue;
-      }
-
-      for (const target of aliveFighters) {
-        if (target.id === b.ownerId) continue;
-        if (Math.hypot(target.x - b.x, target.y - b.y) < target.size / 2) {
-          target.health = Math.max(0, target.health - b.damage);
-          target.hitFlash = 10;
-          playSound('hit');
-
-          floatingTexts.push({ x: target.x, y: target.y - 35, text: `-${b.damage}`, color: '#38bdf8', alpha: 1, vy: -2, scale: 1 });
-
-          if (target.health <= 0 && !target.isDead) handleDeath(target);
-          bullets.splice(i, 1);
-          break;
-        }
-      }
-    }
-
-    // Box to Box Combat
-    for (let i = 0; i < aliveFighters.length; i++) {
-      for (let j = i + 1; j < aliveFighters.length; j++) {
-        const A = aliveFighters[i];
-        const B = aliveFighters[j];
-
-        const dx = B.x - A.x;
-        const dy = B.y - A.y;
-        const dist = Math.hypot(dx, dy);
-        const minDist = (A.size + B.size) / 2;
-
-        if (dist < minDist && dist > 0) {
-          const nx = dx / dist;
-          const ny = dy / dist;
-
-          const overlap = minDist - dist;
-          A.x -= (nx * overlap) / 2;
-          A.y -= (ny * overlap) / 2;
-          B.x += (nx * overlap) / 2;
-          B.y += (ny * overlap) / 2;
-
-          const kx = A.vx - B.vx;
-          const ky = A.vy - B.vy;
-          const p = 2 * (nx * kx + ny * ky) / 2;
-
-          A.vx -= p * nx;
-          A.vy -= p * ny;
-          B.vx += p * nx;
-          B.vy += p * ny;
-
-          if (A.invulnerableTimer === 0 && B.invulnerableTimer === 0) {
-            A.invulnerableTimer = 18;
-            B.invulnerableTimer = 18;
-            A.hitFlash = 12;
-            B.hitFlash = 12;
-            screenShakeRef.current = 6;
-            playSound('hit');
-
-            let dmgA = A.damage;
-            if (A.hasDagger) { dmgA *= 2; A.daggerActivated = true; }
-            if (A.specialPower === 'berserker' && A.health / A.maxHealth <= 0.2) dmgA *= 2;
-            if (B.hasShield) { dmgA = 0; B.hasShield = false; floatingTexts.push({ x: B.x, y: B.y - 45, text: `BLOCKED!`, color: '#a855f7', alpha: 1, vy: -2, scale: 1.2 }); }
-            else if (B.specialPower === 'iron_shield' && B.health / B.maxHealth <= 0.5) { dmgA = Math.round(dmgA * 0.5); floatingTexts.push({ x: B.x, y: B.y - 55, text: `🛡️ -50%`, color: '#38bdf8', alpha: 1, vy: -2, scale: 1 }); }
-
-            let dmgB = B.damage;
-            if (B.hasDagger) { dmgB *= 2; B.daggerActivated = true; }
-            if (B.specialPower === 'berserker' && B.health / B.maxHealth <= 0.2) dmgB *= 2;
-            if (A.hasShield) { dmgB = 0; A.hasShield = false; floatingTexts.push({ x: A.x, y: A.y - 45, text: `BLOCKED!`, color: '#a855f7', alpha: 1, vy: -2, scale: 1.2 }); }
-            else if (A.specialPower === 'iron_shield' && A.health / A.maxHealth <= 0.5) { dmgB = Math.round(dmgB * 0.5); floatingTexts.push({ x: A.x, y: A.y - 55, text: `🛡️ -50%`, color: '#38bdf8', alpha: 1, vy: -2, scale: 1 }); }
-
-            B.health = Math.max(0, B.health - dmgA);
-            A.health = Math.max(0, A.health - dmgB);
-
-            if (A.specialPower === 'vampiric' && dmgA > 0) A.health = Math.min(A.maxHealth, A.health + Math.round(dmgA * 0.2));
-            if (B.specialPower === 'vampiric' && dmgB > 0) B.health = Math.min(B.maxHealth, B.health + Math.round(dmgB * 0.2));
-
-            if (B.specialPower === 'thorns' && dmgA > 0) { const rec = Math.round(dmgA * 0.3); A.health = Math.max(0, A.health - rec); floatingTexts.push({ x: A.x, y: A.y - 50, text: `🌵 -${rec}`, color: '#10b981', alpha: 1, vy: -2, scale: 1 }); }
-            if (A.specialPower === 'thorns' && dmgB > 0) { const rec = Math.round(dmgB * 0.3); B.health = Math.max(0, B.health - rec); floatingTexts.push({ x: B.x, y: B.y - 50, text: `🌵 -${rec}`, color: '#10b981', alpha: 1, vy: -2, scale: 1 }); }
-
-            if (dmgA > 0) floatingTexts.push({ x: B.x + (Math.random() - 0.5) * 20, y: B.y - 45, text: `-${dmgA}`, color: '#ef4444', alpha: 1, vy: -2.5, scale: 1.3 });
-            if (dmgB > 0) floatingTexts.push({ x: A.x + (Math.random() - 0.5) * 20, y: A.y - 45, text: `-${dmgB}`, color: '#ef4444', alpha: 1, vy: -2.5, scale: 1.3 });
-
-            const midX = (A.x + B.x) / 2;
-            const midY = (A.y + B.y) / 2;
-            for (let k = 0; k < 12; k++) {
-              const a = Math.random() * Math.PI * 2;
-              const s = Math.random() * 6 + 2;
-              particles.push({ x: midX, y: midY, vx: Math.cos(a) * s, vy: Math.sin(a) * s, color: Math.random() > 0.5 ? A.color : B.color, radius: Math.random() * 4 + 2, alpha: 1, decay: 0.04 });
-            }
-
-            // Prevent mutual wipeout when only 2 fighters are alive
-            if (aliveFighters.length === 2 && A.health <= 0 && B.health <= 0) {
-              if (dmgA >= dmgB) {
-                A.health = 5;
-              } else {
-                B.health = 5;
-              }
-            }
-
-            [A, B].forEach((f) => {
-              if (f.health <= 0) {
-                if (f.specialPower === 'phoenix' && !f.phoenixUsed) {
-                  f.phoenixUsed = true;
-                  f.health = 20;
-                  playSound('heal');
-                  floatingTexts.push({ x: f.x, y: f.y - 55, text: `🦅 REBORN!`, color: '#f59e0b', alpha: 1, vy: -3, scale: 1.4 });
-                } else if (!f.isDead) handleDeath(f);
-              }
-            });
-          }
-        }
-      }
-    }
-
-    // Decay Particles & Floating Texts
-    for (let i = particles.length - 1; i >= 0; i--) {
-      const p = particles[i];
-      p.x += p.vx * simSpeed;
-      p.y += p.vy * simSpeed;
-      p.alpha -= p.decay * simSpeed;
-      if (p.alpha <= 0) particles.splice(i, 1);
-    }
-
-    for (let i = floatingTexts.length - 1; i >= 0; i--) {
-      const ft = floatingTexts[i];
-      ft.y += ft.vy * simSpeed;
-      ft.alpha -= 0.025 * simSpeed;
-      if (ft.alpha <= 0) floatingTexts.splice(i, 1);
-    }
-  };
-
-  const handleDeath = (fighter: LiveFighter) => {
-    fighter.isDead = true;
-    playSound('explosion');
-    setAliveCount((prev) => Math.max(0, prev - 1));
-
-    for (let k = 0; k < 35; k++) {
-      const angle = Math.random() * Math.PI * 2;
-      const spd = Math.random() * 9 + 3;
-      particlesRef.current.push({
-        x: fighter.x,
-        y: fighter.y,
-        vx: Math.cos(angle) * spd,
-        vy: Math.sin(angle) * spd,
-        color: fighter.color,
-        radius: Math.random() * 6 + 3,
-        alpha: 1,
-        decay: 0.025,
-      });
-    }
-  };
-
-  // 6. Draw Frame on Canvas
-  const drawFrame = () => {
+  // 4. Draw Frame on Canvas (Uses SimFrameState)
+  const drawFrame = (frameState?: SimFrameState | null) => {
     const canvases = [canvasRef.current, fullscreenCanvasRef.current].filter(Boolean) as HTMLCanvasElement[];
+    if (canvases.length === 0) return;
+
+    const sim = simResultRef.current;
+    const current = frameState || (sim ? sim.frames[Math.min(sim.frames.length - 1, Math.floor(currentFrameRef.current))] : null);
+    if (!current) return;
+
+    const { fighters, items, bullets, particles, floatingTexts, winner: frameWinner } = current;
+
     canvases.forEach((canvas) => {
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
@@ -709,12 +283,6 @@ export default function GamePage() {
       const { x: cx, y: cy } = ARENA_CENTER;
 
       ctx.save();
-
-      if (screenShakeRef.current > 0) {
-        const shakeX = (Math.random() - 0.5) * screenShakeRef.current * 3;
-        const shakeY = (Math.random() - 0.5) * screenShakeRef.current * 3;
-        ctx.translate(shakeX, shakeY);
-      }
 
       // Minimalist deep black background
       ctx.fillStyle = '#05070c';
@@ -769,8 +337,8 @@ export default function GamePage() {
       ctx.restore();
 
       // Draw Items
-      itemsRef.current.forEach((item) => {
-        const bob = Math.sin(item.spawnTime + item.bobOffset) * 6;
+      items.forEach((item) => {
+        const bob = Math.sin((currentFrameRef.current * 0.08) + item.bobOffset) * 6;
         ctx.save();
         ctx.translate(item.x, item.y + bob);
 
@@ -803,7 +371,7 @@ export default function GamePage() {
       });
 
       // Bullets
-      bulletsRef.current.forEach((b) => {
+      bullets.forEach((b) => {
         ctx.save();
         ctx.beginPath();
         ctx.arc(b.x, b.y, 7, 0, Math.PI * 2);
@@ -815,7 +383,7 @@ export default function GamePage() {
       });
 
       // Particles
-      particlesRef.current.forEach((p) => {
+      particles.forEach((p) => {
         ctx.save();
         ctx.globalAlpha = Math.max(0, p.alpha);
         ctx.beginPath();
@@ -828,7 +396,7 @@ export default function GamePage() {
       });
 
       // Contestants (Enlarged Box Size: 120px) with clearly visible names
-      fightersRef.current.forEach((f) => {
+      fighters.forEach((f) => {
         if (f.isDead) return;
 
         const half = f.size / 2;
@@ -848,8 +416,9 @@ export default function GamePage() {
         ctx.save();
         ctx.clip();
 
-        if (f.image && f.image.complete && f.image.naturalWidth > 0) {
-          ctx.drawImage(f.image, -half, -half, f.size, f.size);
+        const img = f.image_url ? loadedImagesRef.current.get(f.image_url) : null;
+        if (img && img.complete && img.naturalWidth > 0) {
+          ctx.drawImage(img, -half, -half, f.size, f.size);
         } else {
           const grad = ctx.createLinearGradient(-half, -half, half, half);
           grad.addColorStop(0, f.color);
@@ -913,8 +482,8 @@ export default function GamePage() {
         ctx.restore();
       });
 
-      // Floating Numbers (Larger 38px font)
-      floatingTextsRef.current.forEach((ft) => {
+      // Floating Numbers
+      floatingTexts.forEach((ft) => {
         ctx.save();
         ctx.globalAlpha = Math.max(0, ft.alpha);
         ctx.fillStyle = ft.color;
@@ -926,7 +495,7 @@ export default function GamePage() {
         ctx.restore();
       });
 
-      // Top Headline Only (circular arena battle text removed)
+      // Top Headline Only
       ctx.save();
       ctx.textAlign = 'center';
       ctx.font = '900 66px "Montserrat", sans-serif';
@@ -937,10 +506,10 @@ export default function GamePage() {
       ctx.restore();
 
       // Dual Sided Healthbars below arena
-      drawLiveHealthBars(ctx, fightersRef.current, width);
+      drawLiveHealthBars(ctx, fighters, width);
 
-      // Victory Overlay
-      if (winner) {
+      // Victory Overlay: ONLY SHOWN WHEN frameWinner IS PRESENT!
+      if (frameWinner) {
         ctx.save();
         ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
         ctx.fillRect(0, 0, width, height);
@@ -952,22 +521,23 @@ export default function GamePage() {
         const winHalf = 80;
         ctx.beginPath();
         ctx.roundRect(width / 2 - winHalf, height / 2 - winHalf, 160, 160, 28);
-        ctx.fillStyle = winner.color;
+        ctx.fillStyle = frameWinner.color;
         ctx.shadowColor = '#eab308';
         ctx.shadowBlur = 45;
         ctx.fill();
 
-        if (winner.image && winner.image.complete && winner.image.naturalWidth > 0) {
+        const winImg = frameWinner.image_url ? loadedImagesRef.current.get(frameWinner.image_url) : null;
+        if (winImg && winImg.complete && winImg.naturalWidth > 0) {
           ctx.save();
           ctx.clip();
-          ctx.drawImage(winner.image, width / 2 - winHalf, height / 2 - winHalf, 160, 160);
+          ctx.drawImage(winImg, width / 2 - winHalf, height / 2 - winHalf, 160, 160);
           ctx.restore();
         } else {
-          ctx.fillStyle = winner.color === '#ffffff' ? '#000' : '#fff';
+          ctx.fillStyle = frameWinner.color === '#ffffff' ? '#000' : '#fff';
           ctx.font = '900 74px "Montserrat", sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(winner.name.charAt(0).toUpperCase(), width / 2, height / 2);
+          ctx.fillText(frameWinner.name.charAt(0).toUpperCase(), width / 2, height / 2);
         }
 
         ctx.lineWidth = 8;
@@ -983,7 +553,7 @@ export default function GamePage() {
 
         ctx.font = '800 50px "Montserrat", sans-serif';
         ctx.fillStyle = '#ffffff';
-        ctx.fillText(`${winner.name} WINS!`, width / 2, height / 2 + 225);
+        ctx.fillText(`${frameWinner.name} WINS!`, width / 2, height / 2 + 225);
 
         ctx.restore();
       }
@@ -993,7 +563,7 @@ export default function GamePage() {
   };
 
   // Helper: Live Health Bars below arena
-  const drawLiveHealthBars = (ctx: CanvasRenderingContext2D, fighters: LiveFighter[], width: number) => {
+  const drawLiveHealthBars = (ctx: CanvasRenderingContext2D, fighters: SimFighter[], width: number) => {
     const startY = 1220;
     const count = fighters.length;
     const colWidth = 460;
@@ -1047,8 +617,9 @@ export default function GamePage() {
       ctx.fill();
       ctx.clip();
 
-      if (f.image && f.image.complete && f.image.naturalWidth > 0) {
-        ctx.drawImage(f.image, 0, 0, thumbSize, thumbSize);
+      const img = f.image_url ? loadedImagesRef.current.get(f.image_url) : null;
+      if (img && img.complete && img.naturalWidth > 0) {
+        ctx.drawImage(img, 0, 0, thumbSize, thumbSize);
       } else {
         ctx.fillStyle = f.color === '#ffffff' ? '#000' : '#fff';
         ctx.font = '900 26px "Montserrat", sans-serif';
@@ -1108,13 +679,47 @@ export default function GamePage() {
     });
   };
 
-  // 7. Animation Loop
+  // 7. Animation Loop (Deterministic Simulation Stepper)
   useEffect(() => {
     let active = true;
+    let lastTime = performance.now();
 
-    const loop = () => {
+    const loop = (now: number) => {
       if (!active) return;
-      if (isPlaying) updatePhysics();
+
+      const dt = Math.min(0.1, (now - lastTime) / 1000);
+      lastTime = now;
+
+      const sim = simResultRef.current;
+      if (sim && isPlaying) {
+        const frameIncrement = 30 * simSpeed * dt;
+        const prevFrame = Math.floor(currentFrameRef.current);
+        currentFrameRef.current = Math.min(sim.frames.length - 1, currentFrameRef.current + frameIncrement);
+        const nextFrame = Math.floor(currentFrameRef.current);
+
+        // Trigger sound events that occurred between previous and current frame
+        if (soundEnabled && sim.soundEvents) {
+          for (const ev of sim.soundEvents) {
+            if (ev.frame > lastSoundFrameRef.current && ev.frame <= nextFrame) {
+              playSound(ev.sound === 'winner' ? 'victory' : ev.sound);
+            }
+          }
+          lastSoundFrameRef.current = nextFrame;
+        }
+
+        const curFrameState = sim.frames[nextFrame];
+        if (curFrameState) {
+          setAliveCount(curFrameState.aliveCount);
+          if (curFrameState.winner && !winner) {
+            setWinner(curFrameState.winner as any);
+          }
+        }
+
+        if (nextFrame >= sim.frames.length - 1) {
+          setIsPlaying(false);
+        }
+      }
+
       drawFrame();
       animFrameIdRef.current = requestAnimationFrame(loop);
     };
@@ -1125,9 +730,28 @@ export default function GamePage() {
       active = false;
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
     };
-  }, [isPlaying, simSpeed, winner, topic, isFullscreen]);
+  }, [isPlaying, simSpeed, winner, topic, isFullscreen, soundEnabled]);
 
-  // 8. Handlers
+  // 8. Handlers & Simulation Controls
+  const resetSimulation = () => {
+    setIsPlaying(false);
+    initSimulation(true);
+  };
+
+  const handlePlayToggle = () => {
+    const sim = simResultRef.current;
+    if (!isPlaying) {
+      if (sim && currentFrameRef.current >= sim.frames.length - 1) {
+        currentFrameRef.current = 0;
+        lastSoundFrameRef.current = -1;
+        setWinner(null);
+      }
+      setIsPlaying(true);
+    } else {
+      setIsPlaying(false);
+    }
+  };
+
   const handleImageUpload = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1144,7 +768,6 @@ export default function GamePage() {
       const img = new Image();
       img.src = base64Url;
       loadedImagesRef.current.set(base64Url, img);
-      if (fightersRef.current[index]) fightersRef.current[index].image = img;
     };
     reader.readAsDataURL(file);
   };
@@ -1175,14 +798,14 @@ export default function GamePage() {
     );
   };
 
-  // 9. Queue Video to YouTube Shorts with Full Dynamic Match Duration
+  // 9. Queue Video to YouTube Shorts with Full Dynamic Match Duration and Identical Seed
   const handleQueueVideo = async () => {
     setQueueLoading(true);
     setQueueMessage(null);
 
     try {
-      // Calculate exact match duration until someone wins (+ winner celebration)
-      const simResult = generateArenaSimulation(
+      const currentSeed = battleSeedRef.current;
+      const simResult = simResultRef.current || generateArenaSimulation(
         contestants.map((c) => ({
           id: c.id,
           name: c.name,
@@ -1193,11 +816,11 @@ export default function GamePage() {
           speed: c.speed,
           special_power: c.special_power,
         })),
-        1650,
-        42
+        1800,
+        currentSeed
       );
 
-      const dynamicDurationSeconds = Math.min(58, Math.max(15, simResult.totalSeconds));
+      const dynamicDurationSeconds = simResult.totalSeconds;
 
       const data_json = {
         topic,
@@ -1213,6 +836,7 @@ export default function GamePage() {
           special_power: c.special_power,
         })),
         duration_seconds: dynamicDurationSeconds,
+        seed: currentSeed,
       };
 
       const response = await fetch('/api/queue-video', {
@@ -1506,7 +1130,7 @@ export default function GamePage() {
             <div className="w-full max-w-[360px] space-y-2">
               <div className="flex gap-2">
                 <button
-                  onClick={() => setIsPlaying(!isPlaying)}
+                  onClick={handlePlayToggle}
                   className={`flex-1 py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition shadow-lg ${
                     isPlaying
                       ? 'bg-amber-500 hover:bg-amber-400 text-slate-950'
@@ -1568,7 +1192,7 @@ export default function GamePage() {
 
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => setIsPlaying(!isPlaying)}
+                  onClick={handlePlayToggle}
                   className={`px-3 py-1 rounded-lg text-xs font-black transition ${
                     isPlaying ? 'bg-amber-500 text-black' : 'bg-emerald-500 text-black'
                   }`}

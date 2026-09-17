@@ -364,22 +364,49 @@ export function generateArenaSimulation(
         }
       }
 
-      // Gun firing (5 bullets capacity)
-      if (f.gunBullets > 0 && rng() < 0.05) {
-        f.gunBullets--;
-        soundEvents.push({ frame, sound: 'gun', volume: 0.6 });
+      // Gun firing: Aim directly at the nearest living opponent!
+      if (f.gunBullets > 0 && rng() < 0.08) {
+        let nearestTarget: SimFighter | null = null;
+        let nearestDist = Infinity;
+        for (const opp of aliveFighters) {
+          if (opp.id === f.id) continue;
+          const d = Math.hypot(opp.x - f.x, opp.y - f.y);
+          if (d < nearestDist) {
+            nearestDist = d;
+            nearestTarget = opp;
+          }
+        }
 
-        const vLen = Math.hypot(f.vx, f.vy) || 1;
-        bullets.push({
-          x: f.x + (f.vx / vLen) * 60,
-          y: f.y + (f.vy / vLen) * 60,
-          vx: (f.vx / vLen) * 16,
-          vy: (f.vy / vLen) * 16,
-          ownerId: f.id,
-          color: '#38bdf8',
-          damage: 5,
-          life: 80,
-        });
+        if (nearestTarget) {
+          f.gunBullets--;
+          soundEvents.push({ frame, sound: 'gun', volume: 0.6 });
+
+          const angleToOpp = Math.atan2(nearestTarget.y - f.y, nearestTarget.x - f.x);
+          const bulletSpeed = 22;
+          bullets.push({
+            x: f.x + Math.cos(angleToOpp) * (f.size / 2 + 15),
+            y: f.y + Math.sin(angleToOpp) * (f.size / 2 + 15),
+            vx: Math.cos(angleToOpp) * bulletSpeed,
+            vy: Math.sin(angleToOpp) * bulletSpeed,
+            ownerId: f.id,
+            color: '#38bdf8',
+            damage: 10,
+            life: 80,
+          });
+
+          // Muzzle flash particles
+          for (let k = 0; k < 4; k++) {
+            particles.push({
+              x: f.x + Math.cos(angleToOpp) * (f.size / 2 + 10),
+              y: f.y + Math.sin(angleToOpp) * (f.size / 2 + 10),
+              vx: Math.cos(angleToOpp + (rng() - 0.5)) * (rng() * 4 + 2),
+              vy: Math.sin(angleToOpp + (rng() - 0.5)) * (rng() * 4 + 2),
+              color: '#38bdf8',
+              radius: rng() * 3 + 2,
+              alpha: 1,
+            });
+          }
+        }
       }
     });
 
