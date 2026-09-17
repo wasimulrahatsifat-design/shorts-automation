@@ -9,8 +9,9 @@ export async function GET() {
   try {
     const { data, error } = await supabase
       .from('shorts_queue')
-      .select('*')
+      .select('id, topic, status, video_url, created_at, scheduled_time')
       .eq('status', 'Needs_Approval')
+      .not('video_url', 'is', null)
       .order('created_at', { ascending: false });
 
     if (error) {
