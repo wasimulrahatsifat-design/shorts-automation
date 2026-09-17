@@ -190,11 +190,6 @@ export function generateArenaSimulation(
   for (let frame = 0; frame < maxFrames; frame++) {
     const aliveFighters = fighters.filter((f) => !f.isDead);
 
-    // Progressive damage escalation so matches don't stall
-    const elapsedSeconds = frame / 30;
-    const escalationMultiplier = 1.0 + Math.max(0, (elapsedSeconds - 6) * 0.08); // starts escalating after 6 seconds
-    const suddenDeathMultiplier = frame > 900 ? 1.8 : frame > 600 ? 1.4 : 1.0;
-
     // Check winner
     if (aliveFighters.length === 1 && !winner && fighters.length > 1) {
       winner = { ...aliveFighters[0] };
@@ -210,51 +205,9 @@ export function generateArenaSimulation(
       soundEvents.push({ frame, sound: 'winner', volume: 1.0 });
     }
 
-    // Absolute battle-royale showdown guarantee:
-    // If match approaches maxFrames - 130 and still no single winner, crown the leader!
-    if (!winner && frame >= maxFrames - 130 && aliveFighters.length > 1) {
-      const sorted = [...aliveFighters].sort((a, b) => b.health - a.health);
-      for (let k = 1; k < sorted.length; k++) {
-        sorted[k].isDead = true;
-        sorted[k].health = 0;
-      }
-      winner = { ...sorted[0] };
-      winnerAnnouncedFrame = frame;
-      soundEvents.push({ frame, sound: 'winner', volume: 1.0 });
-    }
-
     // Stop simulation 120 frames (4s) after winner is declared
     if (winner && winnerAnnouncedFrame > 0 && frame >= winnerAnnouncedFrame + 120) {
       break;
-    }
-
-    // Sudden Death Storm: If battle exceeds 22s and multiple fighters remain,
-    // safe zone contracts or deals storm damage so battle finishes definitively!
-    if (frame > 660 && aliveFighters.length > 1) {
-      const stormShrink = Math.min(220, (frame - 660) * 0.45);
-      const safeRadius = ARENA_RADIUS - stormShrink;
-      aliveFighters.forEach((f) => {
-        const d = Math.hypot(f.x - ARENA_CENTER.x, f.y - ARENA_CENTER.y);
-        if (d > safeRadius && frame % 15 === 0) {
-          f.health = Math.max(0, f.health - 7);
-          f.hitFlash = 8;
-          soundEvents.push({ frame, sound: 'hit', volume: 0.4 });
-          floatingTexts.push({
-            id: `storm_${frame}_${f.id}`,
-            x: f.x,
-            y: f.y - 45,
-            text: '⚡ STORM -7',
-            color: '#ef4444',
-            alpha: 1,
-            vy: -2,
-            scale: 1.1,
-          });
-          if (f.health <= 0 && !f.isDead) {
-            f.isDead = true;
-            soundEvents.push({ frame, sound: 'explosion', volume: 0.9 });
-          }
-        }
-      });
     }
 
     // Item Spawner: Only 8 seconds (240 frames) AFTER an item is picked up (or initial spawn)
@@ -262,9 +215,7 @@ export function generateArenaSimulation(
       if (nextItemSpawnCooldown > 0) {
         nextItemSpawnCooldown--;
       } else {
-        // After 20 seconds, no more health kits spawn so battle concludes!
-        const availableItems = frame > 600 ? itemTypes.filter((it) => it.type !== 'health') : itemTypes;
-        const pick = availableItems[Math.floor(rng() * availableItems.length)];
+        const pick = itemTypes[Math.floor(rng() * itemTypes.length)];
         const a = rng() * Math.PI * 2;
         const r = rng() * (ARENA_RADIUS - 90);
         items.push({
@@ -281,7 +232,7 @@ export function generateArenaSimulation(
       }
     }
 
-    // Move Fighters & Circular Wall Bounce
+    // Move Fighters & Circular Wall Bounce (Pure 2D Physics - No auto steering or artificial attacks)
     aliveFighters.forEach((f) => {
       if (f.invulnerableTimer > 0) f.invulnerableTimer--;
       if (f.hitFlash > 0) f.hitFlash--;
@@ -296,36 +247,7 @@ export function generateArenaSimulation(
 
       if (f.speedBoostTimer > 0) f.speedBoostTimer--;
 
-      // Combat Steering: After opening bounce (5s), fighters actively steer toward opponents
-      if (frame > 150 && aliveFighters.length > 1 && !winner) {
-        let nearestDist = Infinity;
-        let nearestTarget: SimFighter | null = null;
-        for (const opp of aliveFighters) {
-          if (opp.id === f.id) continue;
-          const distToOpp = Math.hypot(opp.x - f.x, opp.y - f.y);
-          if (distToOpp < nearestDist) {
-            nearestDist = distToOpp;
-            nearestTarget = opp;
-          }
-        }
-
-        if (nearestTarget) {
-          const steerRate = 0.18 + Math.min(0.35, (frame - 150) / 1000);
-          const angleToTarget = Math.atan2(nearestTarget.y - f.y, nearestTarget.x - f.x);
-          f.vx += Math.cos(angleToTarget) * steerRate;
-          f.vy += Math.sin(angleToTarget) * steerRate;
-
-          // Normalize speed
-          const curSpd = Math.hypot(f.vx, f.vy);
-          const baseSpd = f.speedBoostTimer > 0 ? 10.5 : 7.2;
-          if (curSpd > 0.1) {
-            f.vx = (f.vx / curSpd) * Math.min(13, Math.max(baseSpd * 0.8, curSpd));
-            f.vy = (f.vy / curSpd) * Math.min(13, Math.max(baseSpd * 0.8, curSpd));
-          }
-        }
-      }
-
-      const spdMult = (f.speedBoostTimer > 0 ? 1.4 : 1) * (frame > 900 ? 1.3 : 1.0);
+      const spdMult = f.speedBoostTimer > 0 ? 1.4 : 1.0;
       f.x += f.vx * spdMult;
       f.y += f.vy * spdMult;
 
@@ -529,8 +451,8 @@ export function generateArenaSimulation(
             if (A.hasShield) { dmgB = 0; A.hasShield = false; }
             else if (A.specialPower === 'iron_shield' && A.health / A.maxHealth <= 0.5) dmgB = Math.round(dmgB * 0.5);
 
-            dmgA = Math.round(dmgA * suddenDeathMultiplier * escalationMultiplier);
-            dmgB = Math.round(dmgB * suddenDeathMultiplier * escalationMultiplier);
+            dmgA = Math.round(dmgA);
+            dmgB = Math.round(dmgB);
 
             B.health = Math.max(0, B.health - dmgA);
             A.health = Math.max(0, A.health - dmgB);
