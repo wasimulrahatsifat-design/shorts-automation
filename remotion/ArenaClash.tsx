@@ -36,13 +36,17 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData, topic: string }> 
 
   const battleDuration = durationInFrames - 90; // Reserve last 3s for winner
 
-  // Fixed positions for exactly 4 contestants in a 1080x1920 layout
-  const positions = [
-    { x: 300, y: 600 },
-    { x: 780, y: 600 },
-    { x: 300, y: 1300 },
-    { x: 780, y: 1300 }
-  ];
+  const count = contestants?.length || 4;
+  const radius = 380;
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const positions = contestants?.map((_, i) => {
+    const angle = (i / count) * Math.PI * 2 - Math.PI / 2;
+    return {
+      x: centerX + Math.cos(angle) * (radius * 0.65),
+      y: centerY + Math.sin(angle) * (radius * 0.65)
+    };
+  }) || [];
 
   // Calculate live health and active event status for each contestant
   const liveContestants = useMemo(() => {

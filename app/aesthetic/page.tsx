@@ -143,8 +143,14 @@ export default function AestheticPage() {
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Aesthetic Video Generator</h1>
             <p className="text-gray-500 dark:text-gray-400">Step {step} of 2</p>
           </div>
-          <div className="flex gap-4">
-            <Link href="/" className="px-6 py-3 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-all text-center">
+          <div className="flex gap-3">
+            <Link 
+              href="/game" 
+              className="px-5 py-3 rounded-xl bg-gradient-to-r from-red-600 to-amber-500 hover:opacity-90 text-white font-bold transition-all text-center shadow-md shadow-red-500/20"
+            >
+              ⚔️ Arena Game
+            </Link>
+            <Link href="/" className="px-5 py-3 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-all text-center">
               Main Dashboard
             </Link>
           </div>

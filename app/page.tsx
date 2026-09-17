@@ -260,14 +260,26 @@ export default function Home() {
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Shorts Automation</h1>
             <p className="text-gray-500 dark:text-gray-400">Step {step} of 3</p>
           </div>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-3">
+            <Link 
+              href="/game" 
+              className="px-5 py-3 rounded-xl bg-gradient-to-r from-red-600 to-amber-500 hover:opacity-90 text-white font-bold transition-all text-center shadow-md shadow-red-500/20"
+            >
+              ⚔️ Arena Game
+            </Link>
+            <Link 
+              href="/aesthetic" 
+              className="px-5 py-3 rounded-xl bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 font-medium hover:bg-purple-200 dark:hover:bg-purple-800/60 transition-all text-center border border-purple-300 dark:border-purple-700"
+            >
+              🌸 Aesthetic
+            </Link>
             <button 
               onClick={() => { setStep(3); fetchVideos(); }}
-              className="px-6 py-3 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-all text-center"
+              className="px-5 py-3 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-all text-center"
             >
               Dashboard
             </button>
-            <Link href="/admin" className="px-6 py-3 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-all text-center">
+            <Link href="/admin" className="px-5 py-3 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-all text-center">
               Admin View
             </Link>
           </div>

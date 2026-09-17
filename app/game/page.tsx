@@ -1,5 +1,6 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
 
@@ -8,552 +9,1375 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-type VideoItem = {
+// Types
+export interface ContestantConfig {
   id: string;
-  topic: string;
-  status: string;
-  video_url: string | null;
-  data_json: any;
-  created_at: string;
-};
+  name: string;
+  color: string;
+  image_url: string | null;
+  starting_health: number;
+  damage: number;
+  speed: number;
+}
 
-export default function Home() {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [loading, setLoading] = useState(false);
-  const [videos, setVideos] = useState<VideoItem[]>([]);
-  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  color: string;
+  radius: number;
+  alpha: number;
+  decay: number;
+}
 
-  // Step 1 State
-  const [topic, setTopic] = useState('');
-  const [videoFormat, setVideoFormat] = useState('Arena Clash');
-  const [duration, setDuration] = useState(30);
-  const [showSubtitles, setShowSubtitles] = useState(true);
-  const [filterFormat, setFilterFormat] = useState('All');
+interface FloatingText {
+  x: number;
+  y: number;
+  text: string;
+  color: string;
+  alpha: number;
+  vy: number;
+  scale: number;
+}
 
-  // Step 2 State
-  const [draftJson, setDraftJson] = useState('');
-  const [magicInstruction, setMagicInstruction] = useState('');
-  const [requiredImages, setRequiredImages] = useState<{keyword: string, file: string | null}[]>([]);
+interface LiveFighter {
+  id: string;
+  name: string;
+  color: string;
+  image: HTMLImageElement | null;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  size: number;
+  health: number;
+  maxHealth: number;
+  damage: number;
+  speed: number;
+  isDead: boolean;
+  hitFlash: number;
+  invulnerableTimer: number;
+}
 
-  // Parse draftJson for unique image keywords
+const DEFAULT_COLORS = [
+  '#ef4444', // Red
+  '#3b82f6', // Blue
+  '#10b981', // Green
+  '#f59e0b', // Yellow
+  '#8b5cf6', // Purple
+  '#ec4899', // Pink
+  '#06b6d4', // Cyan
+  '#f97316', // Orange
+];
+
+const PRESET_TOPICS = [
+  { topic: 'Marvel vs DC', names: ['Iron Man', 'Batman', 'Spider-Man', 'Superman'] },
+  { topic: 'Anime Royale', names: ['Goku', 'Naruto', 'Luffy', 'Ichigo'] },
+  { topic: 'Titan Monsters', names: ['Godzilla', 'King Kong', 'T-Rex', 'Megalodon'] },
+  { topic: 'Fast Food Clash', names: ['Burger', 'Pizza', 'Taco', 'French Fries'] },
+  { topic: 'Gaming Legends', names: ['Mario', 'Sonic', 'Master Chief', 'Kratos'] },
+];
+
+export default function GamePage() {
+  // Setup State
+  const [topic, setTopic] = useState('Marvel vs DC');
+  const [contestantCount, setContestantCount] = useState<number>(4);
+  const [contestants, setContestants] = useState<ContestantConfig[]>([]);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundVolume, setSoundVolume] = useState(0.5);
+
+  // Simulation Controls
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [simSpeed, setSimSpeed] = useState<number>(1);
+  const [aliveCount, setAliveCount] = useState(4);
+  const [winner, setWinner] = useState<LiveFighter | null>(null);
+  const [announcerLoading, setAnnouncerLoading] = useState(false);
+  const [announcerAudioUrl, setAnnouncerAudioUrl] = useState<string | null>(null);
+  const [queueLoading, setQueueLoading] = useState(false);
+  const [queueMessage, setQueueMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Canvas & Audio Refs
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const animFrameIdRef = useRef<number | null>(null);
+  const loadedImagesRef = useRef<Map<string, HTMLImageElement>>(new Map());
+
+  // Simulation State Refs (for high performance canvas loop)
+  const fightersRef = useRef<LiveFighter[]>([]);
+  const particlesRef = useRef<Particle[]>([]);
+  const floatingTextsRef = useRef<FloatingText[]>([]);
+  const screenShakeRef = useRef(0);
+  const arenaRadiusRef = useRef(380);
+  const arenaCenterRef = useRef({ x: 540, y: 960 });
+
+  // 1. Initialize Contestants when Count Changes
   useEffect(() => {
-    if (!draftJson || step !== 2) return;
-    try {
-      const parsed = JSON.parse(draftJson);
-      const keywords = new Set<string>();
-      
-      const addKeyword = (kw: string) => { if (kw) keywords.add(kw); }
+    setContestants((prev) => {
+      const updated: ContestantConfig[] = [];
+      const preset = PRESET_TOPICS[0].names;
 
-      if (parsed.questions) parsed.questions.forEach((q: any) => addKeyword(q.image_keyword));
-      if (parsed.items) parsed.items.forEach((item: any) => addKeyword(item.image_keyword));
-      if (parsed.contestants) parsed.contestants.forEach((c: any) => addKeyword(c.image_keyword));
-      if (parsed.scenarios) {
-        parsed.scenarios.forEach((s: any) => {
-          addKeyword(s.image_keyword_a);
-          addKeyword(s.image_keyword_b);
-        });
+      for (let i = 0; i < contestantCount; i++) {
+        if (prev[i]) {
+          updated.push(prev[i]);
+        } else {
+          updated.push({
+            id: `fighter_${i + 1}`,
+            name: preset[i] || `Fighter ${i + 1}`,
+            color: DEFAULT_COLORS[i % DEFAULT_COLORS.length],
+            image_url: null,
+            starting_health: 100,
+            damage: 25,
+            speed: 6,
+          });
+        }
+      }
+      return updated;
+    });
+  }, [contestantCount]);
+
+  // 2. Sound Effects Engine (Web Audio API Synthesizer)
+  const getAudioContext = () => {
+    if (!audioCtxRef.current && typeof window !== 'undefined') {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        audioCtxRef.current = new AudioCtx();
+      }
+    }
+    if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+      audioCtxRef.current.resume();
+    }
+    return audioCtxRef.current;
+  };
+
+  const playBounceSound = () => {
+    if (!soundEnabled) return;
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(200, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(60, ctx.currentTime + 0.08);
+
+      gain.gain.setValueAtTime(0.3 * soundVolume, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start();
+      osc.stop(ctx.currentTime + 0.08);
+    } catch (e) {}
+  };
+
+  const playHitSound = () => {
+    if (!soundEnabled) return;
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(320, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + 0.12);
+
+      gain.gain.setValueAtTime(0.5 * soundVolume, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start();
+      osc.stop(ctx.currentTime + 0.12);
+    } catch (e) {}
+  };
+
+  const playExplosionSound = () => {
+    if (!soundEnabled) return;
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      // White noise buffer for explosion
+      const bufferSize = ctx.sampleRate * 0.4;
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.1));
       }
 
-      setRequiredImages(prev => {
-        return Array.from(keywords).map(kw => {
-          const existing = prev.find(r => r.keyword === kw);
-          return { keyword: kw, file: existing?.file || null };
-        });
-      });
-    } catch (e) {
-      // invalid json, ignore
-    }
-  }, [draftJson, step]);
+      const noise = ctx.createBufferSource();
+      noise.buffer = buffer;
 
-  const handleFileUpload = (keyword: string, e: React.ChangeEvent<HTMLInputElement>) => {
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(600, ctx.currentTime);
+      filter.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.4);
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.8 * soundVolume, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+
+      noise.start();
+      noise.stop(ctx.currentTime + 0.4);
+    } catch (e) {}
+  };
+
+  const playVictorySound = () => {
+    if (!soundEnabled) return;
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const notes = [261.63, 329.63, 392.00, 523.25]; // C4, E4, G4, C5
+      notes.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.1);
+
+        gain.gain.setValueAtTime(0.4 * soundVolume, ctx.currentTime + i * 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.1 + 0.35);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(ctx.currentTime + i * 0.1);
+        osc.stop(ctx.currentTime + i * 0.1 + 0.35);
+      });
+    } catch (e) {}
+  };
+
+  // 3. Reset & Setup Live Simulation Fighters
+  const resetSimulation = () => {
+    setIsPlaying(false);
+    setWinner(null);
+    setAliveCount(contestants.length);
+    particlesRef.current = [];
+    floatingTextsRef.current = [];
+    screenShakeRef.current = 0;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const width = 1080;
+    const height = 1920;
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const arenaRadius = 380;
+
+    arenaCenterRef.current = { x: centerX, y: centerY };
+    arenaRadiusRef.current = arenaRadius;
+
+    const count = contestants.length;
+    const fighters: LiveFighter[] = [];
+
+    contestants.forEach((c, idx) => {
+      // Distribute evenly along a starting circle
+      const angle = (idx / count) * Math.PI * 2 + Math.PI / 4;
+      const spawnRadius = arenaRadius * 0.6;
+      const x = centerX + Math.cos(angle) * spawnRadius;
+      const y = centerY + Math.sin(angle) * spawnRadius;
+
+      // Random inward velocity vector
+      const speed = c.speed || 6;
+      const moveAngle = angle + Math.PI + (Math.random() - 0.5) * 0.8;
+      const vx = Math.cos(moveAngle) * speed;
+      const vy = Math.sin(moveAngle) * speed;
+
+      // Check cached image
+      let imgObj: HTMLImageElement | null = null;
+      if (c.image_url) {
+        if (loadedImagesRef.current.has(c.image_url)) {
+          imgObj = loadedImagesRef.current.get(c.image_url)!;
+        } else {
+          imgObj = new Image();
+          imgObj.src = c.image_url;
+          loadedImagesRef.current.set(c.image_url, imgObj);
+        }
+      }
+
+      fighters.push({
+        id: c.id,
+        name: c.name,
+        color: c.color,
+        image: imgObj,
+        x,
+        y,
+        vx,
+        vy,
+        size: 90, // Small square box size
+        health: c.starting_health || 100,
+        maxHealth: c.starting_health || 100,
+        damage: c.damage || 25,
+        speed: c.speed || 6,
+        isDead: false,
+        hitFlash: 0,
+        invulnerableTimer: 0,
+      });
+    });
+
+    fightersRef.current = fighters;
+    drawFrame();
+  };
+
+  // Re-initialize when contestants array changes
+  useEffect(() => {
+    resetSimulation();
+  }, [contestants]);
+
+  // 4. Physics Engine & Render Loop
+  const updatePhysics = () => {
+    const fighters = fightersRef.current;
+    const particles = particlesRef.current;
+    const floatingTexts = floatingTextsRef.current;
+    const { x: cx, y: cy } = arenaCenterRef.current;
+    const arenaRadius = arenaRadiusRef.current;
+
+    // Decay screen shake
+    if (screenShakeRef.current > 0) {
+      screenShakeRef.current = Math.max(0, screenShakeRef.current - 0.8);
+    }
+
+    const aliveFighters = fighters.filter((f) => !f.isDead);
+
+    // If only 1 survivor remains, declare victory!
+    if (aliveFighters.length === 1 && !winner && fighters.length > 1) {
+      setWinner(aliveFighters[0]);
+      setIsPlaying(false);
+      playVictorySound();
+
+      // Confetti burst for winner
+      for (let i = 0; i < 70; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 8 + 3;
+        particles.push({
+          x: aliveFighters[0].x,
+          y: aliveFighters[0].y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 2,
+          color: DEFAULT_COLORS[Math.floor(Math.random() * DEFAULT_COLORS.length)],
+          radius: Math.random() * 5 + 3,
+          alpha: 1,
+          decay: 0.01 + Math.random() * 0.015,
+        });
+      }
+    }
+
+    // 4.1 Update Position and Circular Boundary Bounce
+    aliveFighters.forEach((f) => {
+      // Invulnerability / cooldown timer
+      if (f.invulnerableTimer > 0) f.invulnerableTimer--;
+      if (f.hitFlash > 0) f.hitFlash--;
+
+      // Move by velocity * simulation speed multiplier
+      f.x += f.vx * simSpeed;
+      f.y += f.vy * simSpeed;
+
+      // Realistic circular arena bounce
+      const dx = f.x - cx;
+      const dy = f.y - cy;
+      const dist = Math.hypot(dx, dy);
+      const halfSize = (f.size / 2) * 1.1; // box boundary buffer
+
+      if (dist + halfSize >= arenaRadius) {
+        // Inward normal unit vector
+        const nx = -dx / dist;
+        const ny = -dy / dist;
+
+        // Push back inside circular boundary
+        f.x = cx - nx * (arenaRadius - halfSize);
+        f.y = cy - ny * (arenaRadius - halfSize);
+
+        // Reflection vector: v' = v - 2(v . n)n
+        const dot = f.vx * nx + f.vy * ny;
+        f.vx = f.vx - 2 * dot * nx;
+        f.vy = f.vy - 2 * dot * ny;
+
+        // Wall spark particles
+        playBounceSound();
+        for (let i = 0; i < 4; i++) {
+          particles.push({
+            x: f.x,
+            y: f.y,
+            vx: nx * (Math.random() * 3 + 1) + (Math.random() - 0.5) * 3,
+            vy: ny * (Math.random() * 3 + 1) + (Math.random() - 0.5) * 3,
+            color: '#facc15',
+            radius: Math.random() * 3 + 2,
+            alpha: 1,
+            decay: 0.04,
+          });
+        }
+      }
+    });
+
+    // 4.2 Box-to-Box Elastic Collision & Combat Damage
+    for (let i = 0; i < aliveFighters.length; i++) {
+      for (let j = i + 1; j < aliveFighters.length; j++) {
+        const A = aliveFighters[i];
+        const B = aliveFighters[j];
+
+        const dx = B.x - A.x;
+        const dy = B.y - A.y;
+        const dist = Math.hypot(dx, dy);
+        const minDist = (A.size + B.size) / 2;
+
+        if (dist < minDist && dist > 0) {
+          // Normal vector from A to B
+          const nx = dx / dist;
+          const ny = dy / dist;
+
+          // Separate boxes to prevent sticking
+          const overlap = minDist - dist;
+          A.x -= (nx * overlap) / 2;
+          A.y -= (ny * overlap) / 2;
+          B.x += (nx * overlap) / 2;
+          B.y += (ny * overlap) / 2;
+
+          // Elastic momentum exchange
+          const kx = A.vx - B.vx;
+          const ky = A.vy - B.vy;
+          const p = 2 * (nx * kx + ny * ky) / 2; // Assuming equal mass
+
+          A.vx -= p * nx;
+          A.vy -= p * ny;
+          B.vx += p * nx;
+          B.vy += p * ny;
+
+          // Apply damage if not on hit cooldown
+          if (A.invulnerableTimer === 0 && B.invulnerableTimer === 0) {
+            A.health = Math.max(0, A.health - B.damage);
+            B.health = Math.max(0, B.health - A.damage);
+
+            A.hitFlash = 12;
+            B.hitFlash = 12;
+            A.invulnerableTimer = 18;
+            B.invulnerableTimer = 18;
+
+            playHitSound();
+            screenShakeRef.current = 6;
+
+            // Damage floating texts
+            floatingTexts.push({
+              x: A.x + (Math.random() - 0.5) * 20,
+              y: A.y - 40,
+              text: `-${B.damage}`,
+              color: '#ef4444',
+              alpha: 1,
+              vy: -2.5,
+              scale: 1.2,
+            });
+
+            floatingTexts.push({
+              x: B.x + (Math.random() - 0.5) * 20,
+              y: B.y - 40,
+              text: `-${A.damage}`,
+              color: '#ef4444',
+              alpha: 1,
+              vy: -2.5,
+              scale: 1.2,
+            });
+
+            // Clash spark particles
+            const midX = (A.x + B.x) / 2;
+            const midY = (A.y + B.y) / 2;
+            for (let pIdx = 0; pIdx < 12; pIdx++) {
+              const angle = Math.random() * Math.PI * 2;
+              const spd = Math.random() * 6 + 2;
+              particles.push({
+                x: midX,
+                y: midY,
+                vx: Math.cos(angle) * spd,
+                vy: Math.sin(angle) * spd,
+                color: Math.random() > 0.5 ? A.color : B.color,
+                radius: Math.random() * 4 + 2,
+                alpha: 1,
+                decay: 0.04,
+              });
+            }
+
+            // Check for death
+            [A, B].forEach((fighter) => {
+              if (fighter.health <= 0 && !fighter.isDead) {
+                fighter.isDead = true;
+                playExplosionSound();
+                setAliveCount((prev) => Math.max(0, prev - 1));
+
+                // Explosion burst
+                for (let k = 0; k < 35; k++) {
+                  const angle = Math.random() * Math.PI * 2;
+                  const spd = Math.random() * 9 + 3;
+                  particles.push({
+                    x: fighter.x,
+                    y: fighter.y,
+                    vx: Math.cos(angle) * spd,
+                    vy: Math.sin(angle) * spd,
+                    color: fighter.color,
+                    radius: Math.random() * 6 + 3,
+                    alpha: 1,
+                    decay: 0.025,
+                  });
+                }
+              }
+            });
+          }
+        }
+      }
+    }
+
+    // 4.3 Update Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx * simSpeed;
+      p.y += p.vy * simSpeed;
+      p.alpha -= p.decay * simSpeed;
+      if (p.alpha <= 0) particles.splice(i, 1);
+    }
+
+    // 4.4 Update Floating Damage Numbers
+    for (let i = floatingTexts.length - 1; i >= 0; i--) {
+      const ft = floatingTexts[i];
+      ft.y += ft.vy * simSpeed;
+      ft.alpha -= 0.03 * simSpeed;
+      if (ft.alpha <= 0) floatingTexts.splice(i, 1);
+    }
+  };
+
+  // 5. Canvas Drawing Function
+  const drawFrame = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const width = 1080;
+    const height = 1920;
+    const { x: cx, y: cy } = arenaCenterRef.current;
+    const arenaRadius = arenaRadiusRef.current;
+
+    ctx.save();
+
+    // Screen Shake effect
+    if (screenShakeRef.current > 0) {
+      const shakeX = (Math.random() - 0.5) * screenShakeRef.current * 3;
+      const shakeY = (Math.random() - 0.5) * screenShakeRef.current * 3;
+      ctx.translate(shakeX, shakeY);
+    }
+
+    // Background: Deep dark cyberpunk arena
+    ctx.fillStyle = '#090d16';
+    ctx.fillRect(0, 0, width, height);
+
+    // Cyberpunk grid backdrop
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 2;
+    const gridSize = 80;
+    for (let x = 0; x < width; x += gridSize) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+      ctx.stroke();
+    }
+    for (let y = 0; y < height; y += gridSize) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+    }
+
+    // 5.1 Draw Circular Arena Floor
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, arenaRadius, 0, Math.PI * 2);
+    ctx.fillStyle = '#0f172a';
+    ctx.fill();
+
+    // Radial gradient glow on floor
+    const floorGrad = ctx.createRadialGradient(cx, cy, 50, cx, cy, arenaRadius);
+    floorGrad.addColorStop(0, 'rgba(30, 41, 59, 0.9)');
+    floorGrad.addColorStop(0.7, 'rgba(15, 23, 42, 0.95)');
+    floorGrad.addColorStop(1, 'rgba(30, 58, 138, 0.4)');
+    ctx.fillStyle = floorGrad;
+    ctx.fill();
+
+    // Arena Center Battle Emblem
+    ctx.beginPath();
+    ctx.arc(cx, cy, 140, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 6;
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+    ctx.font = '900 70px "Montserrat", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('VS', cx, cy);
+
+    // Glowing Circular Arena Wall
+    ctx.beginPath();
+    ctx.arc(cx, cy, arenaRadius, 0, Math.PI * 2);
+    ctx.lineWidth = 14;
+    ctx.strokeStyle = '#38bdf8';
+    ctx.shadowColor = '#0284c7';
+    ctx.shadowBlur = 25;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Outer hazard ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, arenaRadius + 16, 0, Math.PI * 2);
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.stroke();
+    ctx.restore();
+
+    // 5.2 Draw Particles
+    particlesRef.current.forEach((p) => {
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, p.alpha);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+      ctx.fillStyle = p.color;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 10;
+      ctx.fill();
+      ctx.restore();
+    });
+
+    // 5.3 Draw Contestants (Square Boxes)
+    fightersRef.current.forEach((f) => {
+      if (f.isDead) return;
+
+      const half = f.size / 2;
+      const cornerRadius = 16;
+
+      ctx.save();
+      ctx.translate(f.x, f.y);
+
+      // Glow under box
+      ctx.shadowColor = f.color;
+      ctx.shadowBlur = 20;
+
+      // Draw rounded square path
+      ctx.beginPath();
+      ctx.roundRect(-half, -half, f.size, f.size, cornerRadius);
+      ctx.fillStyle = '#1e293b';
+      ctx.fill();
+
+      // Clip image inside rounded square
+      ctx.save();
+      ctx.clip();
+
+      if (f.image && f.image.complete && f.image.naturalWidth > 0) {
+        ctx.drawImage(f.image, -half, -half, f.size, f.size);
+      } else {
+        // Fallback: Gradient with Name Initial
+        const grad = ctx.createLinearGradient(-half, -half, half, half);
+        grad.addColorStop(0, f.color);
+        grad.addColorStop(1, '#0f172a');
+        ctx.fillStyle = grad;
+        ctx.fillRect(-half, -half, f.size, f.size);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '900 40px "Montserrat", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(f.name.charAt(0).toUpperCase(), 0, 0);
+      }
+
+      // Hit Flash overlay
+      if (f.hitFlash > 0) {
+        ctx.fillStyle = `rgba(239, 68, 68, ${f.hitFlash / 12})`;
+        ctx.fillRect(-half, -half, f.size, f.size);
+      }
+
+      ctx.restore(); // end clip
+
+      // Border around square
+      ctx.beginPath();
+      ctx.roundRect(-half, -half, f.size, f.size, cornerRadius);
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = f.hitFlash > 0 ? '#ffffff' : f.color;
+      ctx.stroke();
+
+      ctx.shadowBlur = 0; // reset shadow
+
+      // 5.4 Floating Health Bar (Above each square box)
+      const barWidth = 110;
+      const barHeight = 14;
+      const barY = -half - 24;
+
+      // Background
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+      ctx.beginPath();
+      ctx.roundRect(-barWidth / 2, barY, barWidth, barHeight, 7);
+      ctx.fill();
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Health Fill
+      const healthPct = Math.max(0, f.health / f.maxHealth);
+      let hpColor = '#22c55e'; // Green
+      if (healthPct < 0.3) hpColor = '#ef4444'; // Red
+      else if (healthPct < 0.6) hpColor = '#eab308'; // Yellow
+
+      if (healthPct > 0) {
+        ctx.fillStyle = hpColor;
+        ctx.beginPath();
+        ctx.roundRect(-barWidth / 2 + 1, barY + 1, (barWidth - 2) * healthPct, barHeight - 2, 5);
+        ctx.fill();
+      }
+
+      // HP Number Text
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '800 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${Math.round(f.health)} HP`, 0, barY + barHeight / 2);
+
+      // Fighter Name tag below health bar
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = '800 13px sans-serif';
+      ctx.shadowColor = 'rgba(0,0,0,0.8)';
+      ctx.shadowBlur = 4;
+      ctx.fillText(f.name, 0, barY - 10);
+
+      ctx.restore();
+    });
+
+    // 5.5 Draw Floating Damage Numbers
+    floatingTextsRef.current.forEach((ft) => {
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, ft.alpha);
+      ctx.fillStyle = ft.color;
+      ctx.font = `900 ${Math.round(28 * ft.scale)}px "Montserrat", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.shadowColor = 'black';
+      ctx.shadowBlur = 8;
+      ctx.fillText(ft.text, ft.x, ft.y);
+      ctx.restore();
+    });
+
+    // 5.6 Top Headline & Banner
+    ctx.save();
+    ctx.textAlign = 'center';
+
+    // Topic / Battle Headline
+    ctx.font = '900 58px "Montserrat", sans-serif';
+    ctx.fillStyle = '#f8fafc';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    ctx.shadowBlur = 20;
+    ctx.fillText(topic.toUpperCase() || 'ARENA CLASH', width / 2, 140);
+
+    // Subtitle badge
+    ctx.font = '800 24px "Montserrat", sans-serif';
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillText('⚡ CIRCULAR ARENA BATTLE ROYALE ⚡', width / 2, 190);
+
+    ctx.restore();
+
+    // 5.7 Victory Screen Overlay
+    if (winner) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+      ctx.fillRect(0, 0, width, height);
+
+      // Golden Crown 👑 above winner
+      ctx.font = '100px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('👑', width / 2, height / 2 - 130);
+
+      // Winner Box in center
+      const winHalf = 70;
+      ctx.beginPath();
+      ctx.roundRect(width / 2 - winHalf, height / 2 - winHalf, 140, 140, 24);
+      ctx.fillStyle = winner.color;
+      ctx.shadowColor = '#eab308';
+      ctx.shadowBlur = 40;
+      ctx.fill();
+
+      if (winner.image && winner.image.complete && winner.image.naturalWidth > 0) {
+        ctx.save();
+        ctx.clip();
+        ctx.drawImage(winner.image, width / 2 - winHalf, height / 2 - winHalf, 140, 140);
+        ctx.restore();
+      } else {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '900 60px "Montserrat", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(winner.name.charAt(0).toUpperCase(), width / 2, height / 2);
+      }
+
+      ctx.lineWidth = 8;
+      ctx.strokeStyle = '#facc15';
+      ctx.stroke();
+
+      // Victory Text
+      ctx.font = '900 70px "Montserrat", sans-serif';
+      ctx.fillStyle = '#facc15';
+      ctx.shadowColor = '#ca8a04';
+      ctx.shadowBlur = 25;
+      ctx.textAlign = 'center';
+      ctx.fillText('VICTORY!', width / 2, height / 2 + 150);
+
+      ctx.font = '800 48px "Montserrat", sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowBlur = 10;
+      ctx.fillText(`${winner.name} WINS!`, width / 2, height / 2 + 220);
+
+      ctx.restore();
+    }
+
+    ctx.restore();
+  };
+
+  // 6. Animation Loop
+  useEffect(() => {
+    let active = true;
+
+    const loop = () => {
+      if (!active) return;
+      if (isPlaying) {
+        updatePhysics();
+      }
+      drawFrame();
+      animFrameIdRef.current = requestAnimationFrame(loop);
+    };
+
+    animFrameIdRef.current = requestAnimationFrame(loop);
+
+    return () => {
+      active = false;
+      if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
+    };
+  }, [isPlaying, simSpeed, winner, topic]);
+
+  // 7. Handle Contestant Image Upload
+  const handleImageUpload = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64Url = reader.result as string;
-      
-      setRequiredImages(prev => prev.map(img => img.keyword === keyword ? { ...img, file: base64Url } : img));
 
-      try {
-        const parsed = JSON.parse(draftJson);
-        
-        if (parsed.questions) {
-          parsed.questions.forEach((q: any) => { if (q.image_keyword === keyword) q.image_url = base64Url; });
-        }
-        if (parsed.items) {
-          parsed.items.forEach((item: any) => { if (item.image_keyword === keyword) item.image_url = base64Url; });
-        }
-        if (parsed.contestants) {
-          parsed.contestants.forEach((c: any) => { if (c.image_keyword === keyword) c.image_url = base64Url; });
-        }
-        if (parsed.scenarios) {
-          parsed.scenarios.forEach((s: any) => {
-            if (s.image_keyword_a === keyword) s.image_url_a = base64Url;
-            if (s.image_keyword_b === keyword) s.image_url_b = base64Url;
-          });
-        }
+      // Update configuration state
+      setContestants((prev) => {
+        const copy = [...prev];
+        copy[index] = { ...copy[index], image_url: base64Url };
+        return copy;
+      });
 
-        setDraftJson(JSON.stringify(parsed, null, 2));
-      } catch(e) {}
+      // Update image cache
+      const img = new Image();
+      img.src = base64Url;
+      loadedImagesRef.current.set(base64Url, img);
+
+      // Update live fighter if simulation initialized
+      if (fightersRef.current[index]) {
+        fightersRef.current[index].image = img;
+      }
     };
     reader.readAsDataURL(file);
   };
 
-  // Poll for updates every 5 seconds on Step 3
-  useEffect(() => {
-    if (step === 3) {
-      fetchVideos();
-      const interval = setInterval(fetchVideos, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [step]);
-
-  useEffect(() => {
-    if (videoFormat === 'Quiz') {
-      setDuration(80); // 16 seconds per question * 5 questions = 80s
-    }
-  }, [videoFormat]);
-
-  const fetchVideos = async () => {
-    const { data, error } = await supabase
-      .from('shorts_queue')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (!error && data) {
-      setVideos(data);
-    }
+  // 8. Update Individual Contestant Field
+  const updateContestant = (index: number, updates: Partial<ContestantConfig>) => {
+    setContestants((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], ...updates };
+      return copy;
+    });
   };
 
-  const handleSuggestTopic = () => {
-    const suggestions = [
-      "Godzilla vs King Kong",
-      "Batman vs Superman",
-      "Goku vs Naruto",
-      "T-Rex vs Megalodon",
-      "Hacker vs AI"
-    ];
-    setTopic(suggestions[Math.floor(Math.random() * suggestions.length)]);
+  // 9. Quick Preset Loader
+  const handleLoadPreset = (presetIndex: number) => {
+    const p = PRESET_TOPICS[presetIndex];
+    setTopic(p.topic);
+    setContestantCount(p.names.length);
+    setContestants(
+      p.names.map((name, i) => ({
+        id: `fighter_${i + 1}`,
+        name,
+        color: DEFAULT_COLORS[i % DEFAULT_COLORS.length],
+        image_url: null,
+        starting_health: 100,
+        damage: 25,
+        speed: 6,
+      }))
+    );
   };
 
-  const handleGenerateDraft = async () => {
-    setLoading(true);
-    setMessage(null);
+  // 10. Optional Announcer Voice (ElevenLabs)
+  const handleGenerateAnnouncer = async () => {
+    setAnnouncerLoading(true);
     try {
-      const response = await fetch('/api/draft-script', { 
+      const namesList = contestants.map((c) => c.name).join(', ');
+      const script = `Arena Clash! ${topic}. Fighters enter the circle: ${namesList}! 3, 2, 1... FIGHT!`;
+
+      const res = await fetch('https://api.elevenlabs.io/v1/text-to-speech/pNInz6obpgDQGcFmaJgB', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic, videoFormat })
+        headers: {
+          'Content-Type': 'application/json',
+          'xi-api-key': process.env.ELEVENLABS_API_KEY || '',
+        },
+        body: JSON.stringify({ text: script, model_id: 'eleven_multilingual_v2' }),
       });
-      const data = await response.json();
-      if (response.ok && data.success) {
-        setDraftJson(JSON.stringify(data.data, null, 2));
-        setStep(2);
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to generate draft.' });
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        setAnnouncerAudioUrl(url);
+        const audio = new Audio(url);
+        audio.play();
       }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Unexpected error generating draft.' });
+    } catch (e) {
+      console.error(e);
     } finally {
-      setLoading(false);
+      setAnnouncerLoading(false);
     }
   };
 
+  // 11. Queue Battle as YouTube Short Video
   const handleQueueVideo = async () => {
-    setLoading(true);
-    setMessage(null);
+    setQueueLoading(true);
+    setQueueMessage(null);
+
     try {
-      let parsedJson;
-      try {
-        parsedJson = JSON.parse(draftJson);
-      } catch (e) {
-        throw new Error('Invalid JSON format. Please check your syntax.');
-      }
+      // Build data_json for Remotion
+      const data_json = {
+        topic,
+        format: 'Arena Clash',
+        contestants: contestants.map((c) => ({
+          id: c.id,
+          name: c.name,
+          color: c.color,
+          image_url: c.image_url,
+          starting_health: c.starting_health,
+        })),
+        duration_seconds: 25,
+      };
 
       const response = await fetch('/api/queue-video', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          data_json: parsedJson, 
-          showSubtitles, 
-          duration 
-        })
+        body: JSON.stringify({
+          data_json,
+          showSubtitles: false,
+          duration: 25,
+        }),
       });
 
-      const data = await response.json();
-      if (response.ok && data.success) {
-        setMessage({ type: 'success', text: 'Video queued successfully and rendering started!' });
-        setStep(3); // Move to rendering and live progress step
+      const resData = await response.json();
+      if (response.ok && resData.success) {
+        setQueueMessage({
+          type: 'success',
+          text: 'Battle queued successfully! Rendering started via GitHub Actions.',
+        });
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to queue video.' });
+        setQueueMessage({
+          type: 'error',
+          text: resData.error || 'Failed to queue video.',
+        });
       }
-    } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || 'Unexpected error queueing video.' });
+    } catch (err: any) {
+      setQueueMessage({
+        type: 'error',
+        text: err.message || 'An unexpected error occurred.',
+      });
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleMagicEdit = async () => {
-    if (!magicInstruction.trim()) return;
-    setLoading(true);
-    setMessage(null);
-    try {
-      const response = await fetch('/api/edit-script', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentScript: draftJson, userInstruction: magicInstruction })
-      });
-      const data = await response.json();
-      if (response.ok && data.success) {
-        setDraftJson(data.newScript);
-        setMagicInstruction('');
-        setMessage({ type: 'success', text: 'Script edited magically!' });
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to edit script.' });
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Unexpected error editing script.' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this video and its files?')) return;
-    try {
-      await fetch(`/api/videos/${id}/delete`, { method: 'DELETE' });
-      fetchVideos();
-    } catch (error) {
-      alert('Failed to delete video.');
-    }
-  };
-
-  const handleRewrite = async (id: string, targetDuration: number) => {
-    if (!confirm(`Rewrite script for ${targetDuration} seconds? This will regenerate audio and trigger a new render.`)) return;
-    setMessage(null);
-    try {
-      const response = await fetch('/api/rewrite-script', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ videoId: id, targetDuration })
-      });
-      const data = await response.json();
-      if (response.ok && data.success) {
-        setMessage({ type: 'success', text: 'Script rewritten and queued for rendering!' });
-        fetchVideos();
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to rewrite.' });
-      }
-    } catch (error) {
-      alert('Error rewriting script.');
+      setQueueLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
-      <div className="max-w-4xl mx-auto space-y-8">
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8">
+      <div className="max-w-7xl mx-auto space-y-8">
         
-        {/* Header Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-8 border border-gray-100 dark:border-gray-700 flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Arena Clash Game</h1>
-            <p className="text-gray-500 dark:text-gray-400">Step {step} of 3</p>
+        {/* Navigation Bar */}
+        <div className="bg-slate-900/80 backdrop-blur border border-slate-800 rounded-3xl p-6 flex flex-wrap justify-between items-center gap-4 shadow-2xl">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">⚔️</span>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-black bg-gradient-to-r from-red-500 via-amber-400 to-cyan-400 bg-clip-text text-transparent">
+                ARENA CLASH ROYALE
+              </h1>
+              <p className="text-xs text-slate-400">Custom 2D Circular Arena Physics Simulator</p>
+            </div>
           </div>
-          <div className="flex gap-4">
-            <button 
-              onClick={() => { setStep(3); fetchVideos(); }}
-              className="px-6 py-3 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-all text-center"
+
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/"
+              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-semibold transition"
             >
-              Dashboard
-            </button>
-            <Link href="/admin" className="px-6 py-3 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-all text-center">
-              Admin View
+              📊 Chart Generator
+            </Link>
+            <Link
+              href="/aesthetic"
+              className="px-4 py-2 rounded-xl bg-purple-900/40 hover:bg-purple-800/60 border border-purple-700/50 text-purple-300 text-sm font-semibold transition"
+            >
+              🌸 Aesthetic Generator
+            </Link>
+            <Link
+              href="/admin"
+              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-semibold transition"
+            >
+              ⚙️ Admin
             </Link>
           </div>
         </div>
 
-        {message && (
-          <div className={`p-4 rounded-xl text-sm font-medium ${message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-            {message.text}
+        {/* Status Message */}
+        {queueMessage && (
+          <div
+            className={`p-4 rounded-2xl text-sm font-semibold flex items-center justify-between ${
+              queueMessage.type === 'success'
+                ? 'bg-emerald-950/80 border border-emerald-500 text-emerald-300'
+                : 'bg-rose-950/80 border border-rose-500 text-rose-300'
+            }`}
+          >
+            <span>{queueMessage.text}</span>
+            <button onClick={() => setQueueMessage(null)} className="text-lg opacity-70 hover:opacity-100">
+              ✕
+            </button>
           </div>
         )}
 
-        {/* --- STEP 1: Settings & Topic Input --- */}
-        {step === 1 && (
-          <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-8 border border-gray-100 dark:border-gray-700 space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Step 1: Setup & Topic</h2>
+        {/* Main Layout Grid: Left Settings, Right 9:16 Interactive Canvas */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          
+          {/* ================= LEFT CONFIGURATION PANEL (7 Cols) ================= */}
+          <div className="lg:col-span-7 space-y-6">
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Topic / Battle</label>
-                <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    value={topic}
-                    onChange={(e) => setTopic(e.target.value)}
-                    placeholder="e.g. Godzilla vs King Kong"
-                    className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
-                  />
-                  <button 
-                    onClick={handleSuggestTopic}
-                    className="px-4 py-3 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-all"
+            {/* Topic & Headline Box */}
+            <div className="bg-slate-900/70 border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-4">
+              <div className="flex justify-between items-center">
+                <label className="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                  <span>🏷️</span> Topic / Battle Headline
+                </label>
+                <span className="text-xs text-slate-400">Shows prominently on screen</span>
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value)}
+                  placeholder="e.g. Marvel vs DC"
+                  className="flex-1 px-4 py-3 bg-slate-950 border border-slate-700 rounded-2xl text-white font-bold text-lg focus:outline-none focus:border-amber-400 transition"
+                />
+              </div>
+
+              {/* Preset Quick Chips */}
+              <div className="flex flex-wrap gap-2 pt-2">
+                <span className="text-xs text-slate-400 self-center mr-1">Presets:</span>
+                {PRESET_TOPICS.map((p, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleLoadPreset(idx)}
+                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-slate-200 transition"
                   >
-                    Suggest
+                    {p.topic}
                   </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Duration (Seconds)</label>
-                <input 
-                  type="number" 
-                  value={duration} 
-                  onChange={(e) => setDuration(parseInt(e.target.value) || 15)}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
-                />
+                ))}
               </div>
             </div>
 
-            <div className="pt-4 flex justify-between items-center">
-              <label className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-medium cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={showSubtitles} 
-                  onChange={(e) => setShowSubtitles(e.target.checked)} 
-                  className="w-5 h-5 accent-blue-600 rounded cursor-pointer"
-                />
-                Enable Subtitles
-              </label>
+            {/* Contestant Count Selector */}
+            <div className="bg-slate-900/70 border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-4">
+              <div className="flex justify-between items-center">
+                <label className="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                  <span>👥</span> Number of Fighters (Clashers)
+                </label>
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                  {contestantCount} Fighters
+                </span>
+              </div>
 
-              <button
-                onClick={handleGenerateDraft}
-                disabled={loading}
-                className={`px-8 py-3 rounded-xl text-white font-bold transition-all ${
-                  loading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 shadow-lg active:scale-95'
-                }`}
-              >
-                {loading ? 'Generating Draft...' : 'Next: Generate Script →'}
-              </button>
+              {/* Number Buttons: 2 to 8 */}
+              <div className="grid grid-cols-7 gap-2">
+                {[2, 3, 4, 5, 6, 7, 8].map((num) => (
+                  <button
+                    key={num}
+                    onClick={() => setContestantCount(num)}
+                    className={`py-3 rounded-2xl font-black text-lg transition-all ${
+                      contestantCount === num
+                        ? 'bg-gradient-to-r from-red-600 to-amber-500 text-white shadow-lg shadow-red-500/30 scale-105 border border-amber-300'
+                        : 'bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800'
+                    }`}
+                  >
+                    {num}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
 
-        {/* --- STEP 2: Script Generation & Editing --- */}
-        {step === 2 && (
-          <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-8 border border-gray-100 dark:border-gray-700 space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Step 2: Review & Edit Script</h2>
-            <p className="text-gray-500">You can manually tweak the script, labels, or data values before rendering the final video.</p>
-            
-            <textarea
-              value={draftJson}
-              onChange={(e) => setDraftJson(e.target.value)}
-              className="w-full h-[300px] font-mono text-sm px-4 py-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 resize-none focus:ring-2 focus:ring-blue-500"
-            />
+            {/* Contestants Setup System (Cards for each contestant) */}
+            <div className="bg-slate-900/70 border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-5">
+              <div className="flex justify-between items-center">
+                <h3 className="text-base font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
+                  <span>🥊</span> Configure Fighters (Small Square Boxes)
+                </h3>
+                <span className="text-xs text-slate-400">Name, Image, Health & Damage</span>
+              </div>
 
-            {/* Manual Image Uploads */}
-            {requiredImages.length > 0 && (
-              <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border border-blue-100 dark:border-blue-800 space-y-4">
-                <h3 className="font-bold text-lg text-blue-900 dark:text-blue-100 mb-2">Required Images</h3>
-                <p className="text-sm text-blue-700 dark:text-blue-300 mb-4">
-                  Please upload an image for each keyword below. You only need to upload it once, and it will be applied automatically everywhere!
-                </p>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {requiredImages.map((req, idx) => (
-                    <div key={idx} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col items-center text-center gap-3">
-                      <span className="font-bold text-gray-800 dark:text-gray-200 text-sm">
-                        {req.keyword}
+              <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                {contestants.map((fighter, idx) => (
+                  <div
+                    key={fighter.id}
+                    className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row items-center gap-4 hover:border-slate-700 transition"
+                  >
+                    {/* Square Avatar Box & Upload */}
+                    <div className="relative group shrink-0">
+                      <div
+                        className="w-20 h-20 rounded-2xl border-4 overflow-hidden flex items-center justify-center bg-slate-900 shadow-md relative"
+                        style={{ borderColor: fighter.color }}
+                      >
+                        {fighter.image_url ? (
+                          <img
+                            src={fighter.image_url}
+                            alt={fighter.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-2xl font-black text-slate-400">
+                            {fighter.name.charAt(0).toUpperCase()}
+                          </span>
+                        )}
+
+                        {/* Upload Hover Overlay */}
+                        <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition text-[10px] text-white font-bold text-center p-1">
+                          <span>📷 Change</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleImageUpload(idx, e)}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+
+                      <span className="absolute -top-2 -left-2 w-6 h-6 rounded-full bg-slate-800 border border-slate-600 text-xs font-black flex items-center justify-center text-amber-400">
+                        {idx + 1}
                       </span>
-                      
-                      {req.file ? (
-                        <div className="relative w-24 h-24 rounded-lg overflow-hidden border-2 border-green-500">
-                          <img src={req.file} alt={req.keyword} className="w-full h-full object-cover" />
-                          <div className="absolute top-0 right-0 bg-green-500 text-white rounded-bl-lg p-1 text-xs">
-                            ✓
+                    </div>
+
+                    {/* Fighter Info & Stats */}
+                    <div className="flex-1 w-full space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Name Input */}
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-400 block mb-1">Name</label>
+                          <input
+                            type="text"
+                            value={fighter.name}
+                            onChange={(e) => updateContestant(idx, { name: e.target.value })}
+                            className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-white font-bold text-sm focus:outline-none focus:border-amber-400"
+                          />
+                        </div>
+
+                        {/* Color Selector */}
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-400 block mb-1">Color Theme</label>
+                          <div className="flex items-center gap-1.5">
+                            {DEFAULT_COLORS.slice(0, 6).map((c) => (
+                              <button
+                                key={c}
+                                type="button"
+                                onClick={() => updateContestant(idx, { color: c })}
+                                className={`w-6 h-6 rounded-lg transition-transform ${
+                                  fighter.color === c ? 'scale-110 ring-2 ring-white' : 'opacity-70 hover:opacity-100'
+                                }`}
+                                style={{ backgroundColor: c }}
+                              />
+                            ))}
                           </div>
                         </div>
-                      ) : (
-                        <div className="w-24 h-24 rounded-lg bg-gray-100 dark:bg-gray-700 border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400">
-                          No Image
+                      </div>
+
+                      {/* Health & Damage Sliders */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <div className="flex justify-between text-[11px] font-semibold text-slate-400 mb-1">
+                            <span>Starting Health</span>
+                            <span className="text-emerald-400 font-bold">{fighter.starting_health} HP</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="50"
+                            max="250"
+                            step="10"
+                            value={fighter.starting_health}
+                            onChange={(e) =>
+                              updateContestant(idx, { starting_health: Number(e.target.value) })
+                            }
+                            className="w-full accent-emerald-500"
+                          />
                         </div>
-                      )}
-                      
-                      <label className="cursor-pointer bg-blue-100 hover:bg-blue-200 text-blue-800 text-xs font-semibold px-4 py-2 rounded-lg transition-colors w-full">
-                        {req.file ? 'Change Image' : 'Upload Image'}
-                        <input 
-                          type="file" 
-                          accept="image/*" 
-                          className="hidden" 
-                          onChange={(e) => handleFileUpload(req.keyword, e)}
-                        />
-                      </label>
+
+                        <div>
+                          <div className="flex justify-between text-[11px] font-semibold text-slate-400 mb-1">
+                            <span>Damage per Hit</span>
+                            <span className="text-rose-400 font-bold">{fighter.damage} DMG</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="10"
+                            max="60"
+                            step="5"
+                            value={fighter.damage}
+                            onChange={(e) => updateContestant(idx, { damage: Number(e.target.value) })}
+                            className="w-full accent-rose-500"
+                          />
+                        </div>
+                      </div>
                     </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Audio Settings & ElevenLabs Voice */}
+            <div className="bg-slate-900/70 border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-4">
+              <div className="flex justify-between items-center">
+                <label className="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                  <span>🔊</span> Sound Effects & Announcer
+                </label>
+                <button
+                  onClick={() => setSoundEnabled(!soundEnabled)}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition ${
+                    soundEnabled ? 'bg-emerald-900/50 text-emerald-300 border border-emerald-600' : 'bg-slate-800 text-slate-500'
+                  }`}
+                >
+                  {soundEnabled ? 'SFX ON' : 'SFX MUTED'}
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-slate-400">Volume</span>
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="1"
+                    step="0.1"
+                    value={soundVolume}
+                    onChange={(e) => setSoundVolume(Number(e.target.value))}
+                    className="accent-cyan-500 w-32"
+                  />
+                </div>
+
+                <button
+                  onClick={handleGenerateAnnouncer}
+                  disabled={announcerLoading}
+                  className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition disabled:opacity-50 flex items-center gap-2 shadow-md"
+                >
+                  <span>🎙️</span>
+                  <span>{announcerLoading ? 'Generating Voice...' : 'Announcer Voice (ElevenLabs)'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ================= RIGHT 9:16 INTERACTIVE SCREEN (5 Cols) ================= */}
+          <div className="lg:col-span-5 flex flex-col items-center space-y-4">
+            
+            {/* 9:16 Smartphone Container */}
+            <div className="relative w-full max-w-[380px] aspect-[9/16] bg-slate-950 rounded-[44px] p-3 shadow-2xl shadow-cyan-950/40 border-[6px] border-slate-800 ring-2 ring-slate-700/50 flex flex-col overflow-hidden">
+              
+              {/* Dynamic Island / Speaker Notch */}
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 w-28 h-5 bg-black rounded-full z-20 flex items-center justify-center">
+                <div className="w-3 h-3 rounded-full bg-slate-900 mr-2" />
+                <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
+              </div>
+
+              {/* Status Header Overlay */}
+              <div className="absolute top-10 left-6 right-6 flex justify-between items-center z-20 pointer-events-none">
+                <span className="px-3 py-1 rounded-full bg-slate-900/80 backdrop-blur border border-slate-700 text-[11px] font-black text-amber-300">
+                  {aliveCount} / {contestants.length} ALIVE
+                </span>
+                <span className="px-3 py-1 rounded-full bg-slate-900/80 backdrop-blur border border-slate-700 text-[11px] font-bold text-slate-300">
+                  {simSpeed}x SPEED
+                </span>
+              </div>
+
+              {/* Canvas Viewport (1080 x 1920 Logical) */}
+              <div className="flex-1 w-full h-full rounded-[34px] overflow-hidden bg-black relative">
+                <canvas
+                  ref={canvasRef}
+                  width={1080}
+                  height={1920}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </div>
+
+            {/* Bottom Playback & Queue Controls */}
+            <div className="w-full max-w-[380px] bg-slate-900/90 border border-slate-800 rounded-3xl p-4 shadow-xl space-y-3">
+              
+              {/* Main Play & Reset Buttons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setIsPlaying(!isPlaying)}
+                  className={`flex-1 py-3.5 rounded-2xl font-black text-base flex items-center justify-center gap-2 transition-all shadow-lg ${
+                    isPlaying
+                      ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/30'
+                      : 'bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 shadow-emerald-500/30'
+                  }`}
+                >
+                  <span>{isPlaying ? '⏸️ PAUSE' : '▶️ PLAY CLASH'}</span>
+                </button>
+
+                <button
+                  onClick={resetSimulation}
+                  title="Reset Game"
+                  className="px-4 py-3.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-2xl font-bold text-sm text-slate-200 transition"
+                >
+                  🔄 RESET
+                </button>
+              </div>
+
+              {/* Speed Controls */}
+              <div className="flex items-center justify-between bg-slate-950 p-2 rounded-2xl border border-slate-800 text-xs font-bold text-slate-400">
+                <span className="pl-2">Game Speed:</span>
+                <div className="flex gap-1">
+                  {[1, 1.5, 2].map((spd) => (
+                    <button
+                      key={spd}
+                      onClick={() => setSimSpeed(spd)}
+                      className={`px-3 py-1 rounded-xl transition ${
+                        simSpeed === spd
+                          ? 'bg-cyan-500 text-slate-950 font-black'
+                          : 'bg-slate-900 hover:bg-slate-800 text-slate-300'
+                      }`}
+                    >
+                      {spd}x
+                    </button>
                   ))}
                 </div>
               </div>
-            )}
 
-            <div className="bg-indigo-50 dark:bg-indigo-900/30 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800 space-y-4">
-              <label className="block text-sm font-bold text-indigo-900 dark:text-indigo-200">
-                ✨ AI Copilot
-              </label>
-              <div className="flex gap-4">
-                <input 
-                  type="text" 
-                  value={magicInstruction}
-                  onChange={(e) => setMagicInstruction(e.target.value)}
-                  placeholder="Tell AI to change something (e.g., 'Make values higher', 'Add one more item')..."
-                  className="flex-1 px-4 py-3 border border-indigo-200 dark:border-indigo-700 rounded-xl bg-white dark:bg-gray-800 text-gray-800 dark:text-white"
-                />
-                <button 
-                  onClick={handleMagicEdit}
-                  disabled={loading || !magicInstruction.trim()}
-                  className={`px-6 py-3 rounded-xl text-white font-bold transition-all whitespace-nowrap ${
-                    loading || !magicInstruction.trim() ? 'bg-indigo-300 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 shadow-md active:scale-95'
-                  }`}
-                >
-                  {loading ? 'Thinking...' : 'Rewrite'}
-                </button>
-              </div>
-            </div>
-
-            <div className="flex justify-between items-center pt-4">
-              <button 
-                onClick={() => setStep(1)}
-                className="px-6 py-3 bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600 rounded-xl font-medium transition-colors"
-              >
-                ← Back
-              </button>
+              {/* Queue Video for YouTube Shorts */}
               <button
                 onClick={handleQueueVideo}
-                disabled={loading}
-                className={`px-8 py-3 rounded-xl text-white font-bold transition-all ${
-                  loading ? 'bg-green-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700 shadow-lg active:scale-95'
-                }`}
+                disabled={queueLoading}
+                className="w-full py-3 bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 hover:opacity-95 text-white rounded-2xl font-black text-sm transition disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-rose-900/30"
               >
-                {loading ? 'Queueing...' : 'Start Rendering Video →'}
+                <span>🚀</span>
+                <span>{queueLoading ? 'Queuing Video...' : 'Queue as YouTube Short (Render)'}</span>
               </button>
             </div>
           </div>
-        )}
-
-        {/* --- STEP 3: Render & Live Progress --- */}
-        {step === 3 && (
-          <div className="space-y-6">
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Videos Dashboard</h2>
-              <div className="flex gap-4 w-full md:w-auto">
-                <select
-                  value={filterFormat}
-                  onChange={(e) => setFilterFormat(e.target.value)}
-                  className="px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 border-none"
-                >
-                  <option value="All">All Formats</option>
-                  <option value="Arena Clash">Arena Clash</option>
-                </select>
-                <button 
-                  onClick={() => { setStep(1); setTopic(''); }}
-                  className="px-6 py-3 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-xl font-medium transition-colors whitespace-nowrap"
-                >
-                  + Create Video
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6">
-              {videos.filter(v => filterFormat === 'All' || v.data_json?.format === filterFormat).map(video => (
-                <VideoCard 
-                  key={video.id} 
-                  video={video} 
-                  onDelete={handleDelete} 
-                  onRewrite={handleRewrite} 
-                />
-              ))}
-              {videos.filter(v => filterFormat === 'All' || v.data_json?.format === filterFormat).length === 0 && (
-                <div className="text-center p-12 text-gray-500 bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700">
-                  No videos found for this category.
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-      </div>
-    </div>
-  );
-}
-
-function VideoCard({ video, onDelete, onRewrite }: { video: VideoItem, onDelete: (id: string) => void, onRewrite: (id: string, duration: number) => void }) {
-  const defaultDuration = video.data_json?.duration_seconds || 15;
-  const [duration, setDuration] = useState(defaultDuration);
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Pending': return 'bg-yellow-100 text-yellow-800 animate-pulse';
-      case 'Rendering': return 'bg-blue-100 text-blue-800 animate-pulse';
-      case 'Needs_Approval': return 'bg-purple-100 text-purple-800';
-      case 'Approved': case 'Published': case 'Completed': return 'bg-green-100 text-green-800';
-      case 'Failed': case 'Rejected': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-md p-6 border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row gap-6">
-      <div className="flex-1 space-y-4">
-        <div className="flex items-start justify-between">
-          <div>
-            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-2 inline-block shadow-sm ${getStatusColor(video.status)}`}>
-              {video.status === 'Pending' ? 'Rendering / Pending' : video.status}
-            </span>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">{video.topic || 'Untitled'}</h3>
-          </div>
-          <button onClick={() => onDelete(video.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
         </div>
-
-        <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-xl text-sm text-gray-700 dark:text-gray-300">
-          <span className="font-semibold block mb-1">Script ({defaultDuration}s):</span>
-          {video.data_json?.script || 'No script generated.'}
-        </div>
-
-        <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-xl border border-gray-100 dark:border-gray-800">
-          <div className="flex-1">
-            <label className="text-xs text-gray-500 font-medium block mb-1">Target Duration: {duration}s</label>
-            <input 
-              type="range" min="15" max="180" step="5"
-              value={duration}
-              onChange={(e) => setDuration(parseInt(e.target.value))}
-              className="w-full accent-blue-600"
-            />
-          </div>
-          <button 
-            onClick={() => onRewrite(video.id, duration)}
-            className="px-4 py-2 bg-blue-100 text-blue-700 hover:bg-blue-200 font-semibold rounded-lg text-sm transition-colors"
-          >
-            Rewrite
-          </button>
-        </div>
-      </div>
-      
-      {/* Video Preview */}
-      <div className="w-full md:w-48 shrink-0 flex items-center justify-center bg-black rounded-xl overflow-hidden aspect-[9/16]">
-        {video.video_url ? (
-          <video src={video.video_url} controls className="w-full h-full object-cover" />
-        ) : (
-          <div className="text-gray-500 text-sm font-medium flex flex-col items-center">
-            {video.status === 'Pending' ? (
-              <>
-                <svg className="animate-spin h-6 w-6 text-white mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                Processing...
-              </>
-            ) : 'No video yet'}
-          </div>
-        )}
       </div>
     </div>
   );
