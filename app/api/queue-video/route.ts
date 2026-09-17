@@ -130,7 +130,8 @@ export async function POST(request: Request) {
         const readingSeconds = (textLength / 15) + 1;
         totalSeconds += readingSeconds + 7;
       }
-      finalDuration = Math.round(totalSeconds + 3);
+    } else if (data_json.format === 'Arena Clash' && data_json.duration_seconds) {
+      finalDuration = data_json.duration_seconds;
     }
 
     // Insert into Supabase

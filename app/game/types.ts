@@ -110,5 +110,6 @@ export interface LiveFighter {
   speedBoostTimer: number;
 }
 
-export const ARENA_RADIUS = 370;
-export const ARENA_CENTER = { x: 540, y: 780 };
+export const ARENA_RADIUS = 430;
+export const ARENA_CENTER = { x: 540, y: 690 };
+export const BOX_SIZE = 120;

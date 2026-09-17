@@ -13,9 +13,10 @@ import {
   LiveFighter,
   ARENA_CENTER,
   ARENA_RADIUS,
+  BOX_SIZE,
 } from './types';
+import { generateArenaSimulation } from '../../lib/arena-physics';
 
-// Types & Definitions
 export { SPECIAL_POWERS, COLOR_SWATCHES };
 export type { ContestantConfig };
 
@@ -59,7 +60,7 @@ export default function GamePage() {
   const particlesRef = useRef<Particle[]>([]);
   const floatingTextsRef = useRef<FloatingText[]>([]);
   const screenShakeRef = useRef(0);
-  const nextItemSpawnRef = useRef<number>(210);
+  const nextItemSpawnRef = useRef<number>(60); // 2s initial spawn
 
   // 1. Initialize Contestants
   useEffect(() => {
@@ -224,21 +225,21 @@ export default function GamePage() {
     itemsRef.current = [];
     bulletsRef.current = [];
     screenShakeRef.current = 0;
-    nextItemSpawnRef.current = 210;
+    nextItemSpawnRef.current = 60; // 2 seconds initial
 
     const count = contestants.length;
     const fighters: LiveFighter[] = [];
 
     contestants.forEach((c, idx) => {
       const angle = (idx / count) * Math.PI * 2 - Math.PI / 2;
-      const spawnRadius = ARENA_RADIUS * 0.6;
+      const spawnRadius = ARENA_RADIUS * 0.62;
       const x = ARENA_CENTER.x + Math.cos(angle) * spawnRadius;
       const y = ARENA_CENTER.y + Math.sin(angle) * spawnRadius;
 
-      let speed = c.speed || 6.5;
+      let speed = c.speed || 6.8;
       if (c.special_power === 'speedster') speed *= 1.35;
 
-      const moveAngle = angle + Math.PI + (Math.random() - 0.5) * 0.6;
+      const moveAngle = angle + Math.PI + (Math.random() - 0.5) * 0.7;
       const vx = Math.cos(moveAngle) * speed;
       const vy = Math.sin(moveAngle) * speed;
 
@@ -262,7 +263,7 @@ export default function GamePage() {
         y,
         vx,
         vy,
-        size: 88,
+        size: BOX_SIZE, // 120px
         health: c.starting_health || 100,
         maxHealth: c.starting_health || 100,
         damage: c.damage || 25,
@@ -289,19 +290,19 @@ export default function GamePage() {
     resetSimulation();
   }, [contestants]);
 
-  // 4. Random Item Spawner (Every 7 seconds)
+  // 4. Random Item Spawner (Only 1 item on field, next spawns 8s after collected)
   const spawnRandomItem = () => {
     const itemPool: { type: ArenaItem['type']; icon: string; name: string; color: string }[] = [
       { type: 'health', icon: '💚', name: '+30 HP Medkit', color: '#22c55e' },
       { type: 'dagger', icon: '🗡️', name: '2x DMG Dagger', color: '#f59e0b' },
-      { type: 'gun', icon: '🔫', name: 'Blaster Gun (3 Bullets)', color: '#38bdf8' },
+      { type: 'gun', icon: '🔫', name: 'Blaster (5 Shots)', color: '#38bdf8' },
       { type: 'shield', icon: '🛡️', name: 'Energy Shield', color: '#a855f7' },
       { type: 'speed', icon: '⚡', name: 'Hyper Speed', color: '#eab308' },
     ];
 
     const pick = itemPool[Math.floor(Math.random() * itemPool.length)];
     const angle = Math.random() * Math.PI * 2;
-    const r = Math.random() * (ARENA_RADIUS - 80);
+    const r = Math.random() * (ARENA_RADIUS - 90);
 
     itemsRef.current.push({
       id: `item_${Date.now()}_${Math.random()}`,
@@ -346,11 +347,12 @@ export default function GamePage() {
       screenShakeRef.current = Math.max(0, screenShakeRef.current - 0.7);
     }
 
-    // Item Spawn Timer (Every 7s)
-    nextItemSpawnRef.current -= simSpeed;
-    if (nextItemSpawnRef.current <= 0) {
-      if (items.length < 3) spawnRandomItem();
-      nextItemSpawnRef.current = 210;
+    // Item Spawn: Only when field is clear and 8s cooldown elapsed!
+    if (items.length === 0 && !winner) {
+      nextItemSpawnRef.current -= simSpeed;
+      if (nextItemSpawnRef.current <= 0) {
+        spawnRandomItem();
+      }
     }
 
     const aliveFighters = fighters.filter((f) => !f.isDead);
@@ -398,7 +400,7 @@ export default function GamePage() {
       const dx = f.x - cx;
       const dy = f.y - cy;
       const dist = Math.hypot(dx, dy);
-      const halfSize = (f.size / 2) * 1.05;
+      const halfSize = (f.size / 2) * 1.02;
 
       if (dist + halfSize >= ARENA_RADIUS) {
         const nx = -dx / dist;
@@ -427,14 +429,14 @@ export default function GamePage() {
         }
       }
 
-      // Gun Shooting
-      if (f.gunBullets > 0 && Math.random() < 0.04) {
+      // Gun Shooting (5 Bullets capacity)
+      if (f.gunBullets > 0 && Math.random() < 0.05) {
         f.gunBullets--;
         playSound('gun');
         const vLen = Math.hypot(f.vx, f.vy) || 1;
         bullets.push({
-          x: f.x + (f.vx / vLen) * 50,
-          y: f.y + (f.vy / vLen) * 50,
+          x: f.x + (f.vx / vLen) * 60,
+          y: f.y + (f.vy / vLen) * 60,
           vx: (f.vx / vLen) * 16,
           vy: (f.vy / vLen) * 16,
           ownerId: f.id,
@@ -457,24 +459,26 @@ export default function GamePage() {
           if (item.type === 'health') {
             f.health = Math.min(f.maxHealth, f.health + 30);
             playSound('heal');
-            floatingTexts.push({ x: f.x, y: f.y - 45, text: '+30 HP', color: '#22c55e', alpha: 1, vy: -2.5, scale: 1.3 });
+            floatingTexts.push({ x: f.x, y: f.y - 50, text: '+30 HP', color: '#22c55e', alpha: 1, vy: -2.5, scale: 1.3 });
           } else if (item.type === 'dagger') {
             f.hasDagger = true;
             f.daggerActivated = false;
             f.daggerTimer = 90;
-            floatingTexts.push({ x: f.x, y: f.y - 45, text: '🗡️ 2X DMG', color: '#f59e0b', alpha: 1, vy: -2.5, scale: 1.2 });
+            floatingTexts.push({ x: f.x, y: f.y - 50, text: '🗡️ 2X DMG', color: '#f59e0b', alpha: 1, vy: -2.5, scale: 1.2 });
           } else if (item.type === 'gun') {
-            f.gunBullets = 3;
-            floatingTexts.push({ x: f.x, y: f.y - 45, text: '🔫 3 BULLETS', color: '#38bdf8', alpha: 1, vy: -2.5, scale: 1.2 });
+            f.gunBullets = 5; // 5 bullets as requested!
+            floatingTexts.push({ x: f.x, y: f.y - 50, text: '🔫 5 BULLETS', color: '#38bdf8', alpha: 1, vy: -2.5, scale: 1.2 });
           } else if (item.type === 'shield') {
             f.hasShield = true;
-            floatingTexts.push({ x: f.x, y: f.y - 45, text: '🛡️ SHIELD', color: '#a855f7', alpha: 1, vy: -2.5, scale: 1.2 });
+            floatingTexts.push({ x: f.x, y: f.y - 50, text: '🛡️ SHIELD', color: '#a855f7', alpha: 1, vy: -2.5, scale: 1.2 });
           } else if (item.type === 'speed') {
             f.speedBoostTimer = 120;
-            floatingTexts.push({ x: f.x, y: f.y - 45, text: '⚡ SPEED', color: '#eab308', alpha: 1, vy: -2.5, scale: 1.2 });
+            floatingTexts.push({ x: f.x, y: f.y - 50, text: '⚡ SPEED', color: '#eab308', alpha: 1, vy: -2.5, scale: 1.2 });
           }
 
           items.splice(i, 1);
+          // 8 SECONDS COOLDOWN BEFORE NEXT ITEM SPAWNS!
+          nextItemSpawnRef.current = 240;
           break;
         }
       }
@@ -499,7 +503,7 @@ export default function GamePage() {
           target.hitFlash = 10;
           playSound('hit');
 
-          floatingTexts.push({ x: target.x, y: target.y - 30, text: `-${b.damage}`, color: '#38bdf8', alpha: 1, vy: -2, scale: 1 });
+          floatingTexts.push({ x: target.x, y: target.y - 35, text: `-${b.damage}`, color: '#38bdf8', alpha: 1, vy: -2, scale: 1 });
 
           if (target.health <= 0 && !target.isDead) handleDeath(target);
           bullets.splice(i, 1);
@@ -549,13 +553,13 @@ export default function GamePage() {
             let dmgA = A.damage;
             if (A.hasDagger) { dmgA *= 2; A.daggerActivated = true; }
             if (A.specialPower === 'berserker' && A.health / A.maxHealth <= 0.2) dmgA *= 2;
-            if (B.hasShield) { dmgA = 0; B.hasShield = false; floatingTexts.push({ x: B.x, y: B.y - 40, text: `BLOCKED!`, color: '#a855f7', alpha: 1, vy: -2, scale: 1.2 }); }
+            if (B.hasShield) { dmgA = 0; B.hasShield = false; floatingTexts.push({ x: B.x, y: B.y - 45, text: `BLOCKED!`, color: '#a855f7', alpha: 1, vy: -2, scale: 1.2 }); }
             else if (B.specialPower === 'iron_shield' && B.health / B.maxHealth <= 0.5) { dmgA = Math.round(dmgA * 0.5); floatingTexts.push({ x: B.x, y: B.y - 55, text: `🛡️ -50%`, color: '#38bdf8', alpha: 1, vy: -2, scale: 1 }); }
 
             let dmgB = B.damage;
             if (B.hasDagger) { dmgB *= 2; B.daggerActivated = true; }
             if (B.specialPower === 'berserker' && B.health / B.maxHealth <= 0.2) dmgB *= 2;
-            if (A.hasShield) { dmgB = 0; A.hasShield = false; floatingTexts.push({ x: A.x, y: A.y - 40, text: `BLOCKED!`, color: '#a855f7', alpha: 1, vy: -2, scale: 1.2 }); }
+            if (A.hasShield) { dmgB = 0; A.hasShield = false; floatingTexts.push({ x: A.x, y: A.y - 45, text: `BLOCKED!`, color: '#a855f7', alpha: 1, vy: -2, scale: 1.2 }); }
             else if (A.specialPower === 'iron_shield' && A.health / A.maxHealth <= 0.5) { dmgB = Math.round(dmgB * 0.5); floatingTexts.push({ x: A.x, y: A.y - 55, text: `🛡️ -50%`, color: '#38bdf8', alpha: 1, vy: -2, scale: 1 }); }
 
             B.health = Math.max(0, B.health - dmgA);
@@ -567,8 +571,8 @@ export default function GamePage() {
             if (B.specialPower === 'thorns' && dmgA > 0) { const rec = Math.round(dmgA * 0.3); A.health = Math.max(0, A.health - rec); floatingTexts.push({ x: A.x, y: A.y - 50, text: `🌵 -${rec}`, color: '#10b981', alpha: 1, vy: -2, scale: 1 }); }
             if (A.specialPower === 'thorns' && dmgB > 0) { const rec = Math.round(dmgB * 0.3); B.health = Math.max(0, B.health - rec); floatingTexts.push({ x: B.x, y: B.y - 50, text: `🌵 -${rec}`, color: '#10b981', alpha: 1, vy: -2, scale: 1 }); }
 
-            if (dmgA > 0) floatingTexts.push({ x: B.x + (Math.random() - 0.5) * 20, y: B.y - 40, text: `-${dmgA}`, color: '#ef4444', alpha: 1, vy: -2.5, scale: 1.2 });
-            if (dmgB > 0) floatingTexts.push({ x: A.x + (Math.random() - 0.5) * 20, y: A.y - 40, text: `-${dmgB}`, color: '#ef4444', alpha: 1, vy: -2.5, scale: 1.2 });
+            if (dmgA > 0) floatingTexts.push({ x: B.x + (Math.random() - 0.5) * 20, y: B.y - 45, text: `-${dmgA}`, color: '#ef4444', alpha: 1, vy: -2.5, scale: 1.3 });
+            if (dmgB > 0) floatingTexts.push({ x: A.x + (Math.random() - 0.5) * 20, y: A.y - 45, text: `-${dmgB}`, color: '#ef4444', alpha: 1, vy: -2.5, scale: 1.3 });
 
             const midX = (A.x + B.x) / 2;
             const midY = (A.y + B.y) / 2;
@@ -584,7 +588,7 @@ export default function GamePage() {
                   f.phoenixUsed = true;
                   f.health = 20;
                   playSound('heal');
-                  floatingTexts.push({ x: f.x, y: f.y - 50, text: `🦅 REBORN!`, color: '#f59e0b', alpha: 1, vy: -3, scale: 1.4 });
+                  floatingTexts.push({ x: f.x, y: f.y - 55, text: `🦅 REBORN!`, color: '#f59e0b', alpha: 1, vy: -3, scale: 1.4 });
                 } else if (!f.isDead) handleDeath(f);
               }
             });
@@ -664,7 +668,7 @@ export default function GamePage() {
         ctx.stroke();
       }
 
-      // Circular Arena Floor
+      // Circular Arena Floor (Enlarged Radius: 430px)
       ctx.save();
       ctx.beginPath();
       ctx.arc(cx, cy, ARENA_RADIUS, 0, Math.PI * 2);
@@ -674,7 +678,7 @@ export default function GamePage() {
       const floorGrad = ctx.createRadialGradient(cx, cy, 30, cx, cy, ARENA_RADIUS);
       floorGrad.addColorStop(0, 'rgba(30, 41, 59, 0.6)');
       floorGrad.addColorStop(0.85, 'rgba(15, 23, 42, 0.9)');
-      floorGrad.addColorStop(1, 'rgba(2, 6, 23, 0.95)');
+      floorGrad.addColorStop(1, 'rgba(2, 6, 23, 0.98)');
       ctx.fillStyle = floorGrad;
       ctx.fill();
 
@@ -686,7 +690,7 @@ export default function GamePage() {
       ctx.stroke();
 
       ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
-      ctx.font = '900 80px "Montserrat", sans-serif';
+      ctx.font = '900 90px "Montserrat", sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('VS', cx, cy);
@@ -694,10 +698,10 @@ export default function GamePage() {
       // Glowing Wall
       ctx.beginPath();
       ctx.arc(cx, cy, ARENA_RADIUS, 0, Math.PI * 2);
-      ctx.lineWidth = 10;
+      ctx.lineWidth = 12;
       ctx.strokeStyle = '#38bdf8';
       ctx.shadowColor = '#0284c7';
-      ctx.shadowBlur = 24;
+      ctx.shadowBlur = 30;
       ctx.stroke();
       ctx.shadowBlur = 0;
       ctx.restore();
@@ -709,30 +713,30 @@ export default function GamePage() {
         ctx.translate(item.x, item.y + bob);
 
         ctx.beginPath();
-        ctx.arc(0, 0, 32, 0, Math.PI * 2);
+        ctx.arc(0, 0, 36, 0, Math.PI * 2);
         ctx.fillStyle = item.color;
         ctx.shadowColor = item.color;
-        ctx.shadowBlur = 20;
+        ctx.shadowBlur = 25;
         ctx.globalAlpha = 0.25;
         ctx.fill();
         ctx.globalAlpha = 1.0;
 
         ctx.beginPath();
-        ctx.arc(0, 0, 24, 0, Math.PI * 2);
+        ctx.arc(0, 0, 28, 0, Math.PI * 2);
         ctx.fillStyle = '#0f172a';
         ctx.strokeStyle = item.color;
         ctx.lineWidth = 3;
         ctx.fill();
         ctx.stroke();
 
-        ctx.font = '24px sans-serif';
+        ctx.font = '28px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(item.icon, 0, 2);
 
-        ctx.font = '800 13px "Montserrat", sans-serif';
+        ctx.font = '800 14px "Montserrat", sans-serif';
         ctx.fillStyle = item.color;
-        ctx.fillText(item.name, 0, 38);
+        ctx.fillText(item.name, 0, 42);
         ctx.restore();
       });
 
@@ -740,10 +744,10 @@ export default function GamePage() {
       bulletsRef.current.forEach((b) => {
         ctx.save();
         ctx.beginPath();
-        ctx.arc(b.x, b.y, 6, 0, Math.PI * 2);
+        ctx.arc(b.x, b.y, 7, 0, Math.PI * 2);
         ctx.fillStyle = b.color;
         ctx.shadowColor = b.color;
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = 18;
         ctx.fill();
         ctx.restore();
       });
@@ -761,18 +765,18 @@ export default function GamePage() {
         ctx.restore();
       });
 
-      // Contestants (Square Boxes)
+      // Contestants (Enlarged Box Size: 120px) with clearly visible names
       fightersRef.current.forEach((f) => {
         if (f.isDead) return;
 
         const half = f.size / 2;
-        const cornerRadius = 18;
+        const cornerRadius = 22;
 
         ctx.save();
         ctx.translate(f.x, f.y);
 
         ctx.shadowColor = f.color;
-        ctx.shadowBlur = 18;
+        ctx.shadowBlur = 24;
 
         ctx.beginPath();
         ctx.roundRect(-half, -half, f.size, f.size, cornerRadius);
@@ -792,7 +796,7 @@ export default function GamePage() {
           ctx.fillRect(-half, -half, f.size, f.size);
 
           ctx.fillStyle = f.color === '#ffffff' ? '#000' : '#fff';
-          ctx.font = '900 42px "Montserrat", sans-serif';
+          ctx.font = '900 54px "Montserrat", sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(f.name.charAt(0).toUpperCase(), 0, 0);
@@ -807,12 +811,31 @@ export default function GamePage() {
 
         ctx.beginPath();
         ctx.roundRect(-half, -half, f.size, f.size, cornerRadius);
-        ctx.lineWidth = 6;
+        ctx.lineWidth = 7;
         ctx.strokeStyle = f.hitFlash > 0 ? '#ffffff' : f.color;
         ctx.stroke();
 
         ctx.shadowBlur = 0;
 
+        // Distinct, Clearly Visible Name Badge directly below the box
+        ctx.save();
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+        ctx.strokeStyle = f.color;
+        ctx.lineWidth = 2;
+        ctx.font = '900 16px "Montserrat", sans-serif';
+        const nameW = ctx.measureText(f.name).width;
+        ctx.beginPath();
+        ctx.roundRect(-nameW / 2 - 12, half + 6, nameW + 24, 28, 10);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(f.name, 0, half + 20);
+        ctx.restore();
+
+        // Active Item Badge Floating Above
         let itemBadge = '';
         if (f.hasShield) itemBadge += '🛡️';
         if (f.hasDagger) itemBadge += '🗡️';
@@ -820,39 +843,35 @@ export default function GamePage() {
         if (f.speedBoostTimer > 0) itemBadge += '⚡';
 
         if (itemBadge) {
-          ctx.font = '16px sans-serif';
+          ctx.font = '18px sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText(itemBadge, 0, -half - 12);
+          ctx.fillText(itemBadge, 0, -half - 14);
         }
 
         ctx.restore();
       });
 
-      // Floating Numbers
+      // Floating Numbers (Larger 38px font)
       floatingTextsRef.current.forEach((ft) => {
         ctx.save();
         ctx.globalAlpha = Math.max(0, ft.alpha);
         ctx.fillStyle = ft.color;
-        ctx.font = `900 ${Math.round(28 * ft.scale)}px "Montserrat", sans-serif`;
+        ctx.font = `900 ${Math.round(38 * ft.scale)}px "Montserrat", sans-serif`;
         ctx.textAlign = 'center';
         ctx.shadowColor = 'black';
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = 10;
         ctx.fillText(ft.text, ft.x, ft.y);
         ctx.restore();
       });
 
-      // Top Headline
+      // Top Headline Only (circular arena battle text removed)
       ctx.save();
       ctx.textAlign = 'center';
-      ctx.font = '900 54px "Montserrat", sans-serif';
+      ctx.font = '900 66px "Montserrat", sans-serif';
       ctx.fillStyle = '#ffffff';
       ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-      ctx.shadowBlur = 16;
-      ctx.fillText(topic.toUpperCase() || 'ARENA CLASH', width / 2, 130);
-
-      ctx.font = '800 22px "Montserrat", sans-serif';
-      ctx.fillStyle = '#38bdf8';
-      ctx.fillText('⚡ CIRCULAR ARENA BATTLE ⚡', width / 2, 180);
+      ctx.shadowBlur = 20;
+      ctx.fillText(topic.toUpperCase() || 'ARENA CLASH', width / 2, 100);
       ctx.restore();
 
       // Dual Sided Healthbars below arena
@@ -861,48 +880,48 @@ export default function GamePage() {
       // Victory Overlay
       if (winner) {
         ctx.save();
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
         ctx.fillRect(0, 0, width, height);
 
-        ctx.font = '90px sans-serif';
+        ctx.font = '100px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('👑', width / 2, height / 2 - 120);
+        ctx.fillText('👑', width / 2, height / 2 - 130);
 
-        const winHalf = 70;
+        const winHalf = 80;
         ctx.beginPath();
-        ctx.roundRect(width / 2 - winHalf, height / 2 - winHalf, 140, 140, 24);
+        ctx.roundRect(width / 2 - winHalf, height / 2 - winHalf, 160, 160, 28);
         ctx.fillStyle = winner.color;
         ctx.shadowColor = '#eab308';
-        ctx.shadowBlur = 35;
+        ctx.shadowBlur = 45;
         ctx.fill();
 
         if (winner.image && winner.image.complete && winner.image.naturalWidth > 0) {
           ctx.save();
           ctx.clip();
-          ctx.drawImage(winner.image, width / 2 - winHalf, height / 2 - winHalf, 140, 140);
+          ctx.drawImage(winner.image, width / 2 - winHalf, height / 2 - winHalf, 160, 160);
           ctx.restore();
         } else {
           ctx.fillStyle = winner.color === '#ffffff' ? '#000' : '#fff';
-          ctx.font = '900 64px "Montserrat", sans-serif';
+          ctx.font = '900 74px "Montserrat", sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(winner.name.charAt(0).toUpperCase(), width / 2, height / 2);
         }
 
-        ctx.lineWidth = 6;
+        ctx.lineWidth = 8;
         ctx.strokeStyle = '#facc15';
         ctx.stroke();
 
-        ctx.font = '900 68px "Montserrat", sans-serif';
+        ctx.font = '900 76px "Montserrat", sans-serif';
         ctx.fillStyle = '#facc15';
         ctx.shadowColor = '#ca8a04';
-        ctx.shadowBlur = 25;
+        ctx.shadowBlur = 30;
         ctx.textAlign = 'center';
-        ctx.fillText('VICTORY!', width / 2, height / 2 + 140);
+        ctx.fillText('VICTORY!', width / 2, height / 2 + 150);
 
-        ctx.font = '800 44px "Montserrat", sans-serif';
+        ctx.font = '800 50px "Montserrat", sans-serif';
         ctx.fillStyle = '#ffffff';
-        ctx.fillText(`${winner.name} WINS!`, width / 2, height / 2 + 210);
+        ctx.fillText(`${winner.name} WINS!`, width / 2, height / 2 + 225);
 
         ctx.restore();
       }
@@ -913,13 +932,13 @@ export default function GamePage() {
 
   // Helper: Live Health Bars below arena
   const drawLiveHealthBars = (ctx: CanvasRenderingContext2D, fighters: LiveFighter[], width: number) => {
-    const startY = 1250;
+    const startY = 1220;
     const count = fighters.length;
-    const colWidth = 450;
-    const leftX = 60;
-    const rightX = width - colWidth - 60;
+    const colWidth = 460;
+    const leftX = 50;
+    const rightX = width - colWidth - 50;
     const rows = Math.ceil(count / 2);
-    const rowHeight = Math.min(115, 520 / Math.max(rows, 2));
+    const rowHeight = Math.min(125, 580 / Math.max(rows, 2));
 
     fighters.forEach((f, idx) => {
       let x = leftX;
@@ -927,7 +946,7 @@ export default function GamePage() {
 
       if (count === 2) {
         x = idx === 0 ? leftX : rightX;
-        y = startY + 50;
+        y = startY + 60;
       } else if (count === 3) {
         if (idx === 0) {
           x = leftX;
@@ -950,10 +969,10 @@ export default function GamePage() {
       ctx.translate(x, y);
 
       ctx.beginPath();
-      ctx.roundRect(0, 0, colWidth, rowHeight - 16, 18);
-      ctx.fillStyle = f.isDead ? 'rgba(15, 23, 42, 0.4)' : 'rgba(15, 23, 42, 0.85)';
+      ctx.roundRect(0, 0, colWidth, rowHeight - 16, 20);
+      ctx.fillStyle = f.isDead ? 'rgba(15, 23, 42, 0.45)' : 'rgba(15, 23, 42, 0.9)';
       ctx.fill();
-      ctx.lineWidth = f.isDead ? 1 : 2;
+      ctx.lineWidth = f.isDead ? 1 : 3;
       ctx.strokeStyle = f.isDead ? '#334155' : f.color;
       ctx.stroke();
 
@@ -961,7 +980,7 @@ export default function GamePage() {
       ctx.save();
       ctx.translate(10, 10);
       ctx.beginPath();
-      ctx.roundRect(0, 0, thumbSize, thumbSize, 12);
+      ctx.roundRect(0, 0, thumbSize, thumbSize, 14);
       ctx.fillStyle = f.color;
       ctx.fill();
       ctx.clip();
@@ -970,7 +989,7 @@ export default function GamePage() {
         ctx.drawImage(f.image, 0, 0, thumbSize, thumbSize);
       } else {
         ctx.fillStyle = f.color === '#ffffff' ? '#000' : '#fff';
-        ctx.font = '900 24px "Montserrat", sans-serif';
+        ctx.font = '900 26px "Montserrat", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(f.name.charAt(0).toUpperCase(), thumbSize / 2, thumbSize / 2);
@@ -978,7 +997,7 @@ export default function GamePage() {
       ctx.restore();
 
       const textX = thumbSize + 24;
-      ctx.font = '900 20px "Montserrat", sans-serif';
+      ctx.font = '900 22px "Montserrat", sans-serif';
       ctx.fillStyle = f.isDead ? '#64748b' : '#ffffff';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
@@ -993,7 +1012,7 @@ export default function GamePage() {
 
       ctx.fillText(`${f.name} ${powerIcon}${itemTag}`, textX, 12);
 
-      ctx.font = '800 16px "Montserrat", sans-serif';
+      ctx.font = '800 18px "Montserrat", sans-serif';
       ctx.fillStyle = f.isDead ? '#ef4444' : '#38bdf8';
       ctx.textAlign = 'right';
       ctx.fillText(f.isDead ? 'ELIMINATED' : `${Math.round(f.health)} HP`, colWidth - 16, 14);
@@ -1001,11 +1020,11 @@ export default function GamePage() {
       const barX = textX;
       const barY = rowHeight - 38;
       const barW = colWidth - textX - 16;
-      const barH = 14;
+      const barH = 16;
 
       ctx.beginPath();
-      ctx.roundRect(barX, barY, barW, barH, 7);
-      ctx.fillStyle = 'rgba(30, 41, 59, 0.8)';
+      ctx.roundRect(barX, barY, barW, barH, 8);
+      ctx.fillStyle = 'rgba(30, 41, 59, 0.85)';
       ctx.fill();
 
       if (!f.isDead && f.health > 0) {
@@ -1015,10 +1034,10 @@ export default function GamePage() {
         else if (hpPct < 0.5) hpColor = '#f59e0b';
 
         ctx.beginPath();
-        ctx.roundRect(barX, barY, barW * hpPct, barH, 7);
+        ctx.roundRect(barX, barY, barW * hpPct, barH, 8);
         ctx.fillStyle = hpColor;
         ctx.shadowColor = hpColor;
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = 10;
         ctx.fill();
         ctx.shadowBlur = 0;
       }
@@ -1094,12 +1113,30 @@ export default function GamePage() {
     );
   };
 
-  // 9. Queue Video to YouTube Shorts
+  // 9. Queue Video to YouTube Shorts with Full Dynamic Match Duration
   const handleQueueVideo = async () => {
     setQueueLoading(true);
     setQueueMessage(null);
 
     try {
+      // Calculate exact match duration until someone wins (+ winner celebration)
+      const simResult = generateArenaSimulation(
+        contestants.map((c) => ({
+          id: c.id,
+          name: c.name,
+          color: c.color,
+          image_url: c.image_url,
+          starting_health: c.starting_health,
+          damage: c.damage,
+          speed: c.speed,
+          special_power: c.special_power,
+        })),
+        1650,
+        42
+      );
+
+      const dynamicDurationSeconds = Math.min(58, Math.max(18, simResult.totalSeconds));
+
       const data_json = {
         topic,
         format: 'Arena Clash',
@@ -1113,7 +1150,7 @@ export default function GamePage() {
           speed: c.speed,
           special_power: c.special_power,
         })),
-        duration_seconds: 25,
+        duration_seconds: dynamicDurationSeconds,
       };
 
       const response = await fetch('/api/queue-video', {
@@ -1122,7 +1159,7 @@ export default function GamePage() {
         body: JSON.stringify({
           data_json,
           showSubtitles: false,
-          duration: 25,
+          duration: dynamicDurationSeconds,
         }),
       });
 
@@ -1130,7 +1167,7 @@ export default function GamePage() {
       if (response.ok && resData.success) {
         setQueueMessage({
           type: 'success',
-          text: 'Video queued successfully! GitHub Actions is rendering your exact gameplay.',
+          text: `Full battle (${dynamicDurationSeconds}s with sound effects & BGM) queued successfully! GitHub Actions is rendering now.`,
         });
       } else {
         setQueueMessage({
@@ -1158,7 +1195,7 @@ export default function GamePage() {
             <span className="text-2xl">⚔️</span>
             <div>
               <h1 className="text-xl font-black tracking-tight text-white flex items-center gap-2">
-                ARENA CLASH <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">2D PHYSICS</span>
+                ARENA CLASH <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">PHYSICS BATTLE</span>
               </h1>
             </div>
           </div>
@@ -1190,7 +1227,7 @@ export default function GamePage() {
           </div>
         )}
 
-        {/* Minimalist Workspace Grid */}
+        {/* Workspace Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
           {/* ================= LEFT CONFIGURATION PANEL (6.5 Cols) ================= */}
@@ -1370,7 +1407,7 @@ export default function GamePage() {
             {/* 9:16 Mobile Screen Container */}
             <div className="relative w-full max-w-[360px] aspect-[9/16] bg-black rounded-[40px] p-2 shadow-2xl border-[5px] border-slate-800/80 ring-1 ring-slate-700/50 flex flex-col overflow-hidden">
               
-              {/* Dynamic Island / Notch */}
+              {/* Dynamic Island Notch */}
               <div className="absolute top-3 left-1/2 -translate-x-1/2 w-24 h-4 bg-slate-950 rounded-full z-20 flex items-center justify-center pointer-events-none">
                 <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
               </div>
@@ -1448,7 +1485,7 @@ export default function GamePage() {
                 className="w-full py-2.5 bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 hover:opacity-95 text-white rounded-xl font-bold text-xs transition disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-md"
               >
                 <span>🚀</span>
-                <span>{queueLoading ? 'Queuing Video...' : 'Queue as YouTube Short (Render Gameplay)'}</span>
+                <span>{queueLoading ? 'Queuing Video...' : 'Queue as YouTube Short (Render Full Game)'}</span>
               </button>
             </div>
           </div>
