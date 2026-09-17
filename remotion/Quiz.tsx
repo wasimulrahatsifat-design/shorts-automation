@@ -54,77 +54,139 @@ const QuizRound: React.FC<{ questionData: Question, topic: string }> = ({ questi
   const isTimerDone = frame > timerStartFrame + timerFrames;
 
   return (
-    <AbsoluteFill style={{ backgroundColor: '#2b2d42', padding: '60px 100px', color: 'white', display: 'flex', flexDirection: 'column' }}>
-      {/* Question Number */}
-      <div style={{ 
-        opacity: titleOpacity, 
-        transform: `scale(${titleScale})`, 
-        fontSize: 50, 
-        fontWeight: 900, 
-        textAlign: 'center',
-        color: '#8d99ae',
-        marginBottom: 20
-      }}>
-        {topic || "Trivia Time!"}
+    <AbsoluteFill
+      style={{
+        backgroundColor: '#1b1d28',
+        padding: '0 80px',
+        color: 'white',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center', // Centers title, image, question, options, and timer bar vertically
+        alignItems: 'stretch',
+        fontFamily: '"Montserrat", sans-serif',
+      }}
+    >
+      {/* Question / Quiz Topic Title */}
+      <div
+        style={{
+          opacity: titleOpacity,
+          transform: `scale(${titleScale})`,
+          fontSize: 52,
+          fontWeight: 900,
+          textAlign: 'center',
+          color: '#facc15',
+          textTransform: 'uppercase',
+          letterSpacing: 2,
+          marginBottom: 28,
+          textShadow: '0 4px 15px rgba(0,0,0,0.5)',
+        }}
+      >
+        {topic || 'Trivia Time!'}
       </div>
 
       {/* Image & Question Box */}
-      <div style={{
-        transform: `translateY(${(1 - questionY) * -30}px)`,
-        opacity: questionY,
-        backgroundColor: '#edf2f4',
-        borderRadius: 30,
-        overflow: 'hidden',
-        boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        marginBottom: 30,
-        marginTop: 40
-      }}>
-        <div style={{ width: '100%', height: 380, backgroundColor: '#d8e2dc', display: 'flex', justifyContent: 'center', alignItems: 'center', paddingTop: 20 }}>
+      <div
+        style={{
+          transform: `translateY(${(1 - questionY) * -30}px)`,
+          opacity: questionY,
+          backgroundColor: '#edf2f4',
+          borderRadius: 32,
+          overflow: 'hidden',
+          boxShadow: '0 15px 40px rgba(0,0,0,0.6)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          marginBottom: 32,
+        }}
+      >
+        <div
+          style={{
+            width: '100%',
+            height: 380,
+            backgroundColor: '#d8e2dc',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            overflow: 'hidden',
+          }}
+        >
           {isTimerDone ? (
-            image_url ? <Img src={image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : null
+            image_url ? (
+              <Img src={image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : null
           ) : (
-            <div style={{ 
-              fontSize: 160, 
-              transform: `rotate(${Math.sin(frame / 8) * 15}deg) scale(${1 + Math.sin(frame / 6) * 0.1})`,
-              filter: 'drop-shadow(0px 10px 20px rgba(0,0,0,0.3))'
-            }}>
+            <div
+              style={{
+                fontSize: 150,
+                transform: `rotate(${Math.sin(frame / 8) * 15}deg) scale(${1 + Math.sin(frame / 6) * 0.1})`,
+                filter: 'drop-shadow(0px 10px 20px rgba(0,0,0,0.3))',
+              }}
+            >
               🤔
             </div>
           )}
         </div>
-        <div style={{ padding: '25px 30px', fontSize: 40, fontWeight: 800, color: '#2b2d42', textAlign: 'center' }}>
+        <div
+          style={{
+            padding: '26px 32px',
+            fontSize: 42,
+            fontWeight: 800,
+            color: '#2b2d42',
+            textAlign: 'center',
+            lineHeight: 1.3,
+          }}
+        >
           {question}
         </div>
       </div>
 
       {/* Options */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20, flex: 1 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginBottom: 32 }}>
         {options.map((opt, index) => {
           const optEntrance = spring({ frame: frame - (30 + index * 10), fps, config: { damping: 14 } });
           const isCorrect = opt === correct_answer;
-          
+
           // Pulse correct answer when timer is done
           const highlightCorrect = isTimerDone && isCorrect;
           const fadeIncorrect = isTimerDone && !isCorrect;
 
           return (
-            <div key={index} style={{
-              transform: `translateX(${(1 - optEntrance) * -100}px)`,
-              opacity: fadeIncorrect ? 0.3 : optEntrance,
-              backgroundColor: highlightCorrect ? '#2a9d8f' : '#8d99ae',
-              padding: '25px',
-              borderRadius: 20,
-              fontSize: 40,
-              fontWeight: 700,
-              boxShadow: highlightCorrect ? '0 0 40px #2a9d8f' : 'none',
-              transition: 'all 0.5s',
-              border: highlightCorrect ? '6px solid white' : '6px solid transparent'
-            }}>
-              <span style={{ marginRight: 20, opacity: 0.7 }}>{['A', 'B', 'C'][index]}</span>
-              {opt}
+            <div
+              key={index}
+              style={{
+                transform: `translateX(${(1 - optEntrance) * -100}px)`,
+                opacity: fadeIncorrect ? 0.35 : optEntrance,
+                backgroundColor: highlightCorrect ? '#10b981' : '#334155',
+                padding: '24px 30px',
+                borderRadius: 22,
+                fontSize: 38,
+                fontWeight: 800,
+                boxShadow: highlightCorrect ? '0 0 45px #10b981' : '0 6px 15px rgba(0,0,0,0.3)',
+                transition: 'all 0.5s',
+                border: highlightCorrect ? '5px solid white' : '5px solid transparent',
+                display: 'flex',
+                alignItems: 'center',
+              }}
+            >
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 52,
+                  height: 52,
+                  borderRadius: 14,
+                  backgroundColor: highlightCorrect ? 'white' : 'rgba(255,255,255,0.12)',
+                  color: highlightCorrect ? '#10b981' : 'white',
+                  fontWeight: 900,
+                  fontSize: 30,
+                  marginRight: 24,
+                  flexShrink: 0,
+                }}
+              >
+                {['A', 'B', 'C', 'D'][index]}
+              </span>
+              <span>{opt}</span>
             </div>
           );
         })}
@@ -145,20 +207,25 @@ const QuizRound: React.FC<{ questionData: Question, topic: string }> = ({ questi
       )}
 
       {/* Timer Bar */}
-      <div style={{
-        marginTop: 40,
-        height: 20,
-        backgroundColor: '#8d99ae',
-        borderRadius: 10,
-        overflow: 'hidden',
-        opacity: timerProgress > 0 ? 1 : 0.3, // Dim before starting
-        transition: 'opacity 0.3s'
-      }}>
-        <div style={{
-          width: `${(1 - timerProgress) * 100}%`,
-          height: '100%',
-          backgroundColor: '#ef233c'
-        }} />
+      <div
+        style={{
+          height: 22,
+          backgroundColor: 'rgba(255, 255, 255, 0.15)',
+          borderRadius: 12,
+          overflow: 'hidden',
+          opacity: timerProgress > 0 ? 1 : 0.4,
+          transition: 'opacity 0.3s',
+          boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
+        }}
+      >
+        <div
+          style={{
+            width: `${(1 - timerProgress) * 100}%`,
+            height: '100%',
+            backgroundColor: '#ef4444',
+            borderRadius: 12,
+          }}
+        />
       </div>
     </AbsoluteFill>
   );
@@ -173,7 +240,7 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
   // Fallback if no questions are provided
   if (!questions || questions.length === 0) {
     return (
-      <AbsoluteFill style={{ backgroundColor: '#2b2d42', justifyContent: 'center', alignItems: 'center', color: 'white' }}>
+      <AbsoluteFill style={{ backgroundColor: '#1b1d28', justifyContent: 'center', alignItems: 'center', color: 'white' }}>
         <h1>No Questions Found</h1>
       </AbsoluteFill>
     );
@@ -182,7 +249,7 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
   const subtitleOpacity = interpolate(frame, [durationInFrames - 30, durationInFrames - 10], [1, 0], { extrapolateRight: 'clamp' });
 
   return (
-    <AbsoluteFill style={{ backgroundColor: '#2b2d42', fontFamily: '"Montserrat", sans-serif', padding: '60px 40px', color: 'white' }}>
+    <AbsoluteFill style={{ backgroundColor: '#1b1d28', fontFamily: '"Montserrat", sans-serif', color: 'white' }}>
       {/* Background Audio Track - legacy fallback for single track */}
       {tts_url && (!tts_urls || tts_urls.length === 0) && <Audio src={tts_url} volume={0.9} />}
 
