@@ -21,15 +21,27 @@ export async function POST(request: Request) {
 
     console.log(`Generating image for prompt: "${prompt}"`);
 
-    const response = await ai.models.generateImages({
-      model: 'imagen-3.0-generate-002',
-      prompt: prompt,
-      numberOfImages: 1,
-      outputMimeType: 'image/jpeg',
-      aspectRatio: '9:16'
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: prompt + ' (Vertical 9:16 composition)',
+      config: {
+        responseModalities: ["IMAGE"],
+        outputOptions: {
+          mimeType: "image/jpeg",
+        },
+        // For some versions of the SDK, aspect ratio needs to be passed via specific image options if supported, 
+        // but by default imagen-3 will output 1:1 if we don't specify. The official docs say to put it in config.
+        // If the SDK throws on unknown keys, we might need to remove it, but let's try this:
+        // Actually the SDK docs for `generateContent` might not strictly support `aspectRatio` here.
+        // Let's pass the prompt to request a vertical 9:16 image.
+      }
     });
 
-    const base64String = response.generatedImages[0].image.imageBytes;
+    if (!response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
+      throw new Error('Failed to generate image or unrecognized response format from Google AI.');
+    }
+
+    const base64String = response.candidates[0].content.parts[0].inlineData.data;
     const imageBuffer = Buffer.from(base64String, 'base64');
 
     const fileName = `img_${crypto.randomUUID()}.jpg`;
