@@ -2,129 +2,28 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import {
+  SPECIAL_POWERS,
+  COLOR_SWATCHES,
+  ContestantConfig,
+  ArenaItem,
+  Bullet,
+  Particle,
+  FloatingText,
+  LiveFighter,
+  ARENA_CENTER,
+  ARENA_RADIUS,
+} from './types';
 
-// Available Special Powers
-export interface SpecialPowerDef {
-  id: string;
-  name: string;
-  icon: string;
-  description: string;
-}
-
-export const SPECIAL_POWERS: SpecialPowerDef[] = [
-  { id: 'none', name: 'None', icon: '⚪', description: 'No passive special power.' },
-  { id: 'iron_shield', name: 'Iron Shield', icon: '🛡️', description: 'Takes 50% less damage when HP is ≤ 50%.' },
-  { id: 'berserker', name: 'Berserker Rage', icon: '⚡', description: 'Deals 2x damage when HP drops to ≤ 20%.' },
-  { id: 'vampiric', name: 'Vampiric Strike', icon: '🩸', description: 'Restores 20% of damage dealt back to health.' },
-  { id: 'thorns', name: 'Thorns Counter', icon: '🌵', description: 'Attacker takes 30% recoil damage on hit.' },
-  { id: 'speedster', name: 'Speedster Dash', icon: '💨', description: '+35% base movement speed & swift bounce.' },
-  { id: 'phoenix', name: 'Phoenix Rebirth', icon: '🦅', description: 'Survives lethal damage once with 20 HP!' },
-];
-
-// Available Color Themes including White and Black
-export const COLOR_SWATCHES = [
-  { name: 'White', hex: '#ffffff', textDark: true },
-  { name: 'Black', hex: '#18181b', textDark: false },
-  { name: 'Crimson', hex: '#ef4444', textDark: false },
-  { name: 'Sapphire', hex: '#3b82f6', textDark: false },
-  { name: 'Emerald', hex: '#10b981', textDark: false },
-  { name: 'Amber', hex: '#f59e0b', textDark: false },
-  { name: 'Purple', hex: '#8b5cf6', textDark: false },
-  { name: 'Cyan', hex: '#06b6d4', textDark: false },
-];
-
-export interface ContestantConfig {
-  id: string;
-  name: string;
-  color: string;
-  image_url: string | null;
-  starting_health: number;
-  damage: number;
-  speed: number;
-  special_power: string;
-}
-
-// In-Game Item Types
-export type ArenaItemType = 'health' | 'dagger' | 'gun' | 'shield' | 'speed';
-
-interface ArenaItem {
-  id: string;
-  type: ArenaItemType;
-  x: number;
-  y: number;
-  icon: string;
-  name: string;
-  color: string;
-  spawnTime: number;
-  bobOffset: number;
-}
-
-interface Bullet {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  ownerId: string;
-  color: string;
-  damage: number;
-  life: number;
-}
-
-interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  color: string;
-  radius: number;
-  alpha: number;
-  decay: number;
-}
-
-interface FloatingText {
-  x: number;
-  y: number;
-  text: string;
-  color: string;
-  alpha: number;
-  vy: number;
-  scale: number;
-}
-
-interface LiveFighter {
-  id: string;
-  name: string;
-  color: string;
-  image: HTMLImageElement | null;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  size: number;
-  health: number;
-  maxHealth: number;
-  damage: number;
-  baseSpeed: number;
-  specialPower: string;
-  isDead: boolean;
-  hitFlash: number;
-  invulnerableTimer: number;
-  phoenixUsed: boolean;
-  
-  // Active Item Status
-  hasShield: boolean;
-  hasDagger: boolean;
-  daggerTimer: number; // 3 seconds remaining after first hit
-  daggerActivated: boolean;
-  gunBullets: number;
-  speedBoostTimer: number;
-}
+// Types & Definitions
+export { SPECIAL_POWERS, COLOR_SWATCHES };
+export type { ContestantConfig };
 
 const PRESET_TOPICS = [
   { topic: 'Marvel vs DC', names: ['Iron Man', 'Batman', 'Spider-Man', 'Superman'] },
-  { topic: 'Anime Royale', names: ['Goku', 'Naruto', 'Luffy', 'Ichigo'] },
-  { topic: 'Titan Monsters', names: ['Godzilla', 'Kong', 'T-Rex', 'Megalodon'] },
-  { topic: 'Fast Food Clash', names: ['Burger', 'Pizza', 'Taco', 'Fries'] },
+  { topic: 'Anime Titans', names: ['Goku', 'Naruto', 'Luffy', 'Ichigo'] },
+  { topic: 'Monsters Clash', names: ['Godzilla', 'Kong', 'T-Rex', 'Megalodon'] },
+  { topic: 'Fast Food Royale', names: ['Burger', 'Pizza', 'Taco', 'Fries'] },
 ];
 
 export default function GamePage() {
@@ -140,6 +39,7 @@ export default function GamePage() {
   const [simSpeed, setSimSpeed] = useState<number>(1);
   const [aliveCount, setAliveCount] = useState(4);
   const [winner, setWinner] = useState<LiveFighter | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Queue State
   const [queueLoading, setQueueLoading] = useState(false);
@@ -147,6 +47,7 @@ export default function GamePage() {
 
   // Canvas & Engine Refs
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const fullscreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const animFrameIdRef = useRef<number | null>(null);
   const loadedImagesRef = useRef<Map<string, HTMLImageElement>>(new Map());
@@ -158,11 +59,7 @@ export default function GamePage() {
   const particlesRef = useRef<Particle[]>([]);
   const floatingTextsRef = useRef<FloatingText[]>([]);
   const screenShakeRef = useRef(0);
-  const nextItemSpawnRef = useRef<number>(210); // 7 seconds at 30fps
-
-  // Circular Arena Setup (Centered in upper area of 1080x1920)
-  const arenaRadius = 370;
-  const arenaCenter = { x: 540, y: 780 };
+  const nextItemSpawnRef = useRef<number>(210);
 
   // 1. Initialize Contestants
   useEffect(() => {
@@ -181,7 +78,7 @@ export default function GamePage() {
             image_url: null,
             starting_health: 100,
             damage: 25,
-            speed: 6,
+            speed: 6.5,
             special_power: SPECIAL_POWERS[(i % (SPECIAL_POWERS.length - 1)) + 1].id,
           });
         }
@@ -189,6 +86,17 @@ export default function GamePage() {
       return updated;
     });
   }, [contestantCount]);
+
+  // Fullscreen ESC Listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
 
   // 2. Web Audio Synthesizer
   const getAudioContext = () => {
@@ -233,7 +141,6 @@ export default function GamePage() {
         osc.start();
         osc.stop(ctx.currentTime + 0.12);
       } else if (type === 'item') {
-        // High sparkle arpeggio
         [440, 660, 880].forEach((freq, idx) => {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
@@ -317,18 +224,18 @@ export default function GamePage() {
     itemsRef.current = [];
     bulletsRef.current = [];
     screenShakeRef.current = 0;
-    nextItemSpawnRef.current = 210; // 7 seconds
+    nextItemSpawnRef.current = 210;
 
     const count = contestants.length;
     const fighters: LiveFighter[] = [];
 
     contestants.forEach((c, idx) => {
       const angle = (idx / count) * Math.PI * 2 - Math.PI / 2;
-      const spawnRadius = arenaRadius * 0.6;
-      const x = arenaCenter.x + Math.cos(angle) * spawnRadius;
-      const y = arenaCenter.y + Math.sin(angle) * spawnRadius;
+      const spawnRadius = ARENA_RADIUS * 0.6;
+      const x = ARENA_CENTER.x + Math.cos(angle) * spawnRadius;
+      const y = ARENA_CENTER.y + Math.sin(angle) * spawnRadius;
 
-      let speed = c.speed || 6;
+      let speed = c.speed || 6.5;
       if (c.special_power === 'speedster') speed *= 1.35;
 
       const moveAngle = angle + Math.PI + (Math.random() - 0.5) * 0.6;
@@ -384,9 +291,9 @@ export default function GamePage() {
 
   // 4. Random Item Spawner (Every 7 seconds)
   const spawnRandomItem = () => {
-    const itemPool: { type: ArenaItemType; icon: string; name: string; color: string }[] = [
+    const itemPool: { type: ArenaItem['type']; icon: string; name: string; color: string }[] = [
       { type: 'health', icon: '💚', name: '+30 HP Medkit', color: '#22c55e' },
-      { type: 'dagger', icon: '🗡️', name: '2x Damage Dagger', color: '#f59e0b' },
+      { type: 'dagger', icon: '🗡️', name: '2x DMG Dagger', color: '#f59e0b' },
       { type: 'gun', icon: '🔫', name: 'Blaster Gun (3 Bullets)', color: '#38bdf8' },
       { type: 'shield', icon: '🛡️', name: 'Energy Shield', color: '#a855f7' },
       { type: 'speed', icon: '⚡', name: 'Hyper Speed', color: '#eab308' },
@@ -394,13 +301,13 @@ export default function GamePage() {
 
     const pick = itemPool[Math.floor(Math.random() * itemPool.length)];
     const angle = Math.random() * Math.PI * 2;
-    const r = Math.random() * (arenaRadius - 80);
+    const r = Math.random() * (ARENA_RADIUS - 80);
 
     itemsRef.current.push({
       id: `item_${Date.now()}_${Math.random()}`,
       type: pick.type,
-      x: arenaCenter.x + Math.cos(angle) * r,
-      y: arenaCenter.y + Math.sin(angle) * r,
+      x: ARENA_CENTER.x + Math.cos(angle) * r,
+      y: ARENA_CENTER.y + Math.sin(angle) * r,
       icon: pick.icon,
       name: pick.name,
       color: pick.color,
@@ -410,13 +317,12 @@ export default function GamePage() {
 
     playSound('item');
 
-    // Item arrival particles
     for (let i = 0; i < 15; i++) {
       const a = Math.random() * Math.PI * 2;
       const s = Math.random() * 4 + 1;
       particlesRef.current.push({
-        x: arenaCenter.x + Math.cos(angle) * r,
-        y: arenaCenter.y + Math.sin(angle) * r,
+        x: ARENA_CENTER.x + Math.cos(angle) * r,
+        y: ARENA_CENTER.y + Math.sin(angle) * r,
         vx: Math.cos(a) * s,
         vy: Math.sin(a) * s,
         color: pick.color,
@@ -434,24 +340,22 @@ export default function GamePage() {
     const bullets = bulletsRef.current;
     const particles = particlesRef.current;
     const floatingTexts = floatingTextsRef.current;
-    const { x: cx, y: cy } = arenaCenter;
+    const { x: cx, y: cy } = ARENA_CENTER;
 
     if (screenShakeRef.current > 0) {
       screenShakeRef.current = Math.max(0, screenShakeRef.current - 0.7);
     }
 
-    // 5.1 Item Spawn Timer (7 seconds = 210 frames at 30fps)
+    // Item Spawn Timer (Every 7s)
     nextItemSpawnRef.current -= simSpeed;
     if (nextItemSpawnRef.current <= 0) {
-      if (items.length < 3) {
-        spawnRandomItem();
-      }
+      if (items.length < 3) spawnRandomItem();
       nextItemSpawnRef.current = 210;
     }
 
     const aliveFighters = fighters.filter((f) => !f.isDead);
 
-    // Check Victory condition
+    // Victory Check
     if (aliveFighters.length === 1 && !winner && fighters.length > 1) {
       setWinner(aliveFighters[0]);
       setIsPlaying(false);
@@ -472,12 +376,11 @@ export default function GamePage() {
       }
     }
 
-    // 5.2 Move Fighters & Arena Wall Bounce
+    // Move Fighters & Circular Arena Bounce
     aliveFighters.forEach((f) => {
       if (f.invulnerableTimer > 0) f.invulnerableTimer--;
       if (f.hitFlash > 0) f.hitFlash--;
 
-      // Active Item Timers
       if (f.daggerActivated && f.daggerTimer > 0) {
         f.daggerTimer -= simSpeed;
         if (f.daggerTimer <= 0) {
@@ -486,27 +389,23 @@ export default function GamePage() {
         }
       }
 
-      if (f.speedBoostTimer > 0) {
-        f.speedBoostTimer -= simSpeed;
-      }
+      if (f.speedBoostTimer > 0) f.speedBoostTimer -= simSpeed;
 
-      // Move Fighter
       const speedMult = f.speedBoostTimer > 0 ? 1.6 : 1;
       f.x += f.vx * simSpeed * speedMult;
       f.y += f.vy * simSpeed * speedMult;
 
-      // Realistic circular arena bounce
       const dx = f.x - cx;
       const dy = f.y - cy;
       const dist = Math.hypot(dx, dy);
       const halfSize = (f.size / 2) * 1.05;
 
-      if (dist + halfSize >= arenaRadius) {
+      if (dist + halfSize >= ARENA_RADIUS) {
         const nx = -dx / dist;
         const ny = -dy / dist;
 
-        f.x = cx - nx * (arenaRadius - halfSize);
-        f.y = cy - ny * (arenaRadius - halfSize);
+        f.x = cx - nx * (ARENA_RADIUS - halfSize);
+        f.y = cy - ny * (ARENA_RADIUS - halfSize);
 
         const dot = f.vx * nx + f.vy * ny;
         f.vx = f.vx - 2 * dot * nx;
@@ -514,7 +413,6 @@ export default function GamePage() {
 
         playSound('bounce');
 
-        // Wall sparks
         for (let i = 0; i < 4; i++) {
           particles.push({
             x: f.x,
@@ -529,107 +427,51 @@ export default function GamePage() {
         }
       }
 
-      // 5.3 Gun Shooting (if player has bullets)
+      // Gun Shooting
       if (f.gunBullets > 0 && Math.random() < 0.04) {
         f.gunBullets--;
         playSound('gun');
-
-        // Fire bullet towards moving direction
         const vLen = Math.hypot(f.vx, f.vy) || 1;
-        const bSpeed = 16;
         bullets.push({
           x: f.x + (f.vx / vLen) * 50,
           y: f.y + (f.vy / vLen) * 50,
-          vx: (f.vx / vLen) * bSpeed,
-          vy: (f.vy / vLen) * bSpeed,
+          vx: (f.vx / vLen) * 16,
+          vy: (f.vy / vLen) * 16,
           ownerId: f.id,
           color: '#38bdf8',
           damage: 5,
           life: 90,
         });
-
-        floatingTexts.push({
-          x: f.x,
-          y: f.y - 40,
-          text: `🔫 BANG!`,
-          color: '#38bdf8',
-          alpha: 1,
-          vy: -2,
-          scale: 1,
-        });
       }
     });
 
-    // 5.4 Item Pickup Collision
+    // Item Pickup Collision
     for (let i = items.length - 1; i >= 0; i--) {
       const item = items[i];
       item.spawnTime += 0.05 * simSpeed;
 
       for (const f of aliveFighters) {
-        const dist = Math.hypot(f.x - item.x, f.y - item.y);
-        if (dist < f.size / 2 + 25) {
-          // Player collected item!
+        if (Math.hypot(f.x - item.x, f.y - item.y) < f.size / 2 + 25) {
           playSound('item');
 
           if (item.type === 'health') {
-            const healAmt = 30;
-            f.health = Math.min(f.maxHealth, f.health + healAmt);
+            f.health = Math.min(f.maxHealth, f.health + 30);
             playSound('heal');
-            floatingTexts.push({
-              x: f.x,
-              y: f.y - 45,
-              text: `+${healAmt} HP`,
-              color: '#22c55e',
-              alpha: 1,
-              vy: -2.5,
-              scale: 1.3,
-            });
+            floatingTexts.push({ x: f.x, y: f.y - 45, text: '+30 HP', color: '#22c55e', alpha: 1, vy: -2.5, scale: 1.3 });
           } else if (item.type === 'dagger') {
             f.hasDagger = true;
             f.daggerActivated = false;
-            f.daggerTimer = 90; // 3 seconds at 30fps
-            floatingTexts.push({
-              x: f.x,
-              y: f.y - 45,
-              text: `🗡️ 2X DAMAGE!`,
-              color: '#f59e0b',
-              alpha: 1,
-              vy: -2.5,
-              scale: 1.2,
-            });
+            f.daggerTimer = 90;
+            floatingTexts.push({ x: f.x, y: f.y - 45, text: '🗡️ 2X DMG', color: '#f59e0b', alpha: 1, vy: -2.5, scale: 1.2 });
           } else if (item.type === 'gun') {
             f.gunBullets = 3;
-            floatingTexts.push({
-              x: f.x,
-              y: f.y - 45,
-              text: `🔫 3 BULLETS!`,
-              color: '#38bdf8',
-              alpha: 1,
-              vy: -2.5,
-              scale: 1.2,
-            });
+            floatingTexts.push({ x: f.x, y: f.y - 45, text: '🔫 3 BULLETS', color: '#38bdf8', alpha: 1, vy: -2.5, scale: 1.2 });
           } else if (item.type === 'shield') {
             f.hasShield = true;
-            floatingTexts.push({
-              x: f.x,
-              y: f.y - 45,
-              text: `🛡️ SHIELD READY`,
-              color: '#a855f7',
-              alpha: 1,
-              vy: -2.5,
-              scale: 1.2,
-            });
+            floatingTexts.push({ x: f.x, y: f.y - 45, text: '🛡️ SHIELD', color: '#a855f7', alpha: 1, vy: -2.5, scale: 1.2 });
           } else if (item.type === 'speed') {
-            f.speedBoostTimer = 120; // 4s speed
-            floatingTexts.push({
-              x: f.x,
-              y: f.y - 45,
-              text: `⚡ HYPER SPEED!`,
-              color: '#eab308',
-              alpha: 1,
-              vy: -2.5,
-              scale: 1.2,
-            });
+            f.speedBoostTimer = 120;
+            floatingTexts.push({ x: f.x, y: f.y - 45, text: '⚡ SPEED', color: '#eab308', alpha: 1, vy: -2.5, scale: 1.2 });
           }
 
           items.splice(i, 1);
@@ -638,52 +480,35 @@ export default function GamePage() {
       }
     }
 
-    // 5.5 Bullets Update & Hit Detection
+    // Bullets Hit
     for (let i = bullets.length - 1; i >= 0; i--) {
       const b = bullets[i];
       b.x += b.vx * simSpeed;
       b.y += b.vy * simSpeed;
       b.life -= simSpeed;
 
-      // Arena boundary hit
-      const bDist = Math.hypot(b.x - cx, b.y - cy);
-      if (bDist >= arenaRadius || b.life <= 0) {
+      if (Math.hypot(b.x - cx, b.y - cy) >= ARENA_RADIUS || b.life <= 0) {
         bullets.splice(i, 1);
         continue;
       }
 
-      // Check hit against other fighters
       for (const target of aliveFighters) {
         if (target.id === b.ownerId) continue;
-        const d = Math.hypot(target.x - b.x, target.y - b.y);
-        if (d < target.size / 2) {
-          // Bullet Hit!
+        if (Math.hypot(target.x - b.x, target.y - b.y) < target.size / 2) {
           target.health = Math.max(0, target.health - b.damage);
           target.hitFlash = 10;
           playSound('hit');
 
-          floatingTexts.push({
-            x: target.x,
-            y: target.y - 30,
-            text: `-${b.damage}`,
-            color: '#38bdf8',
-            alpha: 1,
-            vy: -2,
-            scale: 1,
-          });
+          floatingTexts.push({ x: target.x, y: target.y - 30, text: `-${b.damage}`, color: '#38bdf8', alpha: 1, vy: -2, scale: 1 });
 
-          // Check death
-          if (target.health <= 0 && !target.isDead) {
-            handleDeath(target);
-          }
-
+          if (target.health <= 0 && !target.isDead) handleDeath(target);
           bullets.splice(i, 1);
           break;
         }
       }
     }
 
-    // 5.6 Box-to-Box Collision & Special Powers Combat
+    // Box to Box Combat
     for (let i = 0; i < aliveFighters.length; i++) {
       for (let j = i + 1; j < aliveFighters.length; j++) {
         const A = aliveFighters[i];
@@ -698,14 +523,12 @@ export default function GamePage() {
           const nx = dx / dist;
           const ny = dy / dist;
 
-          // Separation
           const overlap = minDist - dist;
           A.x -= (nx * overlap) / 2;
           A.y -= (ny * overlap) / 2;
           B.x += (nx * overlap) / 2;
           B.y += (ny * overlap) / 2;
 
-          // Elastic collision velocity swap
           const kx = A.vx - B.vx;
           const ky = A.vy - B.vy;
           const p = 2 * (nx * kx + ny * ky) / 2;
@@ -723,127 +546,46 @@ export default function GamePage() {
             screenShakeRef.current = 6;
             playSound('hit');
 
-            // --- Compute Damage from A to B ---
             let dmgA = A.damage;
-            if (A.hasDagger) {
-              dmgA *= 2;
-              A.daggerActivated = true;
-            }
-            if (A.specialPower === 'berserker' && A.health / A.maxHealth <= 0.2) {
-              dmgA *= 2;
-            }
-            if (B.hasShield) {
-              dmgA = 0;
-              B.hasShield = false;
-              floatingTexts.push({ x: B.x, y: B.y - 40, text: `BLOCKED!`, color: '#a855f7', alpha: 1, vy: -2, scale: 1.2 });
-            } else if (B.specialPower === 'iron_shield' && B.health / B.maxHealth <= 0.5) {
-              dmgA = Math.round(dmgA * 0.5);
-              floatingTexts.push({ x: B.x, y: B.y - 55, text: `🛡️ -50%`, color: '#38bdf8', alpha: 1, vy: -2, scale: 1 });
-            }
+            if (A.hasDagger) { dmgA *= 2; A.daggerActivated = true; }
+            if (A.specialPower === 'berserker' && A.health / A.maxHealth <= 0.2) dmgA *= 2;
+            if (B.hasShield) { dmgA = 0; B.hasShield = false; floatingTexts.push({ x: B.x, y: B.y - 40, text: `BLOCKED!`, color: '#a855f7', alpha: 1, vy: -2, scale: 1.2 }); }
+            else if (B.specialPower === 'iron_shield' && B.health / B.maxHealth <= 0.5) { dmgA = Math.round(dmgA * 0.5); floatingTexts.push({ x: B.x, y: B.y - 55, text: `🛡️ -50%`, color: '#38bdf8', alpha: 1, vy: -2, scale: 1 }); }
 
-            // --- Compute Damage from B to A ---
             let dmgB = B.damage;
-            if (B.hasDagger) {
-              dmgB *= 2;
-              B.daggerActivated = true;
-            }
-            if (B.specialPower === 'berserker' && B.health / B.maxHealth <= 0.2) {
-              dmgB *= 2;
-            }
-            if (A.hasShield) {
-              dmgB = 0;
-              A.hasShield = false;
-              floatingTexts.push({ x: A.x, y: A.y - 40, text: `BLOCKED!`, color: '#a855f7', alpha: 1, vy: -2, scale: 1.2 });
-            } else if (A.specialPower === 'iron_shield' && A.health / A.maxHealth <= 0.5) {
-              dmgB = Math.round(dmgB * 0.5);
-              floatingTexts.push({ x: A.x, y: A.y - 55, text: `🛡️ -50%`, color: '#38bdf8', alpha: 1, vy: -2, scale: 1 });
-            }
+            if (B.hasDagger) { dmgB *= 2; B.daggerActivated = true; }
+            if (B.specialPower === 'berserker' && B.health / B.maxHealth <= 0.2) dmgB *= 2;
+            if (A.hasShield) { dmgB = 0; A.hasShield = false; floatingTexts.push({ x: A.x, y: A.y - 40, text: `BLOCKED!`, color: '#a855f7', alpha: 1, vy: -2, scale: 1.2 }); }
+            else if (A.specialPower === 'iron_shield' && A.health / A.maxHealth <= 0.5) { dmgB = Math.round(dmgB * 0.5); floatingTexts.push({ x: A.x, y: A.y - 55, text: `🛡️ -50%`, color: '#38bdf8', alpha: 1, vy: -2, scale: 1 }); }
 
-            // Apply Damage
             B.health = Math.max(0, B.health - dmgA);
             A.health = Math.max(0, A.health - dmgB);
 
-            // Special: Vampiric
-            if (A.specialPower === 'vampiric' && dmgA > 0) {
-              A.health = Math.min(A.maxHealth, A.health + Math.round(dmgA * 0.2));
-            }
-            if (B.specialPower === 'vampiric' && dmgB > 0) {
-              B.health = Math.min(B.maxHealth, B.health + Math.round(dmgB * 0.2));
-            }
+            if (A.specialPower === 'vampiric' && dmgA > 0) A.health = Math.min(A.maxHealth, A.health + Math.round(dmgA * 0.2));
+            if (B.specialPower === 'vampiric' && dmgB > 0) B.health = Math.min(B.maxHealth, B.health + Math.round(dmgB * 0.2));
 
-            // Special: Thorns Counter
-            if (B.specialPower === 'thorns' && dmgA > 0) {
-              const recoil = Math.round(dmgA * 0.3);
-              A.health = Math.max(0, A.health - recoil);
-              floatingTexts.push({ x: A.x, y: A.y - 50, text: `🌵 -${recoil}`, color: '#10b981', alpha: 1, vy: -2, scale: 1 });
-            }
-            if (A.specialPower === 'thorns' && dmgB > 0) {
-              const recoil = Math.round(dmgB * 0.3);
-              B.health = Math.max(0, B.health - recoil);
-              floatingTexts.push({ x: B.x, y: B.y - 50, text: `🌵 -${recoil}`, color: '#10b981', alpha: 1, vy: -2, scale: 1 });
-            }
+            if (B.specialPower === 'thorns' && dmgA > 0) { const rec = Math.round(dmgA * 0.3); A.health = Math.max(0, A.health - rec); floatingTexts.push({ x: A.x, y: A.y - 50, text: `🌵 -${rec}`, color: '#10b981', alpha: 1, vy: -2, scale: 1 }); }
+            if (A.specialPower === 'thorns' && dmgB > 0) { const rec = Math.round(dmgB * 0.3); B.health = Math.max(0, B.health - rec); floatingTexts.push({ x: B.x, y: B.y - 50, text: `🌵 -${rec}`, color: '#10b981', alpha: 1, vy: -2, scale: 1 }); }
 
-            // Floating Numbers
-            if (dmgA > 0) {
-              floatingTexts.push({
-                x: B.x + (Math.random() - 0.5) * 20,
-                y: B.y - 40,
-                text: `-${dmgA}`,
-                color: '#ef4444',
-                alpha: 1,
-                vy: -2.5,
-                scale: 1.2,
-              });
-            }
-            if (dmgB > 0) {
-              floatingTexts.push({
-                x: A.x + (Math.random() - 0.5) * 20,
-                y: A.y - 40,
-                text: `-${dmgB}`,
-                color: '#ef4444',
-                alpha: 1,
-                vy: -2.5,
-                scale: 1.2,
-              });
-            }
+            if (dmgA > 0) floatingTexts.push({ x: B.x + (Math.random() - 0.5) * 20, y: B.y - 40, text: `-${dmgA}`, color: '#ef4444', alpha: 1, vy: -2.5, scale: 1.2 });
+            if (dmgB > 0) floatingTexts.push({ x: A.x + (Math.random() - 0.5) * 20, y: A.y - 40, text: `-${dmgB}`, color: '#ef4444', alpha: 1, vy: -2.5, scale: 1.2 });
 
-            // Spark particles
             const midX = (A.x + B.x) / 2;
             const midY = (A.y + B.y) / 2;
             for (let k = 0; k < 12; k++) {
-              const angle = Math.random() * Math.PI * 2;
-              const spd = Math.random() * 6 + 2;
-              particles.push({
-                x: midX,
-                y: midY,
-                vx: Math.cos(angle) * spd,
-                vy: Math.sin(angle) * spd,
-                color: Math.random() > 0.5 ? A.color : B.color,
-                radius: Math.random() * 4 + 2,
-                alpha: 1,
-                decay: 0.04,
-              });
+              const a = Math.random() * Math.PI * 2;
+              const s = Math.random() * 6 + 2;
+              particles.push({ x: midX, y: midY, vx: Math.cos(a) * s, vy: Math.sin(a) * s, color: Math.random() > 0.5 ? A.color : B.color, radius: Math.random() * 4 + 2, alpha: 1, decay: 0.04 });
             }
 
-            // Check Phoenix or Death
-            [A, B].forEach((fighter) => {
-              if (fighter.health <= 0) {
-                if (fighter.specialPower === 'phoenix' && !fighter.phoenixUsed) {
-                  fighter.phoenixUsed = true;
-                  fighter.health = 20;
+            [A, B].forEach((f) => {
+              if (f.health <= 0) {
+                if (f.specialPower === 'phoenix' && !f.phoenixUsed) {
+                  f.phoenixUsed = true;
+                  f.health = 20;
                   playSound('heal');
-                  floatingTexts.push({
-                    x: fighter.x,
-                    y: fighter.y - 50,
-                    text: `🦅 REBORN!`,
-                    color: '#f59e0b',
-                    alpha: 1,
-                    vy: -3,
-                    scale: 1.4,
-                  });
-                } else if (!fighter.isDead) {
-                  handleDeath(fighter);
-                }
+                  floatingTexts.push({ x: f.x, y: f.y - 50, text: `🦅 REBORN!`, color: '#f59e0b', alpha: 1, vy: -3, scale: 1.4 });
+                } else if (!f.isDead) handleDeath(f);
               }
             });
           }
@@ -851,7 +593,7 @@ export default function GamePage() {
       }
     }
 
-    // 5.7 Update Particles
+    // Decay Particles & Floating Texts
     for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
       p.x += p.vx * simSpeed;
@@ -860,7 +602,6 @@ export default function GamePage() {
       if (p.alpha <= 0) particles.splice(i, 1);
     }
 
-    // 5.8 Update Floating Texts
     for (let i = floatingTexts.length - 1; i >= 0; i--) {
       const ft = floatingTexts[i];
       ft.y += ft.vy * simSpeed;
@@ -890,324 +631,293 @@ export default function GamePage() {
     }
   };
 
-  // 6. Minimalist 9:16 Canvas Drawing Function
+  // 6. Draw Frame on Canvas
   const drawFrame = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const canvases = [canvasRef.current, fullscreenCanvasRef.current].filter(Boolean) as HTMLCanvasElement[];
+    canvases.forEach((canvas) => {
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
 
-    const width = 1080;
-    const height = 1920;
-    const { x: cx, y: cy } = arenaCenter;
-
-    ctx.save();
-
-    // Screen Shake
-    if (screenShakeRef.current > 0) {
-      const shakeX = (Math.random() - 0.5) * screenShakeRef.current * 3;
-      const shakeY = (Math.random() - 0.5) * screenShakeRef.current * 3;
-      ctx.translate(shakeX, shakeY);
-    }
-
-    // Clean Minimalist Background: Deep obsidian black
-    ctx.fillStyle = '#05070c';
-    ctx.fillRect(0, 0, width, height);
-
-    // Subtle dark ambient lines
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
-    ctx.lineWidth = 1;
-    for (let x = 0; x < width; x += 120) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
-      ctx.stroke();
-    }
-
-    // 6.1 Draw Circular Arena Floor
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx, cy, arenaRadius, 0, Math.PI * 2);
-    ctx.fillStyle = '#0c101c';
-    ctx.fill();
-
-    // Radial gradient glow inside arena
-    const floorGrad = ctx.createRadialGradient(cx, cy, 30, cx, cy, arenaRadius);
-    floorGrad.addColorStop(0, 'rgba(30, 41, 59, 0.6)');
-    floorGrad.addColorStop(0.85, 'rgba(15, 23, 42, 0.9)');
-    floorGrad.addColorStop(1, 'rgba(2, 6, 23, 0.95)');
-    ctx.fillStyle = floorGrad;
-    ctx.fill();
-
-    // Inner subtle ring
-    ctx.beginPath();
-    ctx.arc(cx, cy, arenaRadius * 0.45, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
-    ctx.lineWidth = 4;
-    ctx.stroke();
-
-    // VS center watermark
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
-    ctx.font = '900 80px "Montserrat", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('VS', cx, cy);
-
-    // Glowing Circular Wall
-    ctx.beginPath();
-    ctx.arc(cx, cy, arenaRadius, 0, Math.PI * 2);
-    ctx.lineWidth = 10;
-    ctx.strokeStyle = '#38bdf8';
-    ctx.shadowColor = '#0284c7';
-    ctx.shadowBlur = 24;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-
-    // Outer boundary border
-    ctx.beginPath();
-    ctx.arc(cx, cy, arenaRadius + 14, 0, Math.PI * 2);
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-    ctx.stroke();
-    ctx.restore();
-
-    // 6.2 Draw In-Arena Random Items
-    itemsRef.current.forEach((item) => {
-      const bob = Math.sin(item.spawnTime + item.bobOffset) * 6;
-      ctx.save();
-      ctx.translate(item.x, item.y + bob);
-
-      // Glowing Aura
-      ctx.beginPath();
-      ctx.arc(0, 0, 32, 0, Math.PI * 2);
-      ctx.fillStyle = item.color;
-      ctx.shadowColor = item.color;
-      ctx.shadowBlur = 20;
-      ctx.globalAlpha = 0.25;
-      ctx.fill();
-      ctx.globalAlpha = 1.0;
-
-      // Item icon box
-      ctx.beginPath();
-      ctx.arc(0, 0, 24, 0, Math.PI * 2);
-      ctx.fillStyle = '#0f172a';
-      ctx.strokeStyle = item.color;
-      ctx.lineWidth = 3;
-      ctx.fill();
-      ctx.stroke();
-
-      // Emoji
-      ctx.font = '24px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(item.icon, 0, 2);
-
-      // Item label
-      ctx.font = '800 12px "Montserrat", sans-serif';
-      ctx.fillStyle = item.color;
-      ctx.fillText(item.name, 0, 38);
-
-      ctx.restore();
-    });
-
-    // 6.3 Draw Bullets
-    bulletsRef.current.forEach((b) => {
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(b.x, b.y, 6, 0, Math.PI * 2);
-      ctx.fillStyle = b.color;
-      ctx.shadowColor = b.color;
-      ctx.shadowBlur = 15;
-      ctx.fill();
-      ctx.restore();
-    });
-
-    // 6.4 Draw Particles
-    particlesRef.current.forEach((p) => {
-      ctx.save();
-      ctx.globalAlpha = Math.max(0, p.alpha);
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-      ctx.fillStyle = p.color;
-      ctx.shadowColor = p.color;
-      ctx.shadowBlur = 8;
-      ctx.fill();
-      ctx.restore();
-    });
-
-    // 6.5 Draw Contestants (Square Boxes)
-    fightersRef.current.forEach((f) => {
-      if (f.isDead) return;
-
-      const half = f.size / 2;
-      const cornerRadius = 18;
+      const width = 1080;
+      const height = 1920;
+      const { x: cx, y: cy } = ARENA_CENTER;
 
       ctx.save();
-      ctx.translate(f.x, f.y);
 
-      // Box Glow
-      ctx.shadowColor = f.color;
-      ctx.shadowBlur = 18;
-
-      // Rounded square path
-      ctx.beginPath();
-      ctx.roundRect(-half, -half, f.size, f.size, cornerRadius);
-      ctx.fillStyle = '#0f172a';
-      ctx.fill();
-
-      // Image or Initial Clip
-      ctx.save();
-      ctx.clip();
-
-      if (f.image && f.image.complete && f.image.naturalWidth > 0) {
-        ctx.drawImage(f.image, -half, -half, f.size, f.size);
-      } else {
-        const grad = ctx.createLinearGradient(-half, -half, half, half);
-        grad.addColorStop(0, f.color);
-        grad.addColorStop(1, '#020617');
-        ctx.fillStyle = grad;
-        ctx.fillRect(-half, -half, f.size, f.size);
-
-        ctx.fillStyle = f.color === '#ffffff' ? '#000000' : '#ffffff';
-        ctx.font = '900 42px "Montserrat", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(f.name.charAt(0).toUpperCase(), 0, 0);
+      if (screenShakeRef.current > 0) {
+        const shakeX = (Math.random() - 0.5) * screenShakeRef.current * 3;
+        const shakeY = (Math.random() - 0.5) * screenShakeRef.current * 3;
+        ctx.translate(shakeX, shakeY);
       }
 
-      // Hit Flash overlay
-      if (f.hitFlash > 0) {
-        ctx.fillStyle = `rgba(239, 68, 68, ${f.hitFlash / 12})`;
-        ctx.fillRect(-half, -half, f.size, f.size);
-      }
-
-      ctx.restore(); // end clip
-
-      // Border around square
-      ctx.beginPath();
-      ctx.roundRect(-half, -half, f.size, f.size, cornerRadius);
-      ctx.lineWidth = 6;
-      ctx.strokeStyle = f.hitFlash > 0 ? '#ffffff' : f.color;
-      ctx.stroke();
-
-      ctx.shadowBlur = 0;
-
-      // Active Item indicators above box
-      let itemBadge = '';
-      if (f.hasShield) itemBadge += '🛡️';
-      if (f.hasDagger) itemBadge += '🗡️';
-      if (f.gunBullets > 0) itemBadge += `🔫x${f.gunBullets}`;
-      if (f.speedBoostTimer > 0) itemBadge += '⚡';
-
-      if (itemBadge) {
-        ctx.font = '16px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(itemBadge, 0, -half - 12);
-      }
-
-      ctx.restore();
-    });
-
-    // 6.6 Draw Floating Numbers & Texts
-    floatingTextsRef.current.forEach((ft) => {
-      ctx.save();
-      ctx.globalAlpha = Math.max(0, ft.alpha);
-      ctx.fillStyle = ft.color;
-      ctx.font = `900 ${Math.round(28 * ft.scale)}px "Montserrat", sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.shadowColor = 'black';
-      ctx.shadowBlur = 8;
-      ctx.fillText(ft.text, ft.x, ft.y);
-      ctx.restore();
-    });
-
-    // 6.7 Top Headline & Theme Title (Clean & Minimalist)
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.font = '900 54px "Montserrat", sans-serif';
-    ctx.fillStyle = '#ffffff';
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-    ctx.shadowBlur = 16;
-    ctx.fillText(topic.toUpperCase() || 'ARENA CLASH', width / 2, 130);
-
-    ctx.font = '800 22px "Montserrat", sans-serif';
-    ctx.fillStyle = '#38bdf8';
-    ctx.fillText('⚡ CIRCULAR ARENA BATTLE ⚡', width / 2, 180);
-    ctx.restore();
-
-    // 6.8 LIVE HEALTHBARS BELOW THE ROUND ARENA (2 Sides / Columns)
-    // Area: y = 1250 to 1840
-    // If 2 players: 1 Left, 1 Right
-    // If 3 players: 2 on Left & Right, 1 below
-    // If 4 players: 2 on Left, 2 on Right
-    // If 5-8 players: dual columns left and right
-    drawLiveHealthBars(ctx, fightersRef.current, width);
-
-    // 6.9 Victory Overlay
-    if (winner) {
-      ctx.save();
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+      // Minimalist deep black background
+      ctx.fillStyle = '#05070c';
       ctx.fillRect(0, 0, width, height);
 
-      ctx.font = '90px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('👑', width / 2, height / 2 - 120);
-
-      const winHalf = 70;
-      ctx.beginPath();
-      ctx.roundRect(width / 2 - winHalf, height / 2 - winHalf, 140, 140, 24);
-      ctx.fillStyle = winner.color;
-      ctx.shadowColor = '#eab308';
-      ctx.shadowBlur = 35;
-      ctx.fill();
-
-      if (winner.image && winner.image.complete && winner.image.naturalWidth > 0) {
-        ctx.save();
-        ctx.clip();
-        ctx.drawImage(winner.image, width / 2 - winHalf, height / 2 - winHalf, 140, 140);
-        ctx.restore();
-      } else {
-        ctx.fillStyle = winner.color === '#ffffff' ? '#000' : '#fff';
-        ctx.font = '900 64px "Montserrat", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(winner.name.charAt(0).toUpperCase(), width / 2, height / 2);
+      // Subtle grid lines
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
+      ctx.lineWidth = 1;
+      for (let x = 0; x < width; x += 120) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
       }
 
-      ctx.lineWidth = 6;
-      ctx.strokeStyle = '#facc15';
+      // Circular Arena Floor
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, ARENA_RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = '#0c101c';
+      ctx.fill();
+
+      const floorGrad = ctx.createRadialGradient(cx, cy, 30, cx, cy, ARENA_RADIUS);
+      floorGrad.addColorStop(0, 'rgba(30, 41, 59, 0.6)');
+      floorGrad.addColorStop(0.85, 'rgba(15, 23, 42, 0.9)');
+      floorGrad.addColorStop(1, 'rgba(2, 6, 23, 0.95)');
+      ctx.fillStyle = floorGrad;
+      ctx.fill();
+
+      // Inner ring
+      ctx.beginPath();
+      ctx.arc(cx, cy, ARENA_RADIUS * 0.45, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+      ctx.lineWidth = 4;
       ctx.stroke();
 
-      ctx.font = '900 68px "Montserrat", sans-serif';
-      ctx.fillStyle = '#facc15';
-      ctx.shadowColor = '#ca8a04';
-      ctx.shadowBlur = 25;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+      ctx.font = '900 80px "Montserrat", sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('VICTORY!', width / 2, height / 2 + 140);
+      ctx.textBaseline = 'middle';
+      ctx.fillText('VS', cx, cy);
 
-      ctx.font = '800 44px "Montserrat", sans-serif';
+      // Glowing Wall
+      ctx.beginPath();
+      ctx.arc(cx, cy, ARENA_RADIUS, 0, Math.PI * 2);
+      ctx.lineWidth = 10;
+      ctx.strokeStyle = '#38bdf8';
+      ctx.shadowColor = '#0284c7';
+      ctx.shadowBlur = 24;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.restore();
+
+      // Draw Items
+      itemsRef.current.forEach((item) => {
+        const bob = Math.sin(item.spawnTime + item.bobOffset) * 6;
+        ctx.save();
+        ctx.translate(item.x, item.y + bob);
+
+        ctx.beginPath();
+        ctx.arc(0, 0, 32, 0, Math.PI * 2);
+        ctx.fillStyle = item.color;
+        ctx.shadowColor = item.color;
+        ctx.shadowBlur = 20;
+        ctx.globalAlpha = 0.25;
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
+
+        ctx.beginPath();
+        ctx.arc(0, 0, 24, 0, Math.PI * 2);
+        ctx.fillStyle = '#0f172a';
+        ctx.strokeStyle = item.color;
+        ctx.lineWidth = 3;
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.font = '24px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(item.icon, 0, 2);
+
+        ctx.font = '800 13px "Montserrat", sans-serif';
+        ctx.fillStyle = item.color;
+        ctx.fillText(item.name, 0, 38);
+        ctx.restore();
+      });
+
+      // Bullets
+      bulletsRef.current.forEach((b) => {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, 6, 0, Math.PI * 2);
+        ctx.fillStyle = b.color;
+        ctx.shadowColor = b.color;
+        ctx.shadowBlur = 15;
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // Particles
+      particlesRef.current.forEach((p) => {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, p.alpha);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 8;
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // Contestants (Square Boxes)
+      fightersRef.current.forEach((f) => {
+        if (f.isDead) return;
+
+        const half = f.size / 2;
+        const cornerRadius = 18;
+
+        ctx.save();
+        ctx.translate(f.x, f.y);
+
+        ctx.shadowColor = f.color;
+        ctx.shadowBlur = 18;
+
+        ctx.beginPath();
+        ctx.roundRect(-half, -half, f.size, f.size, cornerRadius);
+        ctx.fillStyle = '#0f172a';
+        ctx.fill();
+
+        ctx.save();
+        ctx.clip();
+
+        if (f.image && f.image.complete && f.image.naturalWidth > 0) {
+          ctx.drawImage(f.image, -half, -half, f.size, f.size);
+        } else {
+          const grad = ctx.createLinearGradient(-half, -half, half, half);
+          grad.addColorStop(0, f.color);
+          grad.addColorStop(1, '#020617');
+          ctx.fillStyle = grad;
+          ctx.fillRect(-half, -half, f.size, f.size);
+
+          ctx.fillStyle = f.color === '#ffffff' ? '#000' : '#fff';
+          ctx.font = '900 42px "Montserrat", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(f.name.charAt(0).toUpperCase(), 0, 0);
+        }
+
+        if (f.hitFlash > 0) {
+          ctx.fillStyle = `rgba(239, 68, 68, ${f.hitFlash / 12})`;
+          ctx.fillRect(-half, -half, f.size, f.size);
+        }
+
+        ctx.restore();
+
+        ctx.beginPath();
+        ctx.roundRect(-half, -half, f.size, f.size, cornerRadius);
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = f.hitFlash > 0 ? '#ffffff' : f.color;
+        ctx.stroke();
+
+        ctx.shadowBlur = 0;
+
+        let itemBadge = '';
+        if (f.hasShield) itemBadge += '🛡️';
+        if (f.hasDagger) itemBadge += '🗡️';
+        if (f.gunBullets > 0) itemBadge += `🔫x${f.gunBullets}`;
+        if (f.speedBoostTimer > 0) itemBadge += '⚡';
+
+        if (itemBadge) {
+          ctx.font = '16px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(itemBadge, 0, -half - 12);
+        }
+
+        ctx.restore();
+      });
+
+      // Floating Numbers
+      floatingTextsRef.current.forEach((ft) => {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, ft.alpha);
+        ctx.fillStyle = ft.color;
+        ctx.font = `900 ${Math.round(28 * ft.scale)}px "Montserrat", sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.shadowColor = 'black';
+        ctx.shadowBlur = 8;
+        ctx.fillText(ft.text, ft.x, ft.y);
+        ctx.restore();
+      });
+
+      // Top Headline
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.font = '900 54px "Montserrat", sans-serif';
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(`${winner.name} WINS!`, width / 2, height / 2 + 210);
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+      ctx.shadowBlur = 16;
+      ctx.fillText(topic.toUpperCase() || 'ARENA CLASH', width / 2, 130);
+
+      ctx.font = '800 22px "Montserrat", sans-serif';
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillText('⚡ CIRCULAR ARENA BATTLE ⚡', width / 2, 180);
+      ctx.restore();
+
+      // Dual Sided Healthbars below arena
+      drawLiveHealthBars(ctx, fightersRef.current, width);
+
+      // Victory Overlay
+      if (winner) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.font = '90px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('👑', width / 2, height / 2 - 120);
+
+        const winHalf = 70;
+        ctx.beginPath();
+        ctx.roundRect(width / 2 - winHalf, height / 2 - winHalf, 140, 140, 24);
+        ctx.fillStyle = winner.color;
+        ctx.shadowColor = '#eab308';
+        ctx.shadowBlur = 35;
+        ctx.fill();
+
+        if (winner.image && winner.image.complete && winner.image.naturalWidth > 0) {
+          ctx.save();
+          ctx.clip();
+          ctx.drawImage(winner.image, width / 2 - winHalf, height / 2 - winHalf, 140, 140);
+          ctx.restore();
+        } else {
+          ctx.fillStyle = winner.color === '#ffffff' ? '#000' : '#fff';
+          ctx.font = '900 64px "Montserrat", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(winner.name.charAt(0).toUpperCase(), width / 2, height / 2);
+        }
+
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = '#facc15';
+        ctx.stroke();
+
+        ctx.font = '900 68px "Montserrat", sans-serif';
+        ctx.fillStyle = '#facc15';
+        ctx.shadowColor = '#ca8a04';
+        ctx.shadowBlur = 25;
+        ctx.textAlign = 'center';
+        ctx.fillText('VICTORY!', width / 2, height / 2 + 140);
+
+        ctx.font = '800 44px "Montserrat", sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(`${winner.name} WINS!`, width / 2, height / 2 + 210);
+
+        ctx.restore();
+      }
 
       ctx.restore();
-    }
-
-    ctx.restore();
+    });
   };
 
-  // 7. Helper: Draw Two-Sided Minimalist Health Bars Below the Round Arena
+  // Helper: Live Health Bars below arena
   const drawLiveHealthBars = (ctx: CanvasRenderingContext2D, fighters: LiveFighter[], width: number) => {
     const startY = 1250;
     const count = fighters.length;
-
-    // Determine grid layout: Left side vs Right side
-    // Left column: x = 60 to 510 (width 450)
-    // Right column: x = 570 to 1020 (width 450)
     const colWidth = 450;
     const leftX = 60;
-    const rightX = width - colWidth - 60; // 570
-
-    // Compute row height based on count
+    const rightX = width - colWidth - 60;
     const rows = Math.ceil(count / 2);
     const rowHeight = Math.min(115, 520 / Math.max(rows, 2));
 
@@ -1226,11 +936,10 @@ export default function GamePage() {
           x = rightX;
           y = startY;
         } else {
-          x = (width - colWidth) / 2; // Centered below
+          x = (width - colWidth) / 2;
           y = startY + rowHeight + 20;
         }
       } else {
-        // 4, 5, 6, 7, 8: 2 columns
         const isRight = idx % 2 === 1;
         const row = Math.floor(idx / 2);
         x = isRight ? rightX : leftX;
@@ -1240,7 +949,6 @@ export default function GamePage() {
       ctx.save();
       ctx.translate(x, y);
 
-      // Card Background (Minimalist dark card with color accent border)
       ctx.beginPath();
       ctx.roundRect(0, 0, colWidth, rowHeight - 16, 18);
       ctx.fillStyle = f.isDead ? 'rgba(15, 23, 42, 0.4)' : 'rgba(15, 23, 42, 0.85)';
@@ -1249,7 +957,6 @@ export default function GamePage() {
       ctx.strokeStyle = f.isDead ? '#334155' : f.color;
       ctx.stroke();
 
-      // Avatar Icon (Small Square Thumbnail)
       const thumbSize = rowHeight - 36;
       ctx.save();
       ctx.translate(10, 10);
@@ -1270,7 +977,6 @@ export default function GamePage() {
       }
       ctx.restore();
 
-      // Top Row: Name + Special Power Icon + Item
       const textX = thumbSize + 24;
       ctx.font = '900 20px "Montserrat", sans-serif';
       ctx.fillStyle = f.isDead ? '#64748b' : '#ffffff';
@@ -1287,13 +993,11 @@ export default function GamePage() {
 
       ctx.fillText(`${f.name} ${powerIcon}${itemTag}`, textX, 12);
 
-      // Status text (HP)
       ctx.font = '800 16px "Montserrat", sans-serif';
       ctx.fillStyle = f.isDead ? '#ef4444' : '#38bdf8';
       ctx.textAlign = 'right';
-      ctx.fillText(f.isDead ? 'ELIMINATED' : `${Math.round(f.health)} / ${f.maxHealth} HP`, colWidth - 16, 14);
+      ctx.fillText(f.isDead ? 'ELIMINATED' : `${Math.round(f.health)} HP`, colWidth - 16, 14);
 
-      // Health Bar Track
       const barX = textX;
       const barY = rowHeight - 38;
       const barW = colWidth - textX - 16;
@@ -1304,7 +1008,6 @@ export default function GamePage() {
       ctx.fillStyle = 'rgba(30, 41, 59, 0.8)';
       ctx.fill();
 
-      // Health Bar Fill
       if (!f.isDead && f.health > 0) {
         const hpPct = Math.max(0, f.health / f.maxHealth);
         let hpColor = '#10b981';
@@ -1324,15 +1027,13 @@ export default function GamePage() {
     });
   };
 
-  // 8. Animation Frame Loop
+  // 7. Animation Loop
   useEffect(() => {
     let active = true;
 
     const loop = () => {
       if (!active) return;
-      if (isPlaying) {
-        updatePhysics();
-      }
+      if (isPlaying) updatePhysics();
       drawFrame();
       animFrameIdRef.current = requestAnimationFrame(loop);
     };
@@ -1343,9 +1044,9 @@ export default function GamePage() {
       active = false;
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
     };
-  }, [isPlaying, simSpeed, winner, topic]);
+  }, [isPlaying, simSpeed, winner, topic, isFullscreen]);
 
-  // 9. Input & Contestant Handlers
+  // 8. Handlers
   const handleImageUpload = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1362,9 +1063,7 @@ export default function GamePage() {
       const img = new Image();
       img.src = base64Url;
       loadedImagesRef.current.set(base64Url, img);
-      if (fightersRef.current[index]) {
-        fightersRef.current[index].image = img;
-      }
+      if (fightersRef.current[index]) fightersRef.current[index].image = img;
     };
     reader.readAsDataURL(file);
   };
@@ -1389,13 +1088,13 @@ export default function GamePage() {
         image_url: null,
         starting_health: 100,
         damage: 25,
-        speed: 6,
+        speed: 6.5,
         special_power: SPECIAL_POWERS[(i % (SPECIAL_POWERS.length - 1)) + 1].id,
       }))
     );
   };
 
-  // 10. Queue Video to YouTube Shorts
+  // 9. Queue Video to YouTube Shorts
   const handleQueueVideo = async () => {
     setQueueLoading(true);
     setQueueMessage(null);
@@ -1410,6 +1109,9 @@ export default function GamePage() {
           color: c.color,
           image_url: c.image_url,
           starting_health: c.starting_health,
+          damage: c.damage,
+          speed: c.speed,
+          special_power: c.special_power,
         })),
         duration_seconds: 25,
       };
@@ -1428,7 +1130,7 @@ export default function GamePage() {
       if (response.ok && resData.success) {
         setQueueMessage({
           type: 'success',
-          text: 'Battle queued successfully! GitHub Actions is rendering your video.',
+          text: 'Video queued successfully! GitHub Actions is rendering your exact gameplay.',
         });
       } else {
         setQueueMessage({
@@ -1447,72 +1149,68 @@ export default function GamePage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen bg-[#07090e] text-slate-100 p-4 md:p-6 selection:bg-cyan-500/20 font-sans">
+      <div className="max-w-6xl mx-auto space-y-6">
         
-        {/* Navigation Bar */}
-        <div className="bg-slate-900/80 backdrop-blur border border-slate-800 rounded-3xl p-6 flex flex-wrap justify-between items-center gap-4 shadow-2xl">
-          <div className="flex items-center gap-3">
-            <span className="text-3xl">⚔️</span>
+        {/* Minimalist Header */}
+        <header className="flex flex-wrap justify-between items-center py-3 border-b border-slate-800/60 gap-4">
+          <div className="flex items-center gap-2.5">
+            <span className="text-2xl">⚔️</span>
             <div>
-              <h1 className="text-2xl md:text-3xl font-black bg-gradient-to-r from-red-500 via-amber-400 to-cyan-400 bg-clip-text text-transparent">
-                ARENA CLASH ROYALE
+              <h1 className="text-xl font-black tracking-tight text-white flex items-center gap-2">
+                ARENA CLASH <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">2D PHYSICS</span>
               </h1>
-              <p className="text-xs text-slate-400">Custom 2D Circular Arena Physics Simulator & Video Generator</p>
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href="/"
-              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-semibold transition"
-            >
-              📊 Chart Generator
+          <nav className="flex items-center gap-2 text-xs font-semibold">
+            <Link href="/" className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 transition">
+              Charts
             </Link>
-            <Link
-              href="/aesthetic"
-              className="px-4 py-2 rounded-xl bg-purple-900/40 hover:bg-purple-800/60 border border-purple-700/50 text-purple-300 text-sm font-semibold transition"
-            >
-              🌸 Aesthetic Generator
+            <Link href="/aesthetic" className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-purple-300 border border-slate-800 transition">
+              Aesthetic
             </Link>
-            <Link
-              href="/admin"
-              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-semibold transition"
-            >
-              ⚙️ Admin
+            <Link href="/admin" className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-800 transition">
+              Admin
             </Link>
-          </div>
-        </div>
+          </nav>
+        </header>
 
         {/* Status Message */}
         {queueMessage && (
           <div
-            className={`p-4 rounded-2xl text-sm font-semibold flex items-center justify-between ${
+            className={`p-3 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
               queueMessage.type === 'success'
-                ? 'bg-emerald-950/80 border border-emerald-500 text-emerald-300'
-                : 'bg-rose-950/80 border border-rose-500 text-rose-300'
+                ? 'bg-emerald-950/60 border border-emerald-500/40 text-emerald-300'
+                : 'bg-rose-950/60 border border-rose-500/40 text-rose-300'
             }`}
           >
             <span>{queueMessage.text}</span>
-            <button onClick={() => setQueueMessage(null)} className="text-lg opacity-70 hover:opacity-100">
-              ✕
-            </button>
+            <button onClick={() => setQueueMessage(null)} className="opacity-60 hover:opacity-100 text-sm">✕</button>
           </div>
         )}
 
-        {/* Main Grid: Left Setup, Right 9:16 Canvas */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Minimalist Workspace Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
-          {/* ================= LEFT CONFIGURATION PANEL (7 Cols) ================= */}
-          <div className="lg:col-span-7 space-y-6">
+          {/* ================= LEFT CONFIGURATION PANEL (6.5 Cols) ================= */}
+          <div className="lg:col-span-7 space-y-4">
             
-            {/* Topic & Headline Box */}
-            <div className="bg-slate-900/70 border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-4">
+            {/* Battle Headline & Preset Bar */}
+            <div className="bg-slate-900/40 border border-slate-800/60 rounded-2xl p-4 space-y-3">
               <div className="flex justify-between items-center">
-                <label className="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                  <span>🏷️</span> Topic / Battle Headline
-                </label>
-                <span className="text-xs text-slate-400">Shows prominently on screen</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Battle Headline</span>
+                <div className="flex gap-1.5">
+                  {PRESET_TOPICS.map((p, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleLoadPreset(idx)}
+                      className="px-2 py-0.5 rounded-md bg-slate-800/80 hover:bg-slate-700 text-[11px] font-medium text-slate-300 transition"
+                    >
+                      {p.topic}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <input
@@ -1520,224 +1218,133 @@ export default function GamePage() {
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
                 placeholder="e.g. Marvel vs DC"
-                className="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-2xl text-white font-bold text-lg focus:outline-none focus:border-amber-400 transition"
+                className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-white font-bold text-base focus:outline-none focus:border-cyan-500 transition"
               />
 
-              <div className="flex flex-wrap gap-2 pt-1">
-                <span className="text-xs text-slate-400 self-center mr-1">Presets:</span>
-                {PRESET_TOPICS.map((p, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleLoadPreset(idx)}
-                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-slate-200 transition"
-                  >
-                    {p.topic}
-                  </button>
-                ))}
+              {/* Fighter Count Pill Bar */}
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-xs font-semibold text-slate-400">Fighter Count:</span>
+                <div className="flex gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                  {[2, 3, 4, 5, 6, 7, 8].map((num) => (
+                    <button
+                      key={num}
+                      onClick={() => setContestantCount(num)}
+                      className={`w-7 h-7 rounded-lg text-xs font-black transition ${
+                        contestantCount === num
+                          ? 'bg-cyan-500 text-slate-950 shadow-md'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {num}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
-            {/* Contestant Count Selector */}
-            <div className="bg-slate-900/70 border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-4">
-              <div className="flex justify-between items-center">
-                <label className="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                  <span>👥</span> Number of Fighters (Clashers)
-                </label>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                  {contestantCount} Fighters
-                </span>
-              </div>
+            {/* Minimalist Fighters Setup Grid */}
+            <div className="space-y-2.5 max-h-[520px] overflow-y-auto pr-1 custom-scrollbar">
+              {contestants.map((fighter, idx) => (
+                <div
+                  key={fighter.id}
+                  className="bg-slate-900/30 border border-slate-800/50 hover:border-slate-700/80 rounded-2xl p-3 flex items-center gap-3 transition"
+                >
+                  {/* Avatar Upload */}
+                  <div className="relative group shrink-0">
+                    <div
+                      className="w-14 h-14 rounded-xl border-2 overflow-hidden flex items-center justify-center bg-slate-950 relative"
+                      style={{ borderColor: fighter.color }}
+                    >
+                      {fighter.image_url ? (
+                        <img src={fighter.image_url} alt={fighter.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-lg font-black" style={{ color: fighter.color === '#ffffff' ? '#fff' : fighter.color }}>
+                          {fighter.name.charAt(0).toUpperCase()}
+                        </span>
+                      )}
 
-              <div className="grid grid-cols-7 gap-2">
-                {[2, 3, 4, 5, 6, 7, 8].map((num) => (
-                  <button
-                    key={num}
-                    onClick={() => setContestantCount(num)}
-                    className={`py-3 rounded-2xl font-black text-lg transition-all ${
-                      contestantCount === num
-                        ? 'bg-gradient-to-r from-red-600 to-amber-500 text-white shadow-lg shadow-red-500/30 scale-105 border border-amber-300'
-                        : 'bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800'
-                    }`}
-                  >
-                    {num}
-                  </button>
-                ))}
-              </div>
-            </div>
+                      <label className="absolute inset-0 bg-black/75 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition text-[9px] text-white font-bold">
+                        <span>📷</span>
+                        <input type="file" accept="image/*" onChange={(e) => handleImageUpload(idx, e)} className="hidden" />
+                      </label>
+                    </div>
+                  </div>
 
-            {/* Contestants Cards (Configuration) */}
-            <div className="bg-slate-900/70 border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-5">
-              <div className="flex justify-between items-center">
-                <h3 className="text-base font-bold uppercase tracking-wider text-slate-200 flex items-center gap-2">
-                  <span>🥊</span> Configure Fighters & Special Powers
-                </h3>
-                <span className="text-xs text-slate-400">Custom stats, powers & colors</span>
-              </div>
+                  {/* Fields */}
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={fighter.name}
+                        onChange={(e) => updateContestant(idx, { name: e.target.value })}
+                        className="flex-1 px-2.5 py-1 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold text-xs focus:outline-none focus:border-cyan-500"
+                      />
 
-              <div className="space-y-4 max-h-[620px] overflow-y-auto pr-2 custom-scrollbar">
-                {contestants.map((fighter, idx) => (
-                  <div
-                    key={fighter.id}
-                    className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center gap-4 hover:border-slate-700 transition"
-                  >
-                    {/* Square Avatar Box & Upload */}
-                    <div className="relative group shrink-0 self-center md:self-auto">
-                      <div
-                        className="w-20 h-20 rounded-2xl border-4 overflow-hidden flex items-center justify-center bg-slate-900 shadow-md relative"
-                        style={{ borderColor: fighter.color }}
-                      >
-                        {fighter.image_url ? (
-                          <img
-                            src={fighter.image_url}
-                            alt={fighter.name}
-                            className="w-full h-full object-cover"
+                      {/* Compact Color Swatches */}
+                      <div className="flex items-center gap-1">
+                        {COLOR_SWATCHES.map((c) => (
+                          <button
+                            key={c.hex}
+                            type="button"
+                            onClick={() => updateContestant(idx, { color: c.hex })}
+                            className={`w-4 h-4 rounded-full border border-slate-700 transition ${
+                              fighter.color === c.hex ? 'ring-2 ring-cyan-400 scale-110' : 'opacity-60 hover:opacity-100'
+                            }`}
+                            style={{ backgroundColor: c.hex }}
                           />
-                        ) : (
-                          <span
-                            className="text-2xl font-black"
-                            style={{ color: fighter.color === '#ffffff' ? '#ffffff' : fighter.color }}
-                          >
-                            {fighter.name.charAt(0).toUpperCase()}
-                          </span>
-                        )}
-
-                        <label className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition text-[10px] text-white font-bold text-center p-1">
-                          <span>📷 Change</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => handleImageUpload(idx, e)}
-                            className="hidden"
-                          />
-                        </label>
+                        ))}
                       </div>
-
-                      <span className="absolute -top-2 -left-2 w-6 h-6 rounded-full bg-slate-800 border border-slate-600 text-xs font-black flex items-center justify-center text-amber-400">
-                        {idx + 1}
-                      </span>
                     </div>
 
-                    {/* Inputs Grid */}
-                    <div className="flex-1 w-full space-y-3">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {/* Name */}
-                        <div>
-                          <label className="text-[11px] font-semibold text-slate-400 block mb-1">Name</label>
-                          <input
-                            type="text"
-                            value={fighter.name}
-                            onChange={(e) => updateContestant(idx, { name: e.target.value })}
-                            className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-white font-bold text-sm focus:outline-none focus:border-amber-400"
-                          />
-                        </div>
+                    {/* Stats & Special Power */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <select
+                        value={fighter.special_power}
+                        onChange={(e) => updateContestant(idx, { special_power: e.target.value })}
+                        className="px-2 py-1 bg-slate-950 border border-slate-800 rounded-lg text-amber-300 font-bold text-[11px] focus:outline-none"
+                      >
+                        {SPECIAL_POWERS.map((p) => (
+                          <option key={p.id} value={p.id} className="bg-slate-900 text-white">
+                            {p.icon} {p.name}
+                          </option>
+                        ))}
+                      </select>
 
-                        {/* Color Selector (including White & Black) */}
-                        <div>
-                          <label className="text-[11px] font-semibold text-slate-400 block mb-1">Color Theme</label>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {COLOR_SWATCHES.map((c) => (
-                              <button
-                                key={c.hex}
-                                type="button"
-                                title={c.name}
-                                onClick={() => updateContestant(idx, { color: c.hex })}
-                                className={`w-6 h-6 rounded-lg transition-transform border border-slate-600 ${
-                                  fighter.color === c.hex ? 'scale-125 ring-2 ring-amber-400' : 'opacity-70 hover:opacity-100'
-                                }`}
-                                style={{ backgroundColor: c.hex }}
-                              />
-                            ))}
-                          </div>
-                        </div>
+                      {/* Health */}
+                      <div className="flex items-center gap-1.5 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800 text-[11px]">
+                        <span className="text-slate-500">HP:</span>
+                        <input
+                          type="number"
+                          min="10"
+                          max="500"
+                          value={fighter.starting_health}
+                          onChange={(e) => updateContestant(idx, { starting_health: Math.max(10, Number(e.target.value) || 10) })}
+                          className="w-12 bg-transparent text-emerald-400 font-bold text-right focus:outline-none"
+                        />
                       </div>
 
-                      {/* Special Power Dropdown */}
-                      <div>
-                        <label className="text-[11px] font-semibold text-slate-400 block mb-1">Special Power / Trait</label>
-                        <select
-                          value={fighter.special_power}
-                          onChange={(e) => updateContestant(idx, { special_power: e.target.value })}
-                          className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-amber-300 font-bold text-xs focus:outline-none focus:border-amber-400"
-                        >
-                          {SPECIAL_POWERS.map((p) => (
-                            <option key={p.id} value={p.id} className="bg-slate-900 text-white">
-                              {p.icon} {p.name} - {p.description}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Health & Damage (Direct Number Typing + Range) */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <div className="flex justify-between items-center text-[11px] font-semibold text-slate-400 mb-1">
-                            <span>Health (HP)</span>
-                            <input
-                              type="number"
-                              min="10"
-                              max="500"
-                              value={fighter.starting_health}
-                              onChange={(e) =>
-                                updateContestant(idx, { starting_health: Math.max(10, Number(e.target.value) || 10) })
-                              }
-                              className="w-16 px-1.5 py-0.5 bg-slate-900 border border-slate-700 rounded text-right text-emerald-400 font-bold text-xs"
-                            />
-                          </div>
-                          <input
-                            type="range"
-                            min="50"
-                            max="300"
-                            step="10"
-                            value={fighter.starting_health}
-                            onChange={(e) =>
-                              updateContestant(idx, { starting_health: Number(e.target.value) })
-                            }
-                            className="w-full accent-emerald-500"
-                          />
-                        </div>
-
-                        <div>
-                          <div className="flex justify-between items-center text-[11px] font-semibold text-slate-400 mb-1">
-                            <span>Damage (DMG)</span>
-                            <input
-                              type="number"
-                              min="1"
-                              max="150"
-                              value={fighter.damage}
-                              onChange={(e) =>
-                                updateContestant(idx, { damage: Math.max(1, Number(e.target.value) || 1) })
-                              }
-                              className="w-16 px-1.5 py-0.5 bg-slate-900 border border-slate-700 rounded text-right text-rose-400 font-bold text-xs"
-                            />
-                          </div>
-                          <input
-                            type="range"
-                            min="5"
-                            max="75"
-                            step="5"
-                            value={fighter.damage}
-                            onChange={(e) => updateContestant(idx, { damage: Number(e.target.value) })}
-                            className="w-full accent-rose-500"
-                          />
-                        </div>
+                      {/* Damage */}
+                      <div className="flex items-center gap-1.5 bg-slate-950 px-2 py-1 rounded-lg border border-slate-800 text-[11px]">
+                        <span className="text-slate-500">DMG:</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="150"
+                          value={fighter.damage}
+                          onChange={(e) => updateContestant(idx, { damage: Math.max(1, Number(e.target.value) || 1) })}
+                          className="w-12 bg-transparent text-rose-400 font-bold text-right focus:outline-none"
+                        />
                       </div>
                     </div>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
 
-            {/* Audio Settings */}
-            <div className="bg-slate-900/70 border border-slate-800/80 rounded-3xl p-6 shadow-xl flex justify-between items-center">
+            {/* Audio & Sound Minimal Bar */}
+            <div className="flex justify-between items-center px-4 py-2.5 bg-slate-900/40 border border-slate-800/60 rounded-xl text-xs">
               <div className="flex items-center gap-3">
-                <span className="text-xl">🔊</span>
-                <div>
-                  <span className="text-sm font-bold block text-slate-200">Game Audio & SFX</span>
-                  <span className="text-xs text-slate-400">Bounce, clash, items & victory chimes</span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4">
+                <span className="font-semibold text-slate-400">Audio Volume:</span>
                 <input
                   type="range"
                   min="0.1"
@@ -1747,44 +1354,46 @@ export default function GamePage() {
                   onChange={(e) => setSoundVolume(Number(e.target.value))}
                   className="accent-cyan-500 w-24"
                 />
-                <button
-                  onClick={() => setSoundEnabled(!soundEnabled)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                    soundEnabled
-                      ? 'bg-emerald-950 border border-emerald-500 text-emerald-300'
-                      : 'bg-slate-800 text-slate-500'
-                  }`}
-                >
-                  {soundEnabled ? 'SFX ON' : 'MUTED'}
-                </button>
               </div>
+              <button
+                onClick={() => setSoundEnabled(!soundEnabled)}
+                className={`font-bold transition ${soundEnabled ? 'text-emerald-400' : 'text-slate-500'}`}
+              >
+                {soundEnabled ? '🔊 SFX ON' : '🔇 MUTED'}
+              </button>
             </div>
           </div>
 
-          {/* ================= RIGHT 9:16 INTERACTIVE SCREEN (5 Cols) ================= */}
-          <div className="lg:col-span-5 flex flex-col items-center space-y-4">
+          {/* ================= RIGHT 9:16 INTERACTIVE SCREEN (5.5 Cols) ================= */}
+          <div className="lg:col-span-5 flex flex-col items-center space-y-3">
             
-            {/* 9:16 Smartphone Container */}
-            <div className="relative w-full max-w-[390px] aspect-[9/16] bg-slate-950 rounded-[44px] p-2.5 shadow-2xl shadow-cyan-950/40 border-[6px] border-slate-800 ring-2 ring-slate-700/50 flex flex-col overflow-hidden">
+            {/* 9:16 Mobile Screen Container */}
+            <div className="relative w-full max-w-[360px] aspect-[9/16] bg-black rounded-[40px] p-2 shadow-2xl border-[5px] border-slate-800/80 ring-1 ring-slate-700/50 flex flex-col overflow-hidden">
               
-              {/* Dynamic Island Notch */}
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 w-28 h-4 bg-black rounded-full z-20 flex items-center justify-center pointer-events-none">
-                <div className="w-2.5 h-2.5 rounded-full bg-slate-900 mr-2" />
+              {/* Dynamic Island / Notch */}
+              <div className="absolute top-3 left-1/2 -translate-x-1/2 w-24 h-4 bg-slate-950 rounded-full z-20 flex items-center justify-center pointer-events-none">
                 <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
               </div>
 
-              {/* Status Header Overlay */}
-              <div className="absolute top-9 left-6 right-6 flex justify-between items-center z-20 pointer-events-none">
-                <span className="px-3 py-1 rounded-full bg-slate-900/90 backdrop-blur border border-slate-700 text-[11px] font-black text-amber-300">
+              {/* Status Header Overlay with Fullscreen Button */}
+              <div className="absolute top-8 left-5 right-5 flex justify-between items-center z-20">
+                <span className="px-2.5 py-0.5 rounded-full bg-black/75 backdrop-blur border border-slate-800 text-[10px] font-black text-amber-300 pointer-events-none">
                   {aliveCount} / {contestants.length} ALIVE
                 </span>
-                <span className="px-3 py-1 rounded-full bg-slate-900/90 backdrop-blur border border-slate-700 text-[11px] font-bold text-slate-300">
-                  {simSpeed}x SPEED
-                </span>
+
+                {/* FULLSCREEN BUTTON ⛶ */}
+                <button
+                  onClick={() => setIsFullscreen(true)}
+                  title="Fullscreen Game Screen"
+                  className="px-2.5 py-1 rounded-full bg-black/80 hover:bg-slate-800 backdrop-blur border border-slate-700 text-xs font-bold text-cyan-300 hover:text-white transition flex items-center gap-1 shadow-lg"
+                >
+                  <span>⛶</span>
+                  <span className="text-[10px]">Fullscreen</span>
+                </button>
               </div>
 
               {/* Canvas Viewport (1080 x 1920 Logical) */}
-              <div className="flex-1 w-full h-full rounded-[34px] overflow-hidden bg-black relative">
+              <div className="flex-1 w-full h-full rounded-[30px] overflow-hidden bg-black relative">
                 <canvas
                   ref={canvasRef}
                   width={1080}
@@ -1794,43 +1403,36 @@ export default function GamePage() {
               </div>
             </div>
 
-            {/* Bottom Playback & Queue Controls */}
-            <div className="w-full max-w-[390px] bg-slate-900/90 border border-slate-800 rounded-3xl p-4 shadow-xl space-y-3">
-              
-              {/* Play / Reset Buttons */}
+            {/* Bottom Controls Bar */}
+            <div className="w-full max-w-[360px] space-y-2">
               <div className="flex gap-2">
                 <button
                   onClick={() => setIsPlaying(!isPlaying)}
-                  className={`flex-1 py-3.5 rounded-2xl font-black text-base flex items-center justify-center gap-2 transition-all shadow-lg ${
+                  className={`flex-1 py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition shadow-lg ${
                     isPlaying
-                      ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-amber-500/30'
-                      : 'bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 shadow-emerald-500/30'
+                      ? 'bg-amber-500 hover:bg-amber-400 text-slate-950'
+                      : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
                   }`}
                 >
-                  <span>{isPlaying ? '⏸️ PAUSE' : '▶️ PLAY CLASH'}</span>
+                  <span>{isPlaying ? '⏸️ PAUSE' : '▶️ PLAY'}</span>
                 </button>
 
                 <button
                   onClick={resetSimulation}
                   title="Reset Game"
-                  className="px-4 py-3.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-2xl font-bold text-sm text-slate-200 transition"
+                  className="px-3.5 py-3 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl font-bold text-xs text-slate-300 transition"
                 >
                   🔄 RESET
                 </button>
-              </div>
 
-              {/* Speed Controls */}
-              <div className="flex items-center justify-between bg-slate-950 p-2 rounded-2xl border border-slate-800 text-xs font-bold text-slate-400">
-                <span className="pl-2">Game Speed:</span>
-                <div className="flex gap-1">
+                {/* Speed Toggle */}
+                <div className="flex bg-slate-900 border border-slate-800 rounded-xl p-0.5">
                   {[1, 1.5, 2].map((spd) => (
                     <button
                       key={spd}
                       onClick={() => setSimSpeed(spd)}
-                      className={`px-3 py-1 rounded-xl transition ${
-                        simSpeed === spd
-                          ? 'bg-cyan-500 text-slate-950 font-black'
-                          : 'bg-slate-900 hover:bg-slate-800 text-slate-300'
+                      className={`px-2 rounded-lg text-xs font-black transition ${
+                        simSpeed === spd ? 'bg-cyan-500 text-slate-950' : 'text-slate-400 hover:text-white'
                       }`}
                     >
                       {spd}x
@@ -1843,14 +1445,64 @@ export default function GamePage() {
               <button
                 onClick={handleQueueVideo}
                 disabled={queueLoading}
-                className="w-full py-3 bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 hover:opacity-95 text-white rounded-2xl font-black text-sm transition disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-rose-900/30"
+                className="w-full py-2.5 bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 hover:opacity-95 text-white rounded-xl font-bold text-xs transition disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-md"
               >
                 <span>🚀</span>
-                <span>{queueLoading ? 'Queuing Video...' : 'Queue as YouTube Short (Render)'}</span>
+                <span>{queueLoading ? 'Queuing Video...' : 'Queue as YouTube Short (Render Gameplay)'}</span>
               </button>
             </div>
           </div>
         </div>
+
+        {/* ================= FULLSCREEN IMMERSIVE 9:16 MODAL ================= */}
+        {isFullscreen && (
+          <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-2xl flex flex-col items-center justify-center p-3 animate-in fade-in duration-200">
+            
+            {/* Top Close / Controls Bar */}
+            <div className="w-full max-w-4xl flex justify-between items-center mb-2 px-4">
+              <div className="flex items-center gap-3">
+                <span className="font-black text-sm text-white tracking-wider uppercase">{topic}</span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 font-bold">
+                  {aliveCount} ALIVE
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setIsPlaying(!isPlaying)}
+                  className={`px-3 py-1 rounded-lg text-xs font-black transition ${
+                    isPlaying ? 'bg-amber-500 text-black' : 'bg-emerald-500 text-black'
+                  }`}
+                >
+                  {isPlaying ? '⏸️ PAUSE' : '▶️ PLAY'}
+                </button>
+                <button
+                  onClick={resetSimulation}
+                  className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg transition"
+                >
+                  🔄 RESET
+                </button>
+                <button
+                  onClick={() => setIsFullscreen(false)}
+                  className="px-3.5 py-1 bg-rose-600/80 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1"
+                >
+                  <span>✕</span>
+                  <span>Exit (ESC)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Fullscreen 9:16 Frame */}
+            <div className="h-[90vh] aspect-[9/16] bg-black rounded-[36px] overflow-hidden border-4 border-slate-800 shadow-2xl shadow-cyan-950/40 relative">
+              <canvas
+                ref={fullscreenCanvasRef}
+                width={1080}
+                height={1920}
+                className="w-full h-full object-cover"
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
