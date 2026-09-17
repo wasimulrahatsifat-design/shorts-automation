@@ -94,7 +94,31 @@ export default function AestheticPage() {
           setRequiredImages(prev => prev.map(img => 
             img.keyword === scene.image_keyword ? { ...img, status: 'done', file: data.url } : img
           ));
+          
+          // Wait 6 seconds between requests to avoid Gemini API rate limits
+          if (i < currentJson.scenes.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 6000));
+          }
         } else {
+          // If rate limited, wait and try once more before failing
+          if (res.status === 429 || (data.error && data.error.includes('429'))) {
+             console.warn('Rate limited, waiting 15 seconds...');
+             await new Promise(resolve => setTimeout(resolve, 15000));
+             const retryRes = await fetch('/api/generate-image', {
+               method: 'POST',
+               headers: { 'Content-Type': 'application/json' },
+               body: JSON.stringify({ prompt: scene.image_keyword })
+             });
+             const retryData = await retryRes.json();
+             if (retryRes.ok && retryData.success) {
+               scene.image_url = retryData.url;
+               setRequiredImages(prev => prev.map(img => 
+                 img.keyword === scene.image_keyword ? { ...img, status: 'done', file: retryData.url } : img
+               ));
+               continue;
+             }
+          }
+          
           allImagesSuccess = false;
           setRequiredImages(prev => prev.map(img => 
             img.keyword === scene.image_keyword ? { ...img, status: 'error' } : img

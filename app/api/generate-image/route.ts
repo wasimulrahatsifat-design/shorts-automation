@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     console.error('Error generating image:', error);
     return NextResponse.json(
       { success: false, error: error.message },
-      { status: 500 }
+      { status: error.status === 429 || error.message?.includes('429') ? 429 : 500 }
     );
   }
 }
