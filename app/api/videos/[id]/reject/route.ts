@@ -9,7 +9,12 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   try {
     const { id } = await params;
 
-    // 1. Delete the video row from Supabase
+    // 1. Delete video file from Storage (best effort)
+    try {
+      await supabase.storage.from('shorts').remove([`${id}.mp4`]);
+    } catch (e) {}
+
+    // 2. Delete the video row from Supabase
     const { error } = await supabase
       .from('shorts_queue')
       .delete()

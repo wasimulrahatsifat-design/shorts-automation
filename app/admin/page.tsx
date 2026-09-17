@@ -35,16 +35,19 @@ export default function AdminDashboard() {
   };
 
   const handleReject = async (id: string) => {
-    if (!confirm('Are you sure you want to reject and delete this video?')) return;
+    if (!confirm('Are you sure you want to delete this video?')) return;
     
-    // Optimistic UI update
-    setVideos(videos.filter(v => v.id !== id));
+    // Instant optimistic UI update
+    setVideos(prev => prev.filter(v => v.id !== id));
     
     try {
-      await fetch(`/api/videos/${id}/reject`, { method: 'DELETE' });
+      const res = await fetch(`/api/videos/${id}/delete`, { method: 'DELETE' });
+      if (!res.ok) {
+        throw new Error('Failed to delete');
+      }
     } catch (error) {
-      console.error('Failed to reject video', error);
-      // Revert on failure
+      console.error('Failed to delete video', error);
+      alert('Failed to delete video.');
       fetchVideos();
     }
   };
@@ -115,12 +118,13 @@ export default function AdminDashboard() {
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 line-clamp-2">
                     {video.topic}
                   </h3>
-                  <div className="flex gap-4">
+                    <div className="flex gap-4">
                     <button
                       onClick={() => handleReject(video.id)}
-                      className="flex-1 bg-red-50 text-red-600 hover:bg-red-100 font-semibold py-2.5 px-4 rounded-xl transition-colors border border-red-200"
+                      className="flex-1 bg-red-50 text-red-600 hover:bg-red-100 font-semibold py-2.5 px-4 rounded-xl transition-colors border border-red-200 flex items-center justify-center gap-1.5"
                     >
-                      Reject
+                      <span>🗑️</span>
+                      <span>Delete</span>
                     </button>
                     <button
                       onClick={() => handleApproveClick(video.id)}

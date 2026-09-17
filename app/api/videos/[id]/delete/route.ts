@@ -12,40 +12,32 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    // 1. Fetch the row to get URLs
-    const { data: video, error: fetchError } = await supabase
+    // 1. Fetch lightweight file reference (best effort)
+    const { data: video } = await supabase
       .from('shorts_queue')
-      .select('video_url, data_json')
+      .select('video_url, data_json->tts_url')
       .eq('id', id)
-      .single();
+      .maybeSingle();
 
-    if (fetchError || !video) {
-      return NextResponse.json({ success: false, error: 'Video not found' }, { status: 404 });
-    }
-
-    const filesToDelete = [];
+    const filesToDelete = [`${id}.mp4`];
     
-    // Add MP4 to deletion list
-    filesToDelete.push(`${id}.mp4`);
-
     // Add TTS to deletion list if exists
-    if (video.data_json?.tts_url) {
-      const ttsUrlParts = video.data_json.tts_url.split('/');
-      const ttsFileName = ttsUrlParts[ttsUrlParts.length - 1];
-      if (ttsFileName) {
-        filesToDelete.push(ttsFileName);
+    const ttsUrl = (video as any)?.tts_url;
+    if (ttsUrl && typeof ttsUrl === 'string') {
+      const parts = ttsUrl.split('/');
+      const fileName = parts[parts.length - 1];
+      if (fileName) {
+        filesToDelete.push(fileName);
       }
     }
 
-    // 2. Delete files from Storage
-    if (filesToDelete.length > 0) {
-      const { error: storageError } = await supabase.storage
+    // 2. Delete files from Storage (best effort)
+    try {
+      await supabase.storage
         .from('shorts')
         .remove(filesToDelete);
-        
-      if (storageError) {
-        console.error('Storage deletion error:', storageError);
-      }
+    } catch (storageError) {
+      console.error('Storage deletion error:', storageError);
     }
 
     // 3. Delete row from Database

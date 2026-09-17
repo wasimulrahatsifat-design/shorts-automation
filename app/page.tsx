@@ -302,12 +302,28 @@ export default function Home() {
   }, [videoFormat]);
 
   const fetchVideos = async () => {
-    const { data, error } = await supabase
-      .from('shorts_queue')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (!error && data) {
-      setVideos(data);
+    try {
+      const { data, error } = await supabase
+        .from('shorts_queue')
+        .select('id, topic, status, video_url, created_at, data_json->format, data_json->duration_seconds, data_json->script')
+        .order('created_at', { ascending: false });
+      if (!error && data) {
+        const mapped: VideoItem[] = data.map((item: any) => ({
+          id: item.id,
+          topic: item.topic,
+          status: item.status,
+          video_url: item.video_url,
+          created_at: item.created_at,
+          data_json: {
+            format: item.format,
+            duration_seconds: item.duration_seconds,
+            script: item.script,
+          }
+        }));
+        setVideos(mapped);
+      }
+    } catch (e) {
+      console.error('Failed to fetch videos:', e);
     }
   };
 
@@ -407,11 +423,18 @@ export default function Home() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this video and its files?')) return;
+    
+    // Instant optimistic UI update
+    setVideos((prev) => prev.filter((v) => v.id !== id));
+
     try {
-      await fetch(`/api/videos/${id}/delete`, { method: 'DELETE' });
-      fetchVideos();
+      const res = await fetch(`/api/videos/${id}/delete`, { method: 'DELETE' });
+      if (!res.ok) {
+        throw new Error('Delete request failed');
+      }
     } catch (error) {
       alert('Failed to delete video.');
+      fetchVideos();
     }
   };
 
