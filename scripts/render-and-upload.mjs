@@ -44,7 +44,14 @@ async function main() {
   const frames = durationSeconds * 30;
 
   // Determine which composition to render based on format type
-  const formatType = row.data_json.type || 'Data Comparison';
+  const formatType = 
+    row.data_json.format || 
+    row.data_json.type || 
+    (row.data_json.scenes ? 'AestheticVideo' :
+     row.data_json.questions ? 'Quiz' :
+     row.data_json.scenarios ? 'Would You Rather' :
+     row.data_json.contestants ? 'Arena Clash' : 'Data Comparison');
+
   let compName = 'DataComparison';
   if (formatType === 'Would You Rather') compName = 'WouldYouRather';
   else if (formatType === 'Quiz') compName = 'Quiz';

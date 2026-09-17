@@ -9,6 +9,7 @@ export interface AestheticScene {
 
 export interface AestheticVideoJson {
   format?: string;
+  topic?: string;
   scenes?: AestheticScene[];
 }
 
@@ -42,7 +43,7 @@ const KenBurnsScene: React.FC<{ sceneData: AestheticScene }> = ({ sceneData }) =
             width: '100%', 
             height: '100%', 
             objectFit: 'cover', 
-            transform: \`scale(\${scale})\`,
+            transform: `scale(${scale})`,
             opacity
           }} 
         />

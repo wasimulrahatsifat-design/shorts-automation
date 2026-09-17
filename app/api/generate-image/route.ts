@@ -26,15 +26,7 @@ export async function POST(request: Request) {
       contents: prompt + ' (Vertical 9:16 composition)',
       config: {
         responseModalities: ["IMAGE"],
-        outputOptions: {
-          mimeType: "image/jpeg",
-        },
-        // For some versions of the SDK, aspect ratio needs to be passed via specific image options if supported, 
-        // but by default imagen-3 will output 1:1 if we don't specify. The official docs say to put it in config.
-        // If the SDK throws on unknown keys, we might need to remove it, but let's try this:
-        // Actually the SDK docs for `generateContent` might not strictly support `aspectRatio` here.
-        // Let's pass the prompt to request a vertical 9:16 image.
-      }
+      } as any
     });
 
     if (!response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
