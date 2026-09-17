@@ -51,6 +51,17 @@ export default function GamePage() {
   const [queueLoading, setQueueLoading] = useState(false);
   const [queueMessage, setQueueMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Image Crop & Framing Modal State
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [cropTargetIndex, setCropTargetIndex] = useState<number | null>(null);
+  const [rawImageSrc, setRawImageSrc] = useState<string | null>(null);
+  const [rawImgNaturalSize, setRawImgNaturalSize] = useState<{ width: number; height: number }>({ width: 300, height: 300 });
+  const [cropScale, setCropScale] = useState<number>(1);
+  const [cropPan, setCropPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDraggingCrop, setIsDraggingCrop] = useState(false);
+  const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
   // Canvas & Engine Refs
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fullscreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -752,6 +763,22 @@ export default function GamePage() {
     }
   };
 
+  const openCropModal = (index: number, imageSrc: string) => {
+    const img = new Image();
+    img.onload = () => {
+      setRawImgNaturalSize({ width: img.naturalWidth, height: img.naturalHeight });
+      const VIEWPORT = 280;
+      // Default scale fills the square box cleanly
+      const fillScale = Math.max(VIEWPORT / img.naturalWidth, VIEWPORT / img.naturalHeight);
+      setCropScale(Number(Math.max(0.15, fillScale).toFixed(2)));
+      setCropPan({ x: 0, y: 0 });
+      setCropTargetIndex(index);
+      setRawImageSrc(imageSrc);
+      setCropModalOpen(true);
+    };
+    img.src = imageSrc;
+  };
+
   const handleImageUpload = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -759,17 +786,108 @@ export default function GamePage() {
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64Url = reader.result as string;
+      openCropModal(index, base64Url);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleCropMouseDown = (e: React.MouseEvent) => {
+    setIsDraggingCrop(true);
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    panStartRef.current = { ...cropPan };
+  };
+
+  const handleCropMouseMove = (e: React.MouseEvent) => {
+    if (!isDraggingCrop) return;
+    const dx = e.clientX - dragStartRef.current.x;
+    const dy = e.clientY - dragStartRef.current.y;
+    setCropPan({ x: panStartRef.current.x + dx, y: panStartRef.current.y + dy });
+  };
+
+  const handleCropMouseUp = () => {
+    setIsDraggingCrop(false);
+  };
+
+  const handleCropTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      setIsDraggingCrop(true);
+      dragStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      panStartRef.current = { ...cropPan };
+    }
+  };
+
+  const handleCropTouchMove = (e: React.TouchEvent) => {
+    if (!isDraggingCrop || e.touches.length !== 1) return;
+    const dx = e.touches[0].clientX - dragStartRef.current.x;
+    const dy = e.touches[0].clientY - dragStartRef.current.y;
+    setCropPan({ x: panStartRef.current.x + dx, y: panStartRef.current.y + dy });
+  };
+
+  const handleCropWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 0.08 : -0.08;
+    setCropScale((prev) => Math.min(3.5, Math.max(0.1, Number((prev + delta).toFixed(2)))));
+  };
+
+  const handleFitCrop = () => {
+    const VIEWPORT = 280;
+    const fitScale = Math.min(VIEWPORT / rawImgNaturalSize.width, VIEWPORT / rawImgNaturalSize.height);
+    setCropScale(Number(fitScale.toFixed(2)));
+    setCropPan({ x: 0, y: 0 });
+  };
+
+  const handleFillCrop = () => {
+    const VIEWPORT = 280;
+    const fillScale = Math.max(VIEWPORT / rawImgNaturalSize.width, VIEWPORT / rawImgNaturalSize.height);
+    setCropScale(Number(fillScale.toFixed(2)));
+    setCropPan({ x: 0, y: 0 });
+  };
+
+  const applyCrop = () => {
+    if (cropTargetIndex === null || !rawImageSrc) return;
+
+    const img = new Image();
+    img.onload = () => {
+      const VIEWPORT = 280;
+      const OUTPUT_SIZE = 400; // 400x400 high-res square avatar
+      const canvas = document.createElement('canvas');
+      canvas.width = OUTPUT_SIZE;
+      canvas.height = OUTPUT_SIZE;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      // Dark slate background
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+
+      const ratio = OUTPUT_SIZE / VIEWPORT;
+      const scaledW = img.naturalWidth * cropScale * ratio;
+      const scaledH = img.naturalHeight * cropScale * ratio;
+      const posX = OUTPUT_SIZE / 2 + cropPan.x * ratio - scaledW / 2;
+      const posY = OUTPUT_SIZE / 2 + cropPan.y * ratio - scaledH / 2;
+
+      ctx.drawImage(img, posX, posY, scaledW, scaledH);
+
+      const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+
+      // Update contestant
       setContestants((prev) => {
         const copy = [...prev];
-        copy[index] = { ...copy[index], image_url: base64Url };
+        copy[cropTargetIndex] = { ...copy[cropTargetIndex], image_url: croppedDataUrl };
         return copy;
       });
 
-      const img = new Image();
-      img.src = base64Url;
-      loadedImagesRef.current.set(base64Url, img);
+      // Update loadedImages cache
+      const cachedImg = new Image();
+      cachedImg.src = croppedDataUrl;
+      loadedImagesRef.current.set(croppedDataUrl, cachedImg);
+
+      setCropModalOpen(false);
+      setRawImageSrc(null);
+      setCropTargetIndex(null);
     };
-    reader.readAsDataURL(file);
+    img.src = rawImageSrc;
   };
 
   const updateContestant = (index: number, updates: Partial<ContestantConfig>) => {
@@ -972,10 +1090,10 @@ export default function GamePage() {
                   key={fighter.id}
                   className="bg-slate-900/30 border border-slate-800/50 hover:border-slate-700/80 rounded-2xl p-3 flex items-center gap-3 transition"
                 >
-                  {/* Avatar Upload */}
-                  <div className="relative group shrink-0">
+                  {/* Avatar Upload & Crop Actions */}
+                  <div className="relative group shrink-0 flex flex-col items-center gap-1">
                     <div
-                      className="w-14 h-14 rounded-xl border-2 overflow-hidden flex items-center justify-center bg-slate-950 relative"
+                      className="w-14 h-14 rounded-xl border-2 overflow-hidden flex items-center justify-center bg-slate-950 relative shadow-md"
                       style={{ borderColor: fighter.color }}
                     >
                       {fighter.image_url ? (
@@ -986,11 +1104,37 @@ export default function GamePage() {
                         </span>
                       )}
 
-                      <label className="absolute inset-0 bg-black/75 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition text-[9px] text-white font-bold">
-                        <span>📷</span>
+                      <label
+                        className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition text-[9px] text-white font-bold"
+                        title="নতুন ছবি আপলোড ও ক্রপ করুন"
+                      >
+                        <span className="text-base">📷</span>
+                        <span className="text-[8px]">আপলোড</span>
                         <input type="file" accept="image/*" onChange={(e) => handleImageUpload(idx, e)} className="hidden" />
                       </label>
                     </div>
+
+                    {fighter.image_url && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => openCropModal(idx, fighter.image_url!)}
+                          title="ছবি ক্রপ বা পজিশন ঠিক করুন"
+                          className="text-[9px] px-1.5 py-0.5 bg-cyan-950/90 hover:bg-cyan-900 text-cyan-300 rounded border border-cyan-700/60 font-bold transition flex items-center gap-0.5"
+                        >
+                          <span>✂️</span>
+                          <span>ক্রপ</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateContestant(idx, { image_url: null })}
+                          title="ছবি মুছুন"
+                          className="text-[9px] px-1.5 py-0.5 bg-rose-950/90 hover:bg-rose-900 text-rose-300 rounded border border-rose-700/60 font-bold transition"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Fields */}
@@ -1223,6 +1367,153 @@ export default function GamePage() {
                 height={1920}
                 className="w-full h-full object-cover"
               />
+            </div>
+          </div>
+        )}
+
+        {/* ================= IMAGE CROP & FRAME MODAL ================= */}
+        {cropModalOpen && rawImageSrc && (
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150">
+            <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+              {/* Header */}
+              <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                <div>
+                  <h3 className="text-sm font-black text-white flex items-center gap-2">
+                    <span>✂️</span>
+                    <span>ছবি কতটুকু দেখাবে সিলেক্ট করুন</span>
+                  </h3>
+                  <p className="text-[11px] text-slate-400">ছবি টেনে ইচ্ছামতো পজিশন করুন এবং জুম অ্যাডজাস্ট করুন</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCropModalOpen(false)}
+                  className="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-xs font-bold transition"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Crop Viewport */}
+              <div className="flex flex-col items-center justify-center">
+                <div
+                  className="relative w-[280px] h-[280px] rounded-2xl overflow-hidden bg-slate-950 border-2 border-cyan-400 cursor-grab active:cursor-grabbing shadow-2xl select-none"
+                  onMouseDown={handleCropMouseDown}
+                  onMouseMove={handleCropMouseMove}
+                  onMouseUp={handleCropMouseUp}
+                  onMouseLeave={handleCropMouseUp}
+                  onTouchStart={handleCropTouchStart}
+                  onTouchMove={handleCropTouchMove}
+                  onTouchEnd={handleCropMouseUp}
+                  onWheel={handleCropWheel}
+                >
+                  <img
+                    src={rawImageSrc}
+                    alt="Crop preview"
+                    draggable={false}
+                    style={{
+                      position: 'absolute',
+                      left: `calc(50% + ${cropPan.x}px)`,
+                      top: `calc(50% + ${cropPan.y}px)`,
+                      transform: `translate(-50%, -50%) scale(${cropScale})`,
+                      transformOrigin: 'center center',
+                      maxWidth: 'none',
+                      maxHeight: 'none',
+                      userSelect: 'none',
+                      pointerEvents: 'none',
+                    }}
+                  />
+                  {/* Subtle Grid Frame Overlay */}
+                  <div className="absolute inset-0 pointer-events-none border-2 border-white/20 rounded-2xl grid grid-cols-3 grid-rows-3">
+                    <div className="border-r border-b border-white/10" />
+                    <div className="border-r border-b border-white/10" />
+                    <div className="border-b border-white/10" />
+                    <div className="border-r border-b border-white/10" />
+                    <div className="border-r border-b border-white/10" />
+                    <div className="border-b border-white/10" />
+                    <div className="border-r border-white/10" />
+                    <div className="border-r border-white/10" />
+                    <div />
+                  </div>
+                </div>
+                <span className="text-[10px] text-slate-400 mt-2">👆 ছবির উপর চেপে ধরে ইচ্ছামতো সরান (Pan / Drag)</span>
+              </div>
+
+              {/* Zoom & Framing Controls */}
+              <div className="space-y-2 bg-slate-950 p-3.5 rounded-2xl border border-slate-800">
+                <div className="flex justify-between items-center text-xs font-bold text-slate-300">
+                  <span>🔍 জুম (Zoom)</span>
+                  <span className="text-cyan-400 font-mono text-[11px]">{Math.round(cropScale * 100)}%</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCropScale((prev) => Math.max(0.1, Number((prev - 0.1).toFixed(2))))}
+                    className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center justify-center transition"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="3.0"
+                    step="0.05"
+                    value={cropScale}
+                    onChange={(e) => setCropScale(parseFloat(e.target.value))}
+                    className="flex-1 accent-cyan-400 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setCropScale((prev) => Math.min(3.0, Number((prev + 0.1).toFixed(2))))}
+                    className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center justify-center transition"
+                  >
+                    +
+                  </button>
+                </div>
+
+                {/* Quick Presets */}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleFitCrop}
+                    className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold rounded-lg transition"
+                  >
+                    🔍 পুরো ছবি ফিট
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleFillCrop}
+                    className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold rounded-lg transition"
+                  >
+                    🖼️ বক্স পূর্ণ (Fill)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCropPan({ x: 0, y: 0 })}
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold rounded-lg transition"
+                  >
+                    🔄 সেন্টার
+                  </button>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setCropModalOpen(false)}
+                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs transition"
+                >
+                  বাতিল (Cancel)
+                </button>
+                <button
+                  type="button"
+                  onClick={applyCrop}
+                  className="flex-1 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-xl font-black text-xs transition shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-1.5"
+                >
+                  <span>✓</span>
+                  <span>ক্রপ সেভ করুন (Save)</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
