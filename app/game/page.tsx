@@ -61,6 +61,7 @@ export default function GamePage() {
   const floatingTextsRef = useRef<FloatingText[]>([]);
   const screenShakeRef = useRef(0);
   const nextItemSpawnRef = useRef<number>(60); // 2s initial spawn
+  const frameCountRef = useRef<number>(0);
 
   // 1. Initialize Contestants
   useEffect(() => {
@@ -347,6 +348,8 @@ export default function GamePage() {
       screenShakeRef.current = Math.max(0, screenShakeRef.current - 0.7);
     }
 
+    frameCountRef.current += simSpeed;
+
     // Item Spawn: Only when field is clear and 8s cooldown elapsed!
     if (items.length === 0 && !winner) {
       nextItemSpawnRef.current -= simSpeed;
@@ -376,6 +379,27 @@ export default function GamePage() {
           decay: 0.015,
         });
       }
+    } else if (aliveFighters.length === 0 && !winner && fighters.length > 1) {
+      const survivor = fighters[0];
+      survivor.isDead = false;
+      survivor.health = 10;
+      setWinner(survivor);
+      setIsPlaying(false);
+      playSound('victory');
+      for (let i = 0; i < 80; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const spd = Math.random() * 8 + 3;
+        particles.push({
+          x: survivor.x,
+          y: survivor.y,
+          vx: Math.cos(angle) * spd,
+          vy: Math.sin(angle) * spd - 2,
+          color: COLOR_SWATCHES[Math.floor(Math.random() * COLOR_SWATCHES.length)].hex,
+          radius: Math.random() * 5 + 3,
+          alpha: 1,
+          decay: 0.015,
+        });
+      }
     }
 
     // Move Fighters & Circular Arena Bounce
@@ -393,7 +417,36 @@ export default function GamePage() {
 
       if (f.speedBoostTimer > 0) f.speedBoostTimer -= simSpeed;
 
-      const speedMult = f.speedBoostTimer > 0 ? 1.6 : 1;
+      // Combat Steering: After 5 seconds, fighters actively steer towards opponents
+      if (frameCountRef.current > 150 && aliveFighters.length > 1 && !winner) {
+        let nearestDist = Infinity;
+        let nearestTarget: LiveFighter | null = null;
+        for (const opp of aliveFighters) {
+          if (opp.id === f.id) continue;
+          const distToOpp = Math.hypot(opp.x - f.x, opp.y - f.y);
+          if (distToOpp < nearestDist) {
+            nearestDist = distToOpp;
+            nearestTarget = opp;
+          }
+        }
+
+        if (nearestTarget) {
+          const steerRate = 0.18 + Math.min(0.35, (frameCountRef.current - 150) / 1000);
+          const angleToTarget = Math.atan2(nearestTarget.y - f.y, nearestTarget.x - f.x);
+          f.vx += Math.cos(angleToTarget) * steerRate;
+          f.vy += Math.sin(angleToTarget) * steerRate;
+
+          // Normalize speed
+          const curSpd = Math.hypot(f.vx, f.vy);
+          const baseSpd = f.speedBoostTimer > 0 ? 10.5 : 7.2;
+          if (curSpd > 0.1) {
+            f.vx = (f.vx / curSpd) * Math.min(13, Math.max(baseSpd * 0.8, curSpd));
+            f.vy = (f.vy / curSpd) * Math.min(13, Math.max(baseSpd * 0.8, curSpd));
+          }
+        }
+      }
+
+      const speedMult = f.speedBoostTimer > 0 ? 1.4 : 1;
       f.x += f.vx * simSpeed * speedMult;
       f.y += f.vy * simSpeed * speedMult;
 
@@ -580,6 +633,15 @@ export default function GamePage() {
               const a = Math.random() * Math.PI * 2;
               const s = Math.random() * 6 + 2;
               particles.push({ x: midX, y: midY, vx: Math.cos(a) * s, vy: Math.sin(a) * s, color: Math.random() > 0.5 ? A.color : B.color, radius: Math.random() * 4 + 2, alpha: 1, decay: 0.04 });
+            }
+
+            // Prevent mutual wipeout when only 2 fighters are alive
+            if (aliveFighters.length === 2 && A.health <= 0 && B.health <= 0) {
+              if (dmgA >= dmgB) {
+                A.health = 5;
+              } else {
+                B.health = 5;
+              }
             }
 
             [A, B].forEach((f) => {
@@ -1135,7 +1197,7 @@ export default function GamePage() {
         42
       );
 
-      const dynamicDurationSeconds = Math.min(58, Math.max(18, simResult.totalSeconds));
+      const dynamicDurationSeconds = Math.min(58, Math.max(15, simResult.totalSeconds));
 
       const data_json = {
         topic,

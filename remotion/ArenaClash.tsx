@@ -39,8 +39,8 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
 
   // Run 100% deterministic simulation and sound event generation
   const simResult = useMemo(() => {
-    return generateArenaSimulation(contestants, durationInFrames, 42);
-  }, [contestants, durationInFrames]);
+    return generateArenaSimulation(contestants, 1800, 42);
+  }, [contestants]);
 
   const { frames, soundEvents, winner } = simResult;
   const current = frames[frame] || frames[frames.length - 1] || {

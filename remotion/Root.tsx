@@ -4,6 +4,7 @@ import { DataComparison } from './Composition';
 import { WouldYouRather } from './WouldYouRather';
 import { Quiz, getQuestionTiming } from './Quiz';
 import { ArenaClash } from './ArenaClash';
+import { generateArenaSimulation } from '../lib/arena-physics';
 import { AestheticVideo } from './AestheticVideo';
 import { loadFont } from '@remotion/google-fonts/Montserrat';
 
@@ -157,8 +158,15 @@ export const RemotionRoot: React.FC = () => {
         width={1080}
         height={1920}
         calculateMetadata={({ props }: any) => {
+          const contestants = props.data_json?.contestants || [];
+          if (contestants.length >= 2) {
+            const sim = generateArenaSimulation(contestants, 1800, 42);
+            return {
+              durationInFrames: sim.totalSeconds * 30
+            };
+          }
           return {
-            durationInFrames: props.data_json?.duration_seconds ? props.data_json.duration_seconds * 30 : 450
+            durationInFrames: props.data_json?.duration_seconds ? props.data_json.duration_seconds * 30 : 600
           };
         }}
         defaultProps={{
