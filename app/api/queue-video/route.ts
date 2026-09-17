@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     if (!data_json || !data_json.topic) {
       throw new Error('Invalid data payload. Must contain topic.');
     }
-    if (data_json.format !== 'Would You Rather' && !data_json.script) {
+    if (data_json.format !== 'Would You Rather' && data_json.format !== 'AestheticVideo' && !data_json.script) {
       throw new Error('Invalid data payload. Must contain script.');
     }
 
@@ -92,6 +92,9 @@ export async function POST(request: Request) {
         // Add "Thanks for watching" outro TTS
         const outroUrl = await generateTTSForText("Thanks for watching!");
         tts_urls.push(outroUrl);
+      } else if (data_json.format === 'AestheticVideo') {
+        // Aesthetic videos don't require TTS audio
+        tts_url = null;
       } else {
         // Standard single TTS logic
         const elResponse = await fetchElevenLabs(script);
