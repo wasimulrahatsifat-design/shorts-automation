@@ -49,6 +49,7 @@ async function main() {
   if (formatType === 'Would You Rather') compName = 'WouldYouRather';
   else if (formatType === 'Quiz') compName = 'Quiz';
   else if (formatType === 'Arena Clash') compName = 'ArenaClash';
+  else if (formatType === 'AestheticVideo') compName = 'AestheticVideo';
 
   try {
     execSync(`npx remotion render remotion/index.ts ${compName} ${outPath} --props=${propsPath}`, { stdio: 'inherit' });

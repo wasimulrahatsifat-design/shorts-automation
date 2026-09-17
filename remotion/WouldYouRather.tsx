@@ -22,7 +22,7 @@ export interface WouldYouRatherJson {
 export const getWyrTiming = (s: Scenario, fps: number) => {
   const textLength = s.option_a.length + s.option_b.length + 20; // "Would you rather option a or option b"
   // ~15 chars per sec is a good average for natural reading + 1s padding for punctuation
-  const readingSeconds = (textLength / 15) + 1;
+  const readingSeconds = (textLength / 15);
   const readingFrames = Math.round(readingSeconds * fps);
   const timerFrames = 3 * fps;
   const revealFrames = 2 * fps;

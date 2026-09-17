@@ -4,6 +4,7 @@ import { DataComparison } from './Composition';
 import { WouldYouRather } from './WouldYouRather';
 import { Quiz, getQuestionTiming } from './Quiz';
 import { ArenaClash } from './ArenaClash';
+import { AestheticVideo } from './AestheticVideo';
 import { loadFont } from '@remotion/google-fonts/Montserrat';
 
 // Preload a bold, modern font for our text
@@ -180,6 +181,40 @@ export const RemotionRoot: React.FC = () => {
             tts_url: undefined,
           },
           topic: 'Arena Clash Demo',
+        }}
+      />
+      <Composition
+        id="AestheticVideo"
+        component={AestheticVideo}
+        durationInFrames={750}
+        fps={30}
+        width={1080}
+        height={1920}
+        calculateMetadata={({ props }: any) => {
+          if (props.data_json?.scenes && Array.isArray(props.data_json.scenes)) {
+            let totalFrames = 0;
+            for (const s of props.data_json.scenes) {
+              totalFrames += s.duration || 150;
+            }
+            return { durationInFrames: totalFrames };
+          }
+          return {
+            durationInFrames: props.data_json?.duration_seconds ? props.data_json.duration_seconds * 30 : 750
+          };
+        }}
+        defaultProps={{
+          data_json: {
+            topic: 'Aesthetic Demo',
+            format: "AestheticVideo",
+            scenes: [
+              { image_keyword: "Cherry blossom forest", duration: 150 },
+              { image_keyword: "Liminal pool room", duration: 150 },
+              { image_keyword: "Neon city at night", duration: 150 },
+              { image_keyword: "Vaporwave sunset", duration: 150 },
+              { image_keyword: "Empty mall from the 90s", duration: 150 }
+            ],
+          },
+          topic: 'Aesthetic Demo',
         }}
       />
     </>
