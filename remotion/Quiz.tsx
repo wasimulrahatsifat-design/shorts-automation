@@ -103,7 +103,7 @@ const QuizRound: React.FC<{ questionData: Question, topic: string }> = ({ questi
           style={{
             width: '100%',
             height: 380,
-            backgroundColor: '#d8e2dc',
+            backgroundColor: '#0f172a',
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
@@ -112,7 +112,7 @@ const QuizRound: React.FC<{ questionData: Question, topic: string }> = ({ questi
         >
           {isTimerDone ? (
             image_url ? (
-              <Img src={image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <Img src={image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
             ) : null
           ) : (
             <div

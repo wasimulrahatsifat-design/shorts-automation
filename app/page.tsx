@@ -1,7 +1,12 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
+import {
+  findImageInLibrary,
+  saveImageToLibrary,
+  syncImagesFromSupabase,
+} from '../lib/image-library';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -34,15 +39,34 @@ export default function Home() {
   const [draftJson, setDraftJson] = useState('');
   const [magicInstruction, setMagicInstruction] = useState('');
   const [requiredImages, setRequiredImages] = useState<{keyword: string, file: string | null}[]>([]);
+  const [imageLibrary, setImageLibrary] = useState<Record<string, string>>({});
 
-  // Parse draftJson for unique image keywords
+  // Image Crop & Frame Modal State
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [cropTargetKeyword, setCropTargetKeyword] = useState<string | null>(null);
+  const [rawCropImageSrc, setRawCropImageSrc] = useState<string | null>(null);
+  const [rawCropImgSize, setRawCropImgSize] = useState<{ width: number; height: number }>({ width: 300, height: 300 });
+  const [cropScale, setCropScale] = useState<number>(1);
+  const [cropPan, setCropPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isDraggingCrop, setIsDraggingCrop] = useState(false);
+  const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Sync past uploaded images from Supabase on mount
+  useEffect(() => {
+    syncImagesFromSupabase(supabase).then((lib) => {
+      setImageLibrary(lib);
+    });
+  }, []);
+
+  // Parse draftJson for unique image keywords & Auto-Match from persistent Image Library!
   useEffect(() => {
     if (!draftJson || step !== 2) return;
     try {
       const parsed = JSON.parse(draftJson);
       const keywords = new Set<string>();
       
-      const addKeyword = (kw: string) => { if (kw) keywords.add(kw); }
+      const addKeyword = (kw: string) => { if (kw) keywords.add(kw); };
 
       if (parsed.questions) parsed.questions.forEach((q: any) => addKeyword(q.image_keyword));
       if (parsed.items) parsed.items.forEach((item: any) => addKeyword(item.image_keyword));
@@ -54,16 +78,80 @@ export default function Home() {
         });
       }
 
-      setRequiredImages(prev => {
-        return Array.from(keywords).map(kw => {
-          const existing = prev.find(r => r.keyword === kw);
-          return { keyword: kw, file: existing?.file || null };
-        });
+      let draftUpdated = false;
+
+      const updatedList = Array.from(keywords).map((kw) => {
+        // 1. Check if draftJson already has an image for this keyword
+        let existingUrl: string | null = null;
+        if (parsed.questions) {
+          const found = parsed.questions.find((q: any) => q.image_keyword === kw && q.image_url);
+          if (found) existingUrl = found.image_url;
+        }
+        if (!existingUrl && parsed.items) {
+          const found = parsed.items.find((it: any) => it.image_keyword === kw && it.image_url);
+          if (found) existingUrl = found.image_url;
+        }
+        if (!existingUrl && parsed.contestants) {
+          const found = parsed.contestants.find((c: any) => c.image_keyword === kw && c.image_url);
+          if (found) existingUrl = found.image_url;
+        }
+        if (!existingUrl && parsed.scenarios) {
+          const found = parsed.scenarios.find((s: any) => (s.image_keyword_a === kw && s.image_url_a) || (s.image_keyword_b === kw && s.image_url_b));
+          if (found) existingUrl = found.image_keyword_a === kw ? found.image_url_a : found.image_url_b;
+        }
+
+        // 2. If not yet attached, auto-match from persistent Image Library (e.g. Giraffe, Bat, Lion, etc.)!
+        if (!existingUrl) {
+          existingUrl = findImageInLibrary(kw, imageLibrary);
+          if (existingUrl) {
+            if (parsed.questions) {
+              parsed.questions.forEach((q: any) => { if (q.image_keyword === kw) q.image_url = existingUrl; });
+            }
+            if (parsed.items) {
+              parsed.items.forEach((it: any) => { if (it.image_keyword === kw) it.image_url = existingUrl; });
+            }
+            if (parsed.contestants) {
+              parsed.contestants.forEach((c: any) => { if (c.image_keyword === kw) c.image_url = existingUrl; });
+            }
+            if (parsed.scenarios) {
+              parsed.scenarios.forEach((s: any) => {
+                if (s.image_keyword_a === kw) s.image_url_a = existingUrl;
+                if (s.image_keyword_b === kw) s.image_url_b = existingUrl;
+              });
+            }
+            draftUpdated = true;
+          }
+        }
+
+        return { keyword: kw, file: existingUrl };
       });
+
+      setRequiredImages(updatedList);
+
+      if (draftUpdated) {
+        setDraftJson(JSON.stringify(parsed, null, 2));
+      }
     } catch (e) {
       // invalid json, ignore
     }
-  }, [draftJson, step]);
+  }, [draftJson, step, imageLibrary]);
+
+  const openCropModal = (keyword: string, imageSrc: string) => {
+    const img = new Image();
+    img.onload = () => {
+      setRawCropImgSize({ width: img.naturalWidth, height: img.naturalHeight });
+      const VIEWPORT_W = 320;
+      const VIEWPORT_H = 220;
+      // Default to fit entire image cleanly inside box without cutting off!
+      const fitScale = Math.min(VIEWPORT_W / img.naturalWidth, VIEWPORT_H / img.naturalHeight);
+      setCropScale(Number(Math.max(0.15, fitScale).toFixed(2)));
+      setCropPan({ x: 0, y: 0 });
+      setCropTargetKeyword(keyword);
+      setRawCropImageSrc(imageSrc);
+      setCropModalOpen(true);
+    };
+    img.src = imageSrc;
+  };
 
   const handleFileUpload = (keyword: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -72,32 +160,130 @@ export default function Home() {
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64Url = reader.result as string;
-      
-      setRequiredImages(prev => prev.map(img => img.keyword === keyword ? { ...img, file: base64Url } : img));
+      openCropModal(keyword, base64Url);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
+  const handleCropMouseDown = (e: React.MouseEvent) => {
+    setIsDraggingCrop(true);
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    panStartRef.current = { ...cropPan };
+  };
+
+  const handleCropMouseMove = (e: React.MouseEvent) => {
+    if (!isDraggingCrop) return;
+    const dx = e.clientX - dragStartRef.current.x;
+    const dy = e.clientY - dragStartRef.current.y;
+    setCropPan({ x: panStartRef.current.x + dx, y: panStartRef.current.y + dy });
+  };
+
+  const handleCropMouseUp = () => {
+    setIsDraggingCrop(false);
+  };
+
+  const handleCropTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      setIsDraggingCrop(true);
+      dragStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      panStartRef.current = { ...cropPan };
+    }
+  };
+
+  const handleCropTouchMove = (e: React.TouchEvent) => {
+    if (!isDraggingCrop || e.touches.length !== 1) return;
+    const dx = e.touches[0].clientX - dragStartRef.current.x;
+    const dy = e.touches[0].clientY - dragStartRef.current.y;
+    setCropPan({ x: panStartRef.current.x + dx, y: panStartRef.current.y + dy });
+  };
+
+  const handleCropWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 0.08 : -0.08;
+    setCropScale((prev) => Math.min(3.5, Math.max(0.1, Number((prev + delta).toFixed(2)))));
+  };
+
+  const handleFitCrop = () => {
+    const VIEWPORT_W = 320;
+    const VIEWPORT_H = 220;
+    const fitScale = Math.min(VIEWPORT_W / rawCropImgSize.width, VIEWPORT_H / rawCropImgSize.height);
+    setCropScale(Number(fitScale.toFixed(2)));
+    setCropPan({ x: 0, y: 0 });
+  };
+
+  const handleFillCrop = () => {
+    const VIEWPORT_W = 320;
+    const VIEWPORT_H = 220;
+    const fillScale = Math.max(VIEWPORT_W / rawCropImgSize.width, VIEWPORT_H / rawCropImgSize.height);
+    setCropScale(Number(fillScale.toFixed(2)));
+    setCropPan({ x: 0, y: 0 });
+  };
+
+  const applyCrop = () => {
+    if (!cropTargetKeyword || !rawCropImageSrc) return;
+
+    const img = new Image();
+    img.onload = () => {
+      const VIEWPORT_W = 320;
+      const VIEWPORT_H = 220;
+      const OUT_W = 640;
+      const OUT_H = 440;
+      const canvas = document.createElement('canvas');
+      canvas.width = OUT_W;
+      canvas.height = OUT_H;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      // Dark background so framed letterboxes look sleek
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, OUT_W, OUT_H);
+
+      const ratio = OUT_W / VIEWPORT_W;
+      const scaledW = img.naturalWidth * cropScale * ratio;
+      const scaledH = img.naturalHeight * cropScale * ratio;
+      const posX = OUT_W / 2 + cropPan.x * ratio - scaledW / 2;
+      const posY = OUT_H / 2 + cropPan.y * ratio - scaledH / 2;
+
+      ctx.drawImage(img, posX, posY, scaledW, scaledH);
+
+      const croppedUrl = canvas.toDataURL('image/jpeg', 0.92);
+
+      // 1. Save to Persistent Image Library so it is remembered forever!
+      saveImageToLibrary(cropTargetKeyword, croppedUrl);
+      setImageLibrary((prev) => ({ ...prev, [cropTargetKeyword]: croppedUrl }));
+
+      // 2. Update requiredImages state
+      setRequiredImages((prev) =>
+        prev.map((imgItem) => (imgItem.keyword === cropTargetKeyword ? { ...imgItem, file: croppedUrl } : imgItem))
+      );
+
+      // 3. Inject into draftJson
       try {
         const parsed = JSON.parse(draftJson);
-        
         if (parsed.questions) {
-          parsed.questions.forEach((q: any) => { if (q.image_keyword === keyword) q.image_url = base64Url; });
+          parsed.questions.forEach((q: any) => { if (q.image_keyword === cropTargetKeyword) q.image_url = croppedUrl; });
         }
         if (parsed.items) {
-          parsed.items.forEach((item: any) => { if (item.image_keyword === keyword) item.image_url = base64Url; });
+          parsed.items.forEach((it: any) => { if (it.image_keyword === cropTargetKeyword) it.image_url = croppedUrl; });
         }
         if (parsed.contestants) {
-          parsed.contestants.forEach((c: any) => { if (c.image_keyword === keyword) c.image_url = base64Url; });
+          parsed.contestants.forEach((c: any) => { if (c.image_keyword === cropTargetKeyword) c.image_url = croppedUrl; });
         }
         if (parsed.scenarios) {
           parsed.scenarios.forEach((s: any) => {
-            if (s.image_keyword_a === keyword) s.image_url_a = base64Url;
-            if (s.image_keyword_b === keyword) s.image_url_b = base64Url;
+            if (s.image_keyword_a === cropTargetKeyword) s.image_url_a = croppedUrl;
+            if (s.image_keyword_b === cropTargetKeyword) s.image_url_b = croppedUrl;
           });
         }
-
         setDraftJson(JSON.stringify(parsed, null, 2));
-      } catch(e) {}
+      } catch (e) {}
+
+      setCropModalOpen(false);
+      setRawCropImageSrc(null);
+      setCropTargetKeyword(null);
     };
-    reader.readAsDataURL(file);
+    img.src = rawCropImageSrc;
   };
 
   // Poll for updates every 5 seconds on Step 3
@@ -376,43 +562,66 @@ export default function Home() {
               className="w-full h-[300px] font-mono text-sm px-4 py-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 resize-none focus:ring-2 focus:ring-blue-500"
             />
 
-            {/* Manual Image Uploads */}
+            {/* Manual Image Uploads & Auto-Memory */}
             {requiredImages.length > 0 && (
-              <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border border-blue-100 dark:border-blue-800 space-y-4">
-                <h3 className="font-bold text-lg text-blue-900 dark:text-blue-100 mb-2">Required Images</h3>
-                <p className="text-sm text-blue-700 dark:text-blue-300 mb-4">
-                  Please upload an image for each keyword below. You only need to upload it once, and it will be applied automatically everywhere!
+              <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-2xl border border-blue-100 dark:border-blue-800 space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+                  <h3 className="font-bold text-lg text-blue-900 dark:text-blue-100 flex items-center gap-2">
+                    <span>🖼️</span>
+                    <span>Required Images (ভিডিওর ছবিসমূহ)</span>
+                  </h3>
+                  <span className="text-[11px] bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-bold px-3 py-1 rounded-full border border-emerald-300 dark:border-emerald-800 flex items-center gap-1.5 w-fit">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>অটোমেটিক ইমেজ মেমোরি সক্রিয় (Auto-Memory Active)</span>
+                  </span>
+                </div>
+                <p className="text-xs text-blue-700 dark:text-blue-300">
+                  যেকোনো ছবি একবার আপলোড করলে সিস্টেম স্বয়ংক্রিয়ভাবে মনে রাখে। ছবি কাটা পড়া রোধ করতে <strong>✂️ ক্রপ</strong> বাটনে চেপে ড্র্যাগ ও জুম করে মুখ বা বিষয়বস্তু ঠিক মাঝখানে সেট করতে পারবেন।
                 </p>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {requiredImages.map((req, idx) => (
-                    <div key={idx} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col items-center text-center gap-3">
-                      <span className="font-bold text-gray-800 dark:text-gray-200 text-sm">
+                    <div key={idx} className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col items-center text-center gap-3">
+                      <span className="font-black text-gray-800 dark:text-gray-100 text-sm">
                         {req.keyword}
                       </span>
                       
                       {req.file ? (
-                        <div className="relative w-24 h-24 rounded-lg overflow-hidden border-2 border-green-500">
-                          <img src={req.file} alt={req.keyword} className="w-full h-full object-cover" />
-                          <div className="absolute top-0 right-0 bg-green-500 text-white rounded-bl-lg p-1 text-xs">
-                            ✓
+                        <div className="relative w-32 h-24 rounded-xl overflow-hidden border-2 border-emerald-500 shadow-md bg-slate-950 flex items-center justify-center">
+                          <img src={req.file} alt={req.keyword} className="w-full h-full object-contain" />
+                          <div className="absolute top-0 right-0 bg-emerald-500 text-white rounded-bl-lg px-2 py-0.5 text-[9px] font-black tracking-wider">
+                            ✓ সংরক্ষিত
                           </div>
                         </div>
                       ) : (
-                        <div className="w-24 h-24 rounded-lg bg-gray-100 dark:bg-gray-700 border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400">
-                          No Image
+                        <div className="w-32 h-24 rounded-xl bg-gray-100 dark:bg-gray-700/60 border-2 border-dashed border-gray-300 dark:border-gray-600 flex flex-col items-center justify-center text-gray-400 text-xs gap-1 font-semibold">
+                          <span>📷</span>
+                          <span>ছবি প্রয়োজন</span>
                         </div>
                       )}
                       
-                      <label className="cursor-pointer bg-blue-100 hover:bg-blue-200 text-blue-800 text-xs font-semibold px-4 py-2 rounded-lg transition-colors w-full">
-                        {req.file ? 'Change Image' : 'Upload Image'}
-                        <input 
-                          type="file" 
-                          accept="image/*" 
-                          className="hidden" 
-                          onChange={(e) => handleFileUpload(req.keyword, e)}
-                        />
-                      </label>
+                      <div className="flex gap-2 w-full pt-1">
+                        <label className="flex-1 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-3 rounded-xl transition-all shadow flex items-center justify-center gap-1.5">
+                          <span>{req.file ? '🔄 পরিবর্তন' : '📷 আপলোড'}</span>
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            className="hidden" 
+                            onChange={(e) => handleFileUpload(req.keyword, e)} 
+                          />
+                        </label>
+                        {req.file && (
+                          <button
+                            type="button"
+                            onClick={() => openCropModal(req.keyword, req.file!)}
+                            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 text-xs font-bold rounded-xl transition border border-slate-300 dark:border-slate-600 flex items-center gap-1"
+                            title="ছবি ড্র্যাগ ও জুম করে পজিশন ঠিক করুন"
+                          >
+                            <span>✂️</span>
+                            <span>ক্রপ</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -503,6 +712,172 @@ export default function Home() {
                   No videos found for this category.
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* --- Image Crop & Frame Modal --- */}
+        {cropModalOpen && rawCropImageSrc && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
+              
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <span>✂️</span>
+                    <span>ছবি অ্যাডজাস্ট ও ফ্রেম সেট করুন</span>
+                  </h3>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 font-semibold mt-0.5">
+                    বিষয়বস্তু: <span className="underline">{cropTargetKeyword}</span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setCropModalOpen(false); setRawCropImageSrc(null); }}
+                  className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-900 dark:hover:text-white flex items-center justify-center font-bold text-sm transition"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Instructions */}
+              <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl p-3 text-xs text-amber-800 dark:text-amber-300 space-y-1">
+                <p className="font-semibold flex items-center gap-1.5">
+                  <span>💡</span>
+                  <span>ছবি কাটা পড়া রোধ করার নিয়ম:</span>
+                </p>
+                <p>
+                  মাউস দিয়ে ড্র্যাগ করে বা নিচের স্লাইডার দিয়ে জুম ইন/আউট করুন। পুরো ছবি দেখাতে চাইলে <strong>Fit</strong> চাপুন।
+                </p>
+              </div>
+
+              {/* Viewport Box (320px x 220px) */}
+              <div className="flex flex-col items-center">
+                <div
+                  className="relative w-[320px] h-[220px] bg-slate-950 rounded-2xl overflow-hidden shadow-inner border-2 border-dashed border-blue-500 select-none cursor-grab active:cursor-grabbing flex items-center justify-center touch-none"
+                  onMouseDown={handleCropMouseDown}
+                  onMouseMove={handleCropMouseMove}
+                  onMouseUp={handleCropMouseUp}
+                  onMouseLeave={handleCropMouseUp}
+                  onTouchStart={handleCropTouchStart}
+                  onTouchMove={handleCropTouchMove}
+                  onTouchEnd={handleCropMouseUp}
+                  onWheel={handleCropWheel}
+                >
+                  {/* Visual Center Guides */}
+                  <div className="absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3 border border-white/10 opacity-30 z-10">
+                    <div className="border-r border-b border-white/20"></div>
+                    <div className="border-r border-b border-white/20"></div>
+                    <div className="border-b border-white/20"></div>
+                    <div className="border-r border-b border-white/20"></div>
+                    <div className="border-r border-b border-white/20"></div>
+                    <div className="border-b border-white/20"></div>
+                    <div className="border-r border-white/20"></div>
+                    <div className="border-r border-white/20"></div>
+                    <div></div>
+                  </div>
+
+                  <img
+                    src={rawCropImageSrc}
+                    alt="To Crop"
+                    draggable={false}
+                    style={{
+                      transform: `translate(${cropPan.x}px, ${cropPan.y}px) scale(${cropScale})`,
+                      transformOrigin: 'center center',
+                      maxWidth: 'none',
+                      userSelect: 'none',
+                      pointerEvents: 'none',
+                      transition: isDraggingCrop ? 'none' : 'transform 0.05s ease-out'
+                    }}
+                  />
+
+                  <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[10px] font-mono px-2 py-0.5 rounded pointer-events-none z-20">
+                    {Math.round(cropScale * 100)}%
+                  </div>
+                </div>
+              </div>
+
+              {/* Zoom Controls & Presets */}
+              <div className="space-y-3 bg-gray-50 dark:bg-gray-800/60 p-4 rounded-2xl border border-gray-100 dark:border-gray-800">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-bold text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                    🔍 জুম:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCropScale((s) => Math.max(0.1, Number((s - 0.1).toFixed(2))))}
+                    className="w-7 h-7 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white font-bold text-xs flex items-center justify-center hover:bg-gray-300 dark:hover:bg-gray-600"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="3.0"
+                    step="0.05"
+                    value={cropScale}
+                    onChange={(e) => setCropScale(parseFloat(e.target.value))}
+                    className="flex-1 accent-blue-600"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setCropScale((s) => Math.min(3.5, Number((s + 0.1).toFixed(2))))}
+                    className="w-7 h-7 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white font-bold text-xs flex items-center justify-center hover:bg-gray-300 dark:hover:bg-gray-600"
+                  >
+                    +
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">প্রিসেট:</span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleFitCrop}
+                      className="px-3 py-1 bg-blue-100 dark:bg-blue-950/80 hover:bg-blue-200 dark:hover:bg-blue-900 text-blue-700 dark:text-blue-300 text-xs font-bold rounded-lg transition border border-blue-200 dark:border-blue-800"
+                      title="পুরো ছবি যাতে ফ্রেমের মধ্যে দেখা যায়"
+                    >
+                      📐 Fit (পুরো ছবি)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleFillCrop}
+                      className="px-3 py-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs font-bold rounded-lg transition"
+                      title="ফ্রেম ভর্তি করে দেখাতে"
+                    >
+                      🖼️ Fill (ফ্রেম ভর্তি)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setCropPan({ x: 0, y: 0 }); handleFitCrop(); }}
+                      className="px-2.5 py-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs rounded-lg transition"
+                    >
+                      রিসেট
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setCropModalOpen(false); setRawCropImageSrc(null); }}
+                  className="px-5 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 font-semibold text-sm rounded-xl transition"
+                >
+                  বাতিল
+                </button>
+                <button
+                  type="button"
+                  onClick={applyCrop}
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-lg transition active:scale-95 flex items-center gap-2"
+                >
+                  <span>✓</span>
+                  <span>সেট ও সেভ করুন</span>
+                </button>
+              </div>
+
             </div>
           </div>
         )}
