@@ -24,7 +24,12 @@ export default function AestheticPage() {
         });
       }
 
-      setRequiredImages(Array.from(keywords).map(kw => ({ keyword: kw, file: null })));
+      setRequiredImages(prev => {
+        return Array.from(keywords).map(kw => {
+          const existing = prev.find(r => r.keyword === kw);
+          return { keyword: kw, file: existing ? existing.file : null };
+        });
+      });
     } catch (e) {
       // invalid json, ignore
     }
@@ -40,15 +45,19 @@ export default function AestheticPage() {
       
       setRequiredImages(prev => prev.map(img => img.keyword === keyword ? { ...img, file: base64Url } : img));
 
-      try {
-        const parsed = JSON.parse(draftJson);
-        if (parsed.scenes) {
-          parsed.scenes.forEach((s: any) => { 
-            if (s.image_keyword === keyword) s.image_url = base64Url; 
-          });
+      setDraftJson(prevJson => {
+        try {
+          const parsed = JSON.parse(prevJson);
+          if (parsed.scenes) {
+            parsed.scenes.forEach((s: any) => { 
+              if (s.image_keyword === keyword) s.image_url = base64Url; 
+            });
+          }
+          return JSON.stringify(parsed, null, 2);
+        } catch(e) {
+          return prevJson;
         }
-        setDraftJson(JSON.stringify(parsed, null, 2));
-      } catch(e) {}
+      });
     };
     reader.readAsDataURL(file);
   };
