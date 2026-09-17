@@ -2,54 +2,28 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 
+type ProcessState = 'idle' | 'drafting' | 'generating_images' | 'queueing' | 'done' | 'error';
+
 export default function AestheticPage() {
-  const [step, setStep] = useState<1 | 2>(1);
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
-
-  // Step 1 State
+  const [processState, setProcessState] = useState<ProcessState>('idle');
   const [topic, setTopic] = useState('');
-
-  // Step 2 State
-  const [draftJson, setDraftJson] = useState('');
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
+  
   const [requiredImages, setRequiredImages] = useState<{keyword: string, file: string | null, status: 'pending' | 'generating' | 'done' | 'error'}[]>([]);
-  const [generatingImages, setGeneratingImages] = useState(false);
 
-  // Parse draftJson for unique image keywords
-  useEffect(() => {
-    if (!draftJson || step !== 2 || generatingImages) return;
-    try {
-      const parsed = JSON.parse(draftJson);
-      const keywords = new Set<string>();
-      
-      if (parsed.scenes) {
-        parsed.scenes.forEach((s: any) => {
-          if (s.image_keyword) keywords.add(s.image_keyword);
-        });
-      }
-
-      setRequiredImages(prev => {
-        return Array.from(keywords).map(kw => {
-          const existing = prev.find(r => r.keyword === kw);
-          return { 
-            keyword: kw, 
-            file: existing?.file || null,
-            status: existing?.status || 'pending'
-          };
-        });
-      });
-    } catch (e) {
-      // invalid json, ignore
-    }
-  }, [draftJson, step, generatingImages]);
-
-  const handleGenerateDraft = async () => {
+  const handleStartProcess = async () => {
     if (!topic.trim()) {
       setMessage({ type: 'error', text: 'Please enter a theme.' });
       return;
     }
-    setLoading(true);
-    setMessage(null);
+
+    setProcessState('drafting');
+    setMessage({ type: 'info', text: 'Drafting aesthetic scenes...' });
+    setRequiredImages([]);
+
+    let draftJsonStr = '';
+
+    // Step 1: Draft the scenes
     try {
       const response = await fetch('/api/draft-aesthetic', { 
         method: 'POST',
@@ -57,101 +31,99 @@ export default function AestheticPage() {
         body: JSON.stringify({ topic })
       });
       const data = await response.json();
+      
       if (response.ok && data.success) {
-        setDraftJson(JSON.stringify(data.data, null, 2));
-        setStep(2);
+        draftJsonStr = JSON.stringify(data.data, null, 2);
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to generate draft.' });
+        throw new Error(data.error || 'Failed to generate draft.');
       }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Unexpected error generating draft.' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGenerateImages = async () => {
-    setGeneratingImages(true);
-    setMessage(null);
-
-    let currentJson;
-    try {
-      currentJson = JSON.parse(draftJson);
-    } catch (e) {
-      setMessage({ type: 'error', text: 'Invalid JSON format.' });
-      setGeneratingImages(false);
+    } catch (error: any) {
+      setProcessState('error');
+      setMessage({ type: 'error', text: error.message || 'Unexpected error generating draft.' });
       return;
     }
 
-    const updatedImages = [...requiredImages];
-    let allSuccess = true;
+    // Parse the draft to get image keywords
+    let currentJson;
+    try {
+      currentJson = JSON.parse(draftJsonStr);
+      const keywords = new Set<string>();
+      
+      if (currentJson.scenes) {
+        currentJson.scenes.forEach((s: any) => {
+          if (s.image_keyword) keywords.add(s.image_keyword);
+        });
+      }
 
-    for (let i = 0; i < updatedImages.length; i++) {
-      if (updatedImages[i].status === 'done') continue; // Skip already generated
+      setRequiredImages(Array.from(keywords).map(kw => ({
+        keyword: kw, 
+        file: null,
+        status: 'pending'
+      })));
+    } catch (e) {
+      setProcessState('error');
+      setMessage({ type: 'error', text: 'Invalid JSON format from AI.' });
+      return;
+    }
 
-      updatedImages[i].status = 'generating';
-      setRequiredImages([...updatedImages]);
+    // Step 2: Generate Images
+    setProcessState('generating_images');
+    setMessage({ type: 'info', text: 'Generating AI images for scenes...' });
+
+    let allImagesSuccess = true;
+
+    for (let i = 0; i < currentJson.scenes.length; i++) {
+      const scene = currentJson.scenes[i];
+      if (!scene.image_keyword) continue;
+
+      setRequiredImages(prev => prev.map(img => 
+        img.keyword === scene.image_keyword ? { ...img, status: 'generating' } : img
+      ));
 
       try {
         const res = await fetch('/api/generate-image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: updatedImages[i].keyword })
+          body: JSON.stringify({ prompt: scene.image_keyword })
         });
         const data = await res.json();
         
         if (res.ok && data.success) {
-          updatedImages[i].file = data.url;
-          updatedImages[i].status = 'done';
+          scene.image_url = data.url; // Update JSON with the image URL
           
-          // Update JSON immediately
-          if (currentJson.scenes) {
-            currentJson.scenes.forEach((s: any) => {
-              if (s.image_keyword === updatedImages[i].keyword) {
-                s.image_url = data.url;
-              }
-            });
-          }
-          setDraftJson(JSON.stringify(currentJson, null, 2));
+          setRequiredImages(prev => prev.map(img => 
+            img.keyword === scene.image_keyword ? { ...img, status: 'done', file: data.url } : img
+          ));
         } else {
-          updatedImages[i].status = 'error';
-          allSuccess = false;
+          allImagesSuccess = false;
+          setRequiredImages(prev => prev.map(img => 
+            img.keyword === scene.image_keyword ? { ...img, status: 'error' } : img
+          ));
+          break; // Stop on first error
         }
       } catch (err) {
-        updatedImages[i].status = 'error';
-        allSuccess = false;
+        allImagesSuccess = false;
+        setRequiredImages(prev => prev.map(img => 
+          img.keyword === scene.image_keyword ? { ...img, status: 'error' } : img
+        ));
+        break; // Stop on first error
       }
-      setRequiredImages([...updatedImages]);
     }
 
-    setGeneratingImages(false);
-    if (!allSuccess) {
-      setMessage({ type: 'error', text: 'Some images failed to generate. You can click Generate Images again to retry them.' });
-    } else {
-      setMessage({ type: 'success', text: 'All images generated successfully! You can now queue the video.' });
+    if (!allImagesSuccess) {
+      setProcessState('error');
+      setMessage({ type: 'error', text: 'Failed to generate some images. Process stopped.' });
+      return;
     }
-  };
 
-  const handleQueueVideo = async () => {
-    setLoading(true);
-    setMessage(null);
+    // Step 3: Queue Video
+    setProcessState('queueing');
+    setMessage({ type: 'info', text: 'Images ready. Queueing video...' });
+
     try {
-      let parsedJson;
-      try {
-        parsedJson = JSON.parse(draftJson);
-      } catch (e) {
-        throw new Error('Invalid JSON format. Please check your syntax.');
-      }
-
-      // Check if all images are generated
-      const missingImages = requiredImages.some(img => !img.file);
-      if (missingImages) {
-        throw new Error('Please generate all images before queueing the video.');
-      }
-
       let totalFrames = 0;
-      if (parsedJson.scenes) {
-        for (const s of parsedJson.scenes) {
+      if (currentJson.scenes) {
+        for (const s of currentJson.scenes) {
           totalFrames += s.duration || 150;
         }
       }
@@ -161,7 +133,7 @@ export default function AestheticPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          data_json: parsedJson, 
+          data_json: currentJson, 
           showSubtitles: false,
           duration: durationSeconds 
         })
@@ -169,14 +141,14 @@ export default function AestheticPage() {
 
       const data = await response.json();
       if (response.ok && data.success) {
+        setProcessState('done');
         setMessage({ type: 'success', text: 'Video queued successfully! Check the main dashboard for rendering progress.' });
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to queue video.' });
+        throw new Error(data.error || 'Failed to queue video.');
       }
     } catch (error: any) {
+      setProcessState('error');
       setMessage({ type: 'error', text: error.message || 'Unexpected error queueing video.' });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -188,7 +160,7 @@ export default function AestheticPage() {
         <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-8 border border-gray-100 dark:border-gray-700 flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Aesthetic Video Generator</h1>
-            <p className="text-gray-500 dark:text-gray-400">Step {step} of 2</p>
+            <p className="text-gray-500 dark:text-gray-400">Automated 3-Step Process</p>
           </div>
           <div className="flex gap-4">
             <Link href="/" className="px-6 py-3 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-all text-center">
@@ -198,90 +170,96 @@ export default function AestheticPage() {
         </div>
 
         {message && (
-          <div className={`p-4 rounded-xl text-sm font-medium ${message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          <div className={`p-4 rounded-xl text-sm font-medium ${
+            message.type === 'success' ? 'bg-green-50 text-green-700' : 
+            message.type === 'error' ? 'bg-red-50 text-red-700' : 
+            'bg-blue-50 text-blue-700'
+          }`}>
             {message.text}
           </div>
         )}
 
-        {/* --- STEP 1: Settings & Topic Input --- */}
-        {step === 1 && (
-          <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-8 border border-gray-100 dark:border-gray-700 space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Step 1: Setup Theme</h2>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Aesthetic Theme</label>
-              <input 
-                type="text" 
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                placeholder="e.g., Cherry blossom forest, Liminal pool rooms..."
-                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
-              />
-            </div>
-
-            <div className="pt-4 flex justify-end">
-              <button
-                onClick={handleGenerateDraft}
-                disabled={loading}
-                className={`px-8 py-3 rounded-xl text-white font-bold transition-all ${
-                  loading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 shadow-lg active:scale-95'
-                }`}
-              >
-                {loading ? 'Generating Scenes...' : 'Next: Review Scenes →'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* --- STEP 2: Script Generation & Editing --- */}
-        {step === 2 && (
-          <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-8 border border-gray-100 dark:border-gray-700 space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Step 2: Review & Generate Images</h2>
-            <p className="text-gray-500">Review the generated prompts, then generate the images using Gemini Imagen 3.</p>
-            
-            <textarea
-              value={draftJson}
-              onChange={(e) => setDraftJson(e.target.value)}
-              disabled={generatingImages}
-              className={`w-full h-[300px] font-mono text-sm px-4 py-4 border border-gray-300 dark:border-gray-600 rounded-xl text-gray-800 dark:text-gray-200 resize-none focus:ring-2 focus:ring-blue-500 ${generatingImages ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-70' : 'bg-gray-50 dark:bg-gray-900'}`}
+        {/* Input & Action */}
+        <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-8 border border-gray-100 dark:border-gray-700 space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Aesthetic Theme</label>
+            <input 
+              type="text" 
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              disabled={processState !== 'idle' && processState !== 'error' && processState !== 'done'}
+              placeholder="e.g., Cherry blossom forest, Liminal pool rooms..."
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white disabled:opacity-50"
             />
+          </div>
+
+          <div className="pt-2 flex justify-end">
+            <button
+              onClick={handleStartProcess}
+              disabled={processState !== 'idle' && processState !== 'error' && processState !== 'done'}
+              className={`px-8 py-3 rounded-xl text-white font-bold transition-all ${
+                processState !== 'idle' && processState !== 'error' && processState !== 'done'
+                  ? 'bg-blue-400 cursor-not-allowed' 
+                  : 'bg-blue-600 hover:bg-blue-700 shadow-lg active:scale-95'
+              }`}
+            >
+              {processState === 'idle' || processState === 'error' || processState === 'done' 
+                ? 'Generate Video Automatically' 
+                : 'Processing...'}
+            </button>
+          </div>
+        </div>
+
+        {/* Live Progress / Thumbnails */}
+        {(requiredImages.length > 0 || processState !== 'idle') && (
+          <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-8 border border-gray-100 dark:border-gray-700 space-y-6">
+            <h3 className="font-bold text-xl text-gray-900 dark:text-white">Process Progress</h3>
+            
+            <div className="flex gap-4 mb-6 text-sm">
+              <span className={`px-3 py-1 rounded-full font-medium ${processState === 'drafting' ? 'bg-blue-100 text-blue-700' : (processState === 'idle' ? 'bg-gray-100 text-gray-500' : 'bg-green-100 text-green-700')}`}>
+                1. Drafting Scenes
+              </span>
+              <span className={`px-3 py-1 rounded-full font-medium ${processState === 'generating_images' ? 'bg-blue-100 text-blue-700 animate-pulse' : (processState === 'queueing' || processState === 'done' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}`}>
+                2. Generating Images
+              </span>
+              <span className={`px-3 py-1 rounded-full font-medium ${processState === 'queueing' ? 'bg-blue-100 text-blue-700 animate-pulse' : (processState === 'done' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}`}>
+                3. Queueing Video
+              </span>
+            </div>
 
             {requiredImages.length > 0 && (
-              <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border border-blue-100 dark:border-blue-800 space-y-4">
-                <div className="flex justify-between items-center mb-2">
-                  <h3 className="font-bold text-lg text-blue-900 dark:text-blue-100">AI Images</h3>
-                  <button
-                    onClick={handleGenerateImages}
-                    disabled={generatingImages || requiredImages.every(img => img.status === 'done')}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold text-white transition-all ${
-                      generatingImages || requiredImages.every(img => img.status === 'done') ? 'bg-gray-400 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700 shadow'
-                    }`}
-                  >
-                    {generatingImages ? 'Generating...' : 'Generate Images'}
-                  </button>
-                </div>
+              <div className="bg-gray-50 dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4">
+                <h4 className="font-bold text-gray-700 dark:text-gray-300 mb-2">Image Generation Status</h4>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {requiredImages.map((req, idx) => (
                     <div key={idx} className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col items-center text-center gap-3">
-                      <span className="font-bold text-gray-800 dark:text-gray-200 text-sm line-clamp-2">
+                      <span className="font-bold text-gray-800 dark:text-gray-200 text-xs line-clamp-2" title={req.keyword}>
                         {req.keyword}
                       </span>
                       
                       {req.file ? (
                         <div className="relative w-24 h-24 rounded-lg overflow-hidden border-2 border-green-500">
-                          <img src={req.file} alt={req.keyword} className="w-full h-full object-cover" />
+                          <img src={req.file} alt="Generated" className="w-full h-full object-cover" />
                           <div className="absolute top-0 right-0 bg-green-500 text-white rounded-bl-lg p-1 text-xs">
                             ✓
                           </div>
                         </div>
                       ) : (
-                        <div className={`w-24 h-24 rounded-lg border-2 flex items-center justify-center text-xs font-medium ${
+                        <div className={`w-24 h-24 rounded-lg border-2 flex flex-col items-center justify-center text-xs font-medium ${
                           req.status === 'generating' ? 'border-purple-400 bg-purple-50 text-purple-600 animate-pulse' :
                           req.status === 'error' ? 'border-red-400 bg-red-50 text-red-600' :
                           'border-dashed border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-400'
                         }`}>
-                          {req.status === 'generating' ? 'Generating...' : req.status === 'error' ? 'Error' : 'Pending'}
+                          {req.status === 'generating' ? (
+                            <>
+                              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-purple-600 mb-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Generating...
+                            </>
+                          ) : req.status === 'error' ? 'Error' : 'Pending'}
                         </div>
                       )}
                     </div>
@@ -289,29 +267,6 @@ export default function AestheticPage() {
                 </div>
               </div>
             )}
-
-            <div className="flex justify-between items-center pt-4">
-              <button 
-                onClick={() => setStep(1)}
-                disabled={generatingImages}
-                className={`px-6 py-3 rounded-xl font-medium transition-colors ${
-                  generatingImages ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600'
-                }`}
-              >
-                ← Back
-              </button>
-              <button
-                onClick={handleQueueVideo}
-                disabled={loading || generatingImages || requiredImages.some(img => img.status !== 'done')}
-                className={`px-8 py-3 rounded-xl text-white font-bold transition-all ${
-                  loading || generatingImages || requiredImages.some(img => img.status !== 'done') 
-                    ? 'bg-green-400 cursor-not-allowed opacity-70' 
-                    : 'bg-green-600 hover:bg-green-700 shadow-lg active:scale-95'
-                }`}
-              >
-                {loading ? 'Queueing...' : 'Start Rendering Video →'}
-              </button>
-            </div>
           </div>
         )}
 
