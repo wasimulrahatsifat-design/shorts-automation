@@ -1,17 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { GoogleGenAI } from '@google/genai';
 import { Octokit } from 'octokit';
+import { generateGeminiJson } from '@/lib/gemini';
 
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-// Initialize Gemini API
-// Delete GOOGLE_API_KEY to prevent @google/genai SDK from prioritizing it over GEMINI_API_KEY
-delete process.env.GOOGLE_API_KEY;
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN,
@@ -71,47 +66,7 @@ export async function POST(request: Request) {
       Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
     }
 
-    const fallbackModels = ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.5-flash'];
-    let text = '';
-    
-    const generateWithKey = async (client: any, keyIndex: number) => {
-      for (let i = 0; i < fallbackModels.length; i++) {
-        try {
-          console.log(`Attempting Gemini generation with model: ${fallbackModels[i]} (Key ${keyIndex})`);
-          const response = await client.models.generateContent({
-            model: fallbackModels[i],
-            contents: prompt,
-          });
-          return response.text || '';
-        } catch (err: any) {
-          console.warn(`Model ${fallbackModels[i]} failed with Key ${keyIndex}: ${err.message}`);
-          if (i === fallbackModels.length - 1) {
-            throw err;
-          }
-        }
-      }
-      return '';
-    };
-
-    try {
-      text = await generateWithKey(ai, 1);
-    } catch (err: any) {
-      if (process.env.GEMINI_API_KEY_2) {
-        console.log('Falling back to GEMINI_API_KEY_2');
-        const ai2 = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY_2 });
-        try {
-          text = await generateWithKey(ai2, 2);
-        } catch (err2: any) {
-           throw new Error(`Both Gemini keys failed. Last error: ${err2.message}`);
-        }
-      } else {
-        throw new Error(`All Gemini models failed. Last error: ${err.message}`);
-      }
-    }
-    
-    // Parse the JSON. Remove markdown backticks if they are present.
-    const cleanedText = text.replace(/```json\n?|```/g, '').trim();
-    const generatedData = JSON.parse(cleanedText);
+    const generatedData = await generateGeminiJson(prompt);
 
     const { topic, script } = generatedData;
     let dataPayload = { ...generatedData, type: videoFormat };
