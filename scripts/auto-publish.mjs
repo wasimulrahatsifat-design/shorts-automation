@@ -3,15 +3,174 @@ import { google } from 'googleapis';
 import fs from 'fs';
 import path from 'path';
 
+/**
+ * Uploads a video file to a Facebook Page via Meta Graph API
+ */
+async function uploadToFacebook(video, localFilePath) {
+  const pageId = process.env.FB_PAGE_ID;
+  const accessToken = process.env.FB_PAGE_ACCESS_TOKEN;
+
+  if (!pageId || !accessToken) {
+    console.log('Skipping Facebook: FB_PAGE_ID or FB_PAGE_ACCESS_TOKEN not configured.');
+    return null;
+  }
+
+  console.log('Uploading to Facebook Page...');
+  const formData = new FormData();
+  formData.append('access_token', accessToken);
+  formData.append('title', video.topic);
+  formData.append('description', `${video.topic}\n\n#shorts #reels #viral #trending`);
+
+  // Attach the video file as multipart/form-data
+  const fileBuffer = fs.readFileSync(localFilePath);
+  const fileBlob = new Blob([fileBuffer], { type: 'video/mp4' });
+  formData.append('source', fileBlob, path.basename(localFilePath));
+
+  const fbUrl = `https://graph.facebook.com/v19.0/${pageId}/videos`;
+  const response = await fetch(fbUrl, {
+    method: 'POST',
+    body: formData,
+  });
+
+  const data = await response.json();
+  if (!response.ok || data.error) {
+    const errorMsg = data.error?.message || `Status ${response.status}: ${JSON.stringify(data)}`;
+    throw new Error(`Facebook API Error: ${errorMsg}`);
+  }
+
+  console.log(`Facebook Upload successful! Video ID: ${data.id}`);
+  return data.id;
+}
+
+/**
+ * Uploads and publishes a video as an Instagram Reel via Meta Graph API
+ */
+async function uploadToInstagram(video, localFilePath) {
+  const igUserId = process.env.IG_USER_ID;
+  const accessToken = process.env.IG_ACCESS_TOKEN || process.env.FB_PAGE_ACCESS_TOKEN;
+
+  if (!igUserId || !accessToken) {
+    console.log('Skipping Instagram: IG_USER_ID or IG_ACCESS_TOKEN/FB_PAGE_ACCESS_TOKEN not configured.');
+    return null;
+  }
+
+  if (!video.video_url) {
+    console.log('Skipping Instagram: Video does not have a public video_url for container creation.');
+    return null;
+  }
+
+  console.log('Uploading to Instagram Reels...');
+
+  // Step 1: Create Media Container
+  console.log('Creating Instagram media container...');
+  const containerUrl = `https://graph.facebook.com/v19.0/${igUserId}/media`;
+  const containerParams = new URLSearchParams({
+    media_type: 'REELS',
+    video_url: video.video_url,
+    caption: `${video.topic}\n\n#reels #shorts #viral #trending`,
+    access_token: accessToken,
+  });
+
+  const createRes = await fetch(`${containerUrl}?${containerParams.toString()}`, {
+    method: 'POST',
+  });
+  const createData = await createRes.json();
+
+  if (!createRes.ok || createData.error || !createData.id) {
+    const errorMsg = createData.error?.message || `Status ${createRes.status}: ${JSON.stringify(createData)}`;
+    throw new Error(`Instagram Container Creation Failed: ${errorMsg}`);
+  }
+
+  const creationId = createData.id;
+  console.log(`Instagram media container created! ID: ${creationId}`);
+
+  // Step 2: Poll container status until FINISHED
+  console.log('Waiting for Instagram to process the video...');
+  let isReady = false;
+  const maxAttempts = 24; // 24 * 5s = 120 seconds max
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+
+    const statusUrl = `https://graph.facebook.com/v19.0/${creationId}?fields=status_code,status&access_token=${accessToken}`;
+    const statusRes = await fetch(statusUrl);
+    const statusData = await statusRes.json();
+
+    const statusCode = statusData.status_code;
+    console.log(`[Attempt ${attempt}/${maxAttempts}] Instagram processing status: ${statusCode || 'UNKNOWN'}`);
+
+    if (statusCode === 'FINISHED') {
+      isReady = true;
+      break;
+    } else if (statusCode === 'ERROR') {
+      throw new Error(`Instagram video processing encountered an error: ${JSON.stringify(statusData)}`);
+    }
+  }
+
+  if (!isReady) {
+    throw new Error('Timed out waiting for Instagram video processing to complete.');
+  }
+
+  // Step 3: Publish the container
+  console.log('Publishing Instagram Reel...');
+  const publishUrl = `https://graph.facebook.com/v19.0/${igUserId}/media_publish`;
+  const publishParams = new URLSearchParams({
+    creation_id: creationId,
+    access_token: accessToken,
+  });
+
+  const publishRes = await fetch(`${publishUrl}?${publishParams.toString()}`, {
+    method: 'POST',
+  });
+  const publishData = await publishRes.json();
+
+  if (!publishRes.ok || publishData.error || !publishData.id) {
+    const errorMsg = publishData.error?.message || `Status ${publishRes.status}: ${JSON.stringify(publishData)}`;
+    throw new Error(`Instagram Publish Failed: ${errorMsg}`);
+  }
+
+  console.log(`Instagram Reel published successfully! Media ID: ${publishData.id}`);
+  return publishData.id;
+}
+
+/**
+ * Uploads a video file to YouTube Shorts via YouTube Data API v3
+ */
+async function uploadToYouTube(video, localFilePath, youtube) {
+  if (!youtube) {
+    console.log('Skipping YouTube: YouTube client not authenticated.');
+    return null;
+  }
+
+  console.log('Uploading to YouTube...');
+  const res = await youtube.videos.insert({
+    part: 'snippet,status',
+    requestBody: {
+      snippet: {
+        title: video.topic,
+        description: `${video.topic}\n\n#shorts #data #comparison`,
+        tags: ['shorts', 'data', 'comparison'],
+        categoryId: '24', // Entertainment
+      },
+      status: {
+        privacyStatus: 'private', // Set to 'public' when ready
+        selfDeclaredMadeForKids: false,
+      },
+    },
+    media: {
+      body: fs.createReadStream(localFilePath),
+    },
+  });
+
+  console.log(`YouTube Upload successful! Video ID: ${res.data.id}`);
+  return res.data.id;
+}
+
 async function main() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const clientId = process.env.YOUTUBE_CLIENT_ID;
-  const clientSecret = process.env.YOUTUBE_CLIENT_SECRET;
-  const refreshToken = process.env.YOUTUBE_REFRESH_TOKEN;
 
-  if (!supabaseUrl || !supabaseAnonKey || !clientId || !clientSecret || !refreshToken) {
-    console.error('Missing required environment variables.');
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('Missing required Supabase environment variables.');
     process.exit(1);
   }
 
@@ -35,107 +194,130 @@ async function main() {
     process.exit(0);
   }
 
-  // Initialize YouTube OAuth2 Client
-  console.log('Authenticating with YouTube API...');
-  const oauth2Client = new google.auth.OAuth2(
-    clientId,
-    clientSecret,
-    'https://developers.google.com/oauthplayground'
-  );
+  // Initialize YouTube OAuth2 Client if credentials exist
+  let youtube = null;
+  const ytClientId = process.env.YOUTUBE_CLIENT_ID;
+  const ytClientSecret = process.env.YOUTUBE_CLIENT_SECRET;
+  const ytRefreshToken = process.env.YOUTUBE_REFRESH_TOKEN;
 
-  oauth2Client.setCredentials({
-    refresh_token: refreshToken
-  });
+  if (ytClientId && ytClientSecret && ytRefreshToken) {
+    console.log('Authenticating with YouTube API...');
+    try {
+      const oauth2Client = new google.auth.OAuth2(
+        ytClientId,
+        ytClientSecret,
+        'https://developers.google.com/oauthplayground'
+      );
+      oauth2Client.setCredentials({ refresh_token: ytRefreshToken });
 
-  try {
-    const { token } = await oauth2Client.getAccessToken();
-    if (!token) throw new Error('OAuth client returned an empty access token.');
-    console.log('Successfully refreshed YouTube access token.');
-  } catch (authError) {
-    console.error('\n=============================================');
-    console.error('YOUTUBE AUTHENTICATION FAILED (401 Unauthorized)');
-    console.error('The YOUTUBE_REFRESH_TOKEN is expired, invalid, or has been revoked.');
-    console.error('=============================================\n');
-    process.exit(1);
+      const { token } = await oauth2Client.getAccessToken();
+      if (!token) throw new Error('OAuth client returned an empty access token.');
+      
+      youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+      console.log('Successfully authenticated with YouTube API.');
+    } catch (authError) {
+      console.warn('YouTube authentication failed:', authError.message || authError);
+      console.warn('Continuing without YouTube integration.');
+    }
+  } else {
+    console.log('YouTube credentials not provided. Proceeding without YouTube.');
   }
-
-  const youtube = google.youtube({
-    version: 'v3',
-    auth: oauth2Client
-  });
 
   console.log(`Found ${videos.length} videos to publish.`);
 
   for (const video of videos) {
-    console.log(`\n--- Processing video: [${video.id}] ${video.topic} ---`);
+    console.log(`\n======================================================`);
+    console.log(`Processing video: [${video.id}] "${video.topic}"`);
+    console.log(`======================================================`);
 
     if (!video.video_url) {
       console.error('Scheduled video does not have a video_url. Skipping.');
       continue;
     }
 
-    // 2. Download the MP4 from Supabase Storage
-    console.log('Downloading video file from Supabase...');
+    // Download the MP4 from Supabase Storage
+    console.log('Downloading video file from Supabase Storage...');
     const fileName = `${video.id}.mp4`;
     const { data: fileData, error: downloadError } = await supabase.storage
       .from('shorts')
       .download(fileName);
 
     if (downloadError) {
-      console.error('Failed to download video:', downloadError);
+      console.error('Failed to download video from Supabase:', downloadError);
       continue;
     }
 
     const localFilePath = path.join(process.cwd(), fileName);
     fs.writeFileSync(localFilePath, Buffer.from(await fileData.arrayBuffer()));
-    console.log(`Video downloaded to ${localFilePath}`);
+    console.log(`Video downloaded locally to: ${localFilePath}`);
 
-    // 3. Upload to YouTube
-    console.log('Uploading to YouTube...');
+    const uploadResults = {
+      youtube: false,
+      facebook: false,
+      instagram: false,
+    };
+
     try {
-      const res = await youtube.videos.insert({
-        part: 'snippet,status',
-        requestBody: {
-          snippet: {
-            title: video.topic,
-            description: `${video.topic}\n\n#shorts #data #comparison`,
-            tags: ['shorts', 'data', 'comparison'],
-            categoryId: '24' // Entertainment
-          },
-          status: {
-            privacyStatus: 'private', // Set to 'public' when ready
-            selfDeclaredMadeForKids: false
-          }
-        },
-        media: {
-          body: fs.createReadStream(localFilePath)
+      // 1. YouTube Upload
+      try {
+        const ytId = await uploadToYouTube(video, localFilePath, youtube);
+        if (ytId) uploadResults.youtube = true;
+      } catch (ytError) {
+        console.error('YouTube upload encountered an error:', ytError.message || ytError);
+      }
+
+      // 2. Facebook Page Upload
+      try {
+        const fbId = await uploadToFacebook(video, localFilePath);
+        if (fbId) uploadResults.facebook = true;
+      } catch (fbError) {
+        console.error('Facebook upload encountered an error:', fbError.message || fbError);
+      }
+
+      // 3. Instagram Reels Upload
+      try {
+        const igId = await uploadToInstagram(video, localFilePath);
+        if (igId) uploadResults.instagram = true;
+      } catch (igError) {
+        console.error('Instagram Reels upload encountered an error:', igError.message || igError);
+      }
+
+      // 4. Update Database Status
+      const anySuccess = uploadResults.youtube || uploadResults.facebook || uploadResults.instagram;
+      console.log(`\nUpload summary for [${video.id}]:`, uploadResults);
+
+      if (anySuccess) {
+        console.log('Updating database status to "Published"...');
+        const { error: updateError } = await supabase
+          .from('shorts_queue')
+          .update({ status: 'Published' })
+          .eq('id', video.id);
+
+        if (updateError) {
+          console.error('Failed to update status in database:', updateError);
+        } else {
+          console.log(`Successfully updated database status to Published for video: ${video.id}`);
         }
-      });
-
-      console.log('YouTube Upload successful! Video ID:', res.data.id);
-    } catch (error) {
-      console.error('YouTube API upload failed:', error);
-      continue;
-    }
-
-    // 4. Update Supabase Row to 'Published'
-    console.log('Updating database status to Published...');
-    const { error: updateError } = await supabase
-      .from('shorts_queue')
-      .update({ status: 'Published' })
-      .eq('id', video.id);
-
-    if (updateError) {
-      console.error('Failed to update status in database:', updateError);
-    } else {
-      console.log(`Successfully published video: ${video.id}`);
+      } else {
+        console.warn(`No platform uploads succeeded for video [${video.id}]. Status retained.`);
+      }
+    } finally {
+      // Clean up downloaded file
+      if (fs.existsSync(localFilePath)) {
+        try {
+          fs.unlinkSync(localFilePath);
+          console.log(`Cleaned up temporary file: ${localFilePath}`);
+        } catch (cleanupErr) {
+          console.warn('Failed to remove temp video file:', cleanupErr);
+        }
+      }
     }
   }
 
   console.log('\nAuto-publish workflow completed successfully!');
 }
 
-main().catch(err => {
-  console.error(err);
+main().catch((err) => {
+  console.error('Fatal error in auto-publish workflow:', err);
   process.exit(1);
 });
