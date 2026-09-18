@@ -8,8 +8,11 @@ import { generateArenaSimulation } from '../lib/arena-physics';
 import { AestheticVideo } from './AestheticVideo';
 import { loadFont } from '@remotion/google-fonts/Montserrat';
 
-// Preload a bold, modern font for our text
-loadFont();
+// Preload Montserrat font with optimal weights
+loadFont('normal', {
+  weights: ['400', '700', '800', '900'],
+  ignoreTooManyRequestsWarning: true,
+});
 
 export const RemotionRoot: React.FC = () => {
   return (
