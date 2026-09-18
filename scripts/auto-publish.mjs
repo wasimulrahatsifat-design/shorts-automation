@@ -236,62 +236,88 @@ async function main() {
 
   const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-  // 1. Check for a scheduled video that's due
-  console.log('Checking for scheduled videos due to be published...');
-  const { data: videos, error: fetchError } = await supabase
-    .from('shorts_queue')
-    .select('*')
-    .eq('status', 'Scheduled')
-    .lte('scheduled_time', new Date().toISOString());
+  const targetVideoId = process.env.TARGET_VIDEO_ID || null;
+  const targetPlatform = (process.env.TARGET_PLATFORM || 'all').toLowerCase();
+  console.log(`Auto-Publish Config: targetVideoId=${targetVideoId || 'any scheduled'}, targetPlatform=${targetPlatform}`);
 
-  if (fetchError) {
-    console.error('Error fetching scheduled videos:', fetchError);
-    process.exit(1);
+  // 1. Fetch videos to process
+  let videos = [];
+  if (targetVideoId) {
+    console.log(`Fetching specific video [${targetVideoId}]...`);
+    const { data, error } = await supabase
+      .from('shorts_queue')
+      .select('*')
+      .eq('id', targetVideoId);
+
+    if (error) {
+      console.error('Error fetching target video:', error);
+      process.exit(1);
+    }
+    videos = data || [];
+  } else {
+    console.log('Checking for scheduled videos due to be published...');
+    const { data, error } = await supabase
+      .from('shorts_queue')
+      .select('*')
+      .eq('status', 'Scheduled')
+      .lte('scheduled_time', new Date().toISOString());
+
+    if (error) {
+      console.error('Error fetching scheduled videos:', error);
+      process.exit(1);
+    }
+    videos = data || [];
   }
 
   if (!videos || videos.length === 0) {
-    console.log('No videos scheduled for publishing right now. Exiting gracefully.');
+    console.log('No videos found for publishing right now. Exiting gracefully.');
     process.exit(0);
   }
 
-  // Initialize YouTube OAuth2 Client if credentials exist
+  // Initialize YouTube OAuth2 Client if credentials exist and YouTube is targeted
   let youtube = null;
-  const ytClientId = process.env.YOUTUBE_CLIENT_ID;
-  const ytClientSecret = process.env.YOUTUBE_CLIENT_SECRET;
-  const ytRefreshToken = process.env.YOUTUBE_REFRESH_TOKEN;
+  const doYouTube = targetPlatform === 'all' || targetPlatform === 'youtube';
+  const doMeta = targetPlatform === 'all' || targetPlatform === 'meta' || targetPlatform === 'facebook-instagram';
 
-  if (ytClientId && ytClientSecret && ytRefreshToken) {
-    console.log('Authenticating with YouTube API...');
-    try {
-      const oauth2Client = new google.auth.OAuth2(
-        ytClientId,
-        ytClientSecret,
-        'https://developers.google.com/oauthplayground'
-      );
-      oauth2Client.setCredentials({ refresh_token: ytRefreshToken });
+  if (doYouTube) {
+    const ytClientId = process.env.YOUTUBE_CLIENT_ID;
+    const ytClientSecret = process.env.YOUTUBE_CLIENT_SECRET;
+    const ytRefreshToken = process.env.YOUTUBE_REFRESH_TOKEN;
 
-      const { token } = await oauth2Client.getAccessToken();
-      if (!token) throw new Error('OAuth client returned an empty access token.');
-      
-      youtube = google.youtube({ version: 'v3', auth: oauth2Client });
-      console.log('Successfully authenticated with YouTube API.');
-    } catch (authError) {
-      console.warn('YouTube authentication failed:', authError.message || authError);
-      console.warn('Continuing without YouTube integration.');
+    if (ytClientId && ytClientSecret && ytRefreshToken) {
+      console.log('Authenticating with YouTube API...');
+      try {
+        const oauth2Client = new google.auth.OAuth2(
+          ytClientId,
+          ytClientSecret,
+          'https://developers.google.com/oauthplayground'
+        );
+        oauth2Client.setCredentials({ refresh_token: ytRefreshToken });
+
+        const { token } = await oauth2Client.getAccessToken();
+        if (!token) throw new Error('OAuth client returned an empty access token.');
+        
+        youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+        console.log('Successfully authenticated with YouTube API.');
+      } catch (authError) {
+        console.warn('YouTube authentication failed:', authError.message || authError);
+        console.warn('Continuing without YouTube integration.');
+      }
+    } else {
+      console.log('YouTube credentials not provided. Skipping YouTube.');
     }
-  } else {
-    console.log('YouTube credentials not provided. Proceeding without YouTube.');
   }
 
-  console.log(`Found ${videos.length} videos to publish.`);
+  console.log(`Processing ${videos.length} video(s)...`);
 
   for (const video of videos) {
     console.log(`\n======================================================`);
     console.log(`Processing video: [${video.id}] "${video.topic}"`);
+    console.log(`Target platform filter: ${targetPlatform}`);
     console.log(`======================================================`);
 
     if (!video.video_url) {
-      console.error('Scheduled video does not have a video_url. Skipping.');
+      console.error('Video does not have a video_url. Skipping.');
       continue;
     }
 
@@ -316,50 +342,94 @@ async function main() {
       facebook: false,
       instagram: false,
     };
+    const uploadedIds = {};
 
     try {
       // 1. YouTube Upload
-      try {
-        const ytId = await uploadToYouTube(video, localFilePath, youtube);
-        if (ytId) uploadResults.youtube = true;
-      } catch (ytError) {
-        console.error('YouTube upload encountered an error:', ytError.message || ytError);
+      if (doYouTube) {
+        if (video.data_json?.youtube_status === 'Published') {
+          console.log('Skipping YouTube: Already published to YouTube.');
+          uploadResults.youtube = true;
+        } else {
+          try {
+            const ytId = await uploadToYouTube(video, localFilePath, youtube);
+            if (ytId) {
+              uploadResults.youtube = true;
+              uploadedIds.youtube_id = ytId;
+            }
+          } catch (ytError) {
+            console.error('YouTube upload encountered an error:', ytError.message || ytError);
+          }
+        }
       }
 
       // 2. Facebook Page Upload
-      try {
-        const fbId = await uploadToFacebook(video, localFilePath);
-        if (fbId) uploadResults.facebook = true;
-      } catch (fbError) {
-        console.error('Facebook upload encountered an error:', fbError.message || fbError);
+      if (doMeta) {
+        if (video.data_json?.meta_status === 'Published') {
+          console.log('Skipping Facebook: Already published to Meta.');
+          uploadResults.facebook = true;
+        } else {
+          try {
+            const fbId = await uploadToFacebook(video, localFilePath);
+            if (fbId) {
+              uploadResults.facebook = true;
+              uploadedIds.facebook_id = fbId;
+            }
+          } catch (fbError) {
+            console.error('Facebook upload encountered an error:', fbError.message || fbError);
+          }
+        }
       }
 
       // 3. Instagram Reels Upload
-      try {
-        const igId = await uploadToInstagram(video, localFilePath);
-        if (igId) uploadResults.instagram = true;
-      } catch (igError) {
-        console.error('Instagram Reels upload encountered an error:', igError.message || igError);
+      if (doMeta) {
+        if (video.data_json?.meta_status === 'Published') {
+          console.log('Skipping Instagram: Already published to Meta.');
+          uploadResults.instagram = true;
+        } else {
+          try {
+            const igId = await uploadToInstagram(video, localFilePath);
+            if (igId) {
+              uploadResults.instagram = true;
+              uploadedIds.instagram_id = igId;
+            }
+          } catch (igError) {
+            console.error('Instagram Reels upload encountered an error:', igError.message || igError);
+          }
+        }
       }
 
-      // 4. Update Database Status
-      const anySuccess = uploadResults.youtube || uploadResults.facebook || uploadResults.instagram;
+      // 4. Update Database Status & Platform Tracking
+      const updatedDataJson = { ...(video.data_json || {}) };
+      if (uploadResults.youtube && doYouTube) {
+        updatedDataJson.youtube_status = 'Published';
+        if (uploadedIds.youtube_id) updatedDataJson.youtube_id = uploadedIds.youtube_id;
+      }
+      if ((uploadResults.facebook || uploadResults.instagram) && doMeta) {
+        updatedDataJson.meta_status = 'Published';
+        if (uploadedIds.facebook_id) updatedDataJson.facebook_id = uploadedIds.facebook_id;
+        if (uploadedIds.instagram_id) updatedDataJson.instagram_id = uploadedIds.instagram_id;
+      }
+
+      const isYtDone = updatedDataJson.youtube_status === 'Published';
+      const isMetaDone = updatedDataJson.meta_status === 'Published';
+      const overallStatus = (isYtDone && isMetaDone) ? 'Published' : (isYtDone || isMetaDone ? 'Partially_Published' : video.status);
+
       console.log(`\nUpload summary for [${video.id}]:`, uploadResults);
+      console.log(`New platform statuses: YouTube=${updatedDataJson.youtube_status || 'Pending'}, Meta=${updatedDataJson.meta_status || 'Pending'}, Overall=${overallStatus}`);
 
-      if (anySuccess) {
-        console.log('Updating database status to "Published"...');
-        const { error: updateError } = await supabase
-          .from('shorts_queue')
-          .update({ status: 'Published' })
-          .eq('id', video.id);
+      const { error: updateError } = await supabase
+        .from('shorts_queue')
+        .update({
+          status: overallStatus,
+          data_json: updatedDataJson,
+        })
+        .eq('id', video.id);
 
-        if (updateError) {
-          console.error('Failed to update status in database:', updateError);
-        } else {
-          console.log(`Successfully updated database status to Published for video: ${video.id}`);
-        }
+      if (updateError) {
+        console.error('Failed to update status in database:', updateError);
       } else {
-        console.warn(`No platform uploads succeeded for video [${video.id}]. Status retained.`);
+        console.log(`Successfully updated database status for video: ${video.id}`);
       }
     } finally {
       // Clean up downloaded file

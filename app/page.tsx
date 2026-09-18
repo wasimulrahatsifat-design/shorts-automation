@@ -685,8 +685,11 @@ export default function Home() {
             >
               Dashboard
             </button>
-            <Link href="/admin" className="px-5 py-3 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-all text-center">
-              Admin View
+            <Link href="/admin/youtube" className="px-4 py-3 rounded-xl bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300 font-medium hover:bg-red-200 dark:hover:bg-red-900/60 transition-all text-center border border-red-200 dark:border-red-900/50 flex items-center justify-center gap-1.5 text-sm">
+              <span>🔴</span> YouTube Approval
+            </Link>
+            <Link href="/admin/meta" className="px-4 py-3 rounded-xl bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-medium hover:bg-blue-200 dark:hover:bg-blue-900/60 transition-all text-center border border-blue-200 dark:border-blue-900/50 flex items-center justify-center gap-1.5 text-sm">
+              <span>🔵</span> FB & IG Approval
             </Link>
           </div>
         </div>
