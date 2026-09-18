@@ -4,24 +4,84 @@ import fs from 'fs';
 import path from 'path';
 
 /**
+ * Automatically resolves a Page Access Token if a User Access Token is provided
+ */
+async function resolvePageAccessToken(inputToken, pageId) {
+  if (!inputToken || !pageId) return inputToken;
+  try {
+    const meRes = await fetch(`https://graph.facebook.com/v19.0/me?access_token=${inputToken}`);
+    const meData = await meRes.json();
+    if (meData.id === pageId) {
+      return inputToken; // Already a page token
+    }
+    console.log(`Input token belongs to: ${meData.name || 'User'} (${meData.id}). Resolving Page Access Token...`);
+    const accountsRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?access_token=${inputToken}`);
+    const accountsData = await accountsRes.json();
+    if (accountsData.data && Array.isArray(accountsData.data)) {
+      const match = accountsData.data.find(acc => acc.id === pageId);
+      if (match && match.access_token) {
+        console.log(`Successfully auto-resolved Page Access Token for "${match.name}" (${match.id})`);
+        return match.access_token;
+      }
+    }
+  } catch (err) {
+    console.warn('Could not auto-resolve Page Access Token:', err.message);
+  }
+  return inputToken;
+}
+
+/**
  * Uploads a video file to a Facebook Page via Meta Graph API
  */
 async function uploadToFacebook(video, localFilePath) {
   const pageId = process.env.FB_PAGE_ID;
-  const accessToken = process.env.FB_PAGE_ACCESS_TOKEN;
+  const rawToken = process.env.FB_PAGE_ACCESS_TOKEN;
 
-  if (!pageId || !accessToken) {
+  if (!pageId || !rawToken) {
     console.log('Skipping Facebook: FB_PAGE_ID or FB_PAGE_ACCESS_TOKEN not configured.');
     return null;
   }
 
+  const accessToken = await resolvePageAccessToken(rawToken, pageId);
+
   console.log('Uploading to Facebook Page...');
+
+  // 1. Try URL-based upload first if video has a public Supabase URL
+  if (video.video_url) {
+    try {
+      console.log('Attempting Facebook upload via public video_url...');
+      const params = new URLSearchParams({
+        access_token: accessToken,
+        file_url: video.video_url,
+        title: video.topic,
+        description: `${video.topic}\n\n#shorts #reels #viral #trending`,
+        published: 'true',
+      });
+
+      const response = await fetch(`https://graph.facebook.com/v19.0/${pageId}/videos`, {
+        method: 'POST',
+        body: params,
+      });
+
+      const data = await response.json();
+      if (response.ok && data.id && !data.error) {
+        console.log(`Facebook Upload successful via URL! Video ID: ${data.id}`);
+        return data.id;
+      }
+      console.warn('URL-based Facebook upload did not succeed, trying multipart file upload:', data.error?.message || data);
+    } catch (urlErr) {
+      console.warn('URL-based Facebook upload error, falling back to multipart:', urlErr.message);
+    }
+  }
+
+  // 2. Fallback: Multipart/form-data upload with local file
+  console.log('Uploading video file to Facebook via multipart/form-data...');
   const formData = new FormData();
   formData.append('access_token', accessToken);
   formData.append('title', video.topic);
   formData.append('description', `${video.topic}\n\n#shorts #reels #viral #trending`);
+  formData.append('published', 'true');
 
-  // Attach the video file as multipart/form-data
   const fileBuffer = fs.readFileSync(localFilePath);
   const fileBlob = new Blob([fileBuffer], { type: 'video/mp4' });
   formData.append('source', fileBlob, path.basename(localFilePath));
