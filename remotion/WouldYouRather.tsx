@@ -19,7 +19,17 @@ export interface WouldYouRatherJson {
   show_subtitles?: boolean;
   bg_music_url?: string;
   bg_music_volume?: number;
+  bg_music_enabled?: boolean;
 }
+
+const resolveAudioUrl = (url?: string) => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url;
+  }
+  const clean = url.startsWith('/') ? url.slice(1) : url;
+  return staticFile(clean);
+};
 
 export const getWyrTiming = (s: Scenario, fps: number) => {
   const textLength = s.option_a.length + s.option_b.length + 20; // "Would you rather option a or option b"
@@ -275,8 +285,8 @@ export const WouldYouRather: React.FC<{ data_json: WouldYouRatherJson; topic: st
   return (
     <AbsoluteFill style={{ backgroundColor: '#111' }}>
       {/* Background Music Support */}
-      {bg_music_url && (
-        <Audio src={bg_music_url} volume={bg_music_volume ?? 0.15} loop />
+      {bg_music_url && (data_json as any).bg_music_enabled !== false && (
+        <Audio src={resolveAudioUrl(bg_music_url)} volume={bg_music_volume ?? 0.15} loop />
       )}
 
       <Series>

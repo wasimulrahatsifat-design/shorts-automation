@@ -28,7 +28,17 @@ export interface ArenaClashData {
   tts_url?: string;
   bg_music_url?: string;
   bg_music_volume?: number;
+  bg_music_enabled?: boolean;
 }
+
+const resolveAudioUrl = (url?: string) => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url;
+  }
+  const clean = url.startsWith('/') ? url.slice(1) : url;
+  return staticFile(clean);
+};
 
 export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> = ({
   data_json,
@@ -221,11 +231,13 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
       }}
     >
       {/* 1. Background Battle Music (Custom or Energetic Arcade BGM) */}
-      <Audio 
-        src={data_json.bg_music_url || staticFile('audio/battle_bgm.wav')} 
-        volume={data_json.bg_music_volume ?? 0.32} 
-        loop 
-      />
+      {data_json.bg_music_enabled !== false && data_json.bg_music_url !== 'none' && data_json.bg_music_url !== null && (
+        <Audio 
+          src={resolveAudioUrl(data_json.bg_music_url) || staticFile('audio/battle_bgm.wav')} 
+          volume={data_json.bg_music_volume ?? 0.32} 
+          loop 
+        />
+      )}
 
       {/* 2. Sequenced Sound Effects (Bounce, Hit, Gun, Item, Explosion, Winner) */}
       {soundEvents.map((ev, idx) => {

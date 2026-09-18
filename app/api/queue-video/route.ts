@@ -117,6 +117,11 @@ export async function POST(request: Request) {
       finalDuration = data_json.duration_seconds;
     }
 
+    // Check if background music is enabled
+    const isBgMusicEnabled = body.bg_music_enabled !== false && data_json.bg_music_enabled !== false;
+    const finalBgMusicUrl = isBgMusicEnabled ? (body.bg_music_url || data_json.bg_music_url || undefined) : undefined;
+    const finalBgMusicVolume = isBgMusicEnabled ? (typeof body.bg_music_volume === 'number' ? body.bg_music_volume : data_json.bg_music_volume) : undefined;
+
     // Insert into Supabase
     const { data: dbData, error } = await supabase
       .from('shorts_queue')
@@ -127,8 +132,9 @@ export async function POST(request: Request) {
             ...data_json,
             tts_url: tts_url,
             tts_urls: tts_urls,
-            bg_music_url: body.bg_music_url || data_json.bg_music_url || undefined,
-            bg_music_volume: typeof body.bg_music_volume === 'number' ? body.bg_music_volume : data_json.bg_music_volume,
+            bg_music_url: finalBgMusicUrl,
+            bg_music_volume: finalBgMusicVolume,
+            bg_music_enabled: isBgMusicEnabled,
             show_subtitles: showSubtitles,
             duration_seconds: finalDuration
           },

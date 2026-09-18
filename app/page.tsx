@@ -8,6 +8,7 @@ import {
   syncImagesFromSupabase,
 } from '../lib/image-library';
 import { POPULAR_VOICES, VoiceOption } from '../lib/voices';
+import { DEFAULT_MUSIC_TRACKS, MusicTrack } from '../lib/music-tracks';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -41,7 +42,9 @@ export default function Home() {
   const audioPreviewRef = useRef<HTMLAudioElement | null>(null);
 
   // Background Music State
-  const [bgMusicUrl, setBgMusicUrl] = useState<string>('');
+  const [bgMusicEnabled, setBgMusicEnabled] = useState<boolean>(true);
+  const [customTracks, setCustomTracks] = useState<MusicTrack[]>([]);
+  const [selectedTrackId, setSelectedTrackId] = useState<string>('battle_bgm');
   const [bgMusicVolume, setBgMusicVolume] = useState<number>(0.15); // default 15%
   const [bgMusicUploading, setBgMusicUploading] = useState<boolean>(false);
   const [isPlayingMusicPreview, setIsPlayingMusicPreview] = useState<boolean>(false);
@@ -85,8 +88,42 @@ export default function Home() {
     };
   }, []);
 
+  // Sync custom background tracks and music preferences
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('custom_bg_tracks');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setCustomTracks(parsed);
+        }
+      }
+      const savedPref = localStorage.getItem('bg_music_enabled');
+      if (savedPref !== null) {
+        setBgMusicEnabled(savedPref === 'true');
+      }
+    } catch (err) {
+      console.error('Failed to load custom bg tracks:', err);
+    }
+  }, []);
+
+  const handleToggleBgMusic = (enabled: boolean) => {
+    setBgMusicEnabled(enabled);
+    try {
+      localStorage.setItem('bg_music_enabled', String(enabled));
+    } catch {}
+    if (!enabled && musicAudioRef.current) {
+      musicAudioRef.current.pause();
+      musicAudioRef.current = null;
+      setIsPlayingMusicPreview(false);
+    }
+  };
+
+  const allMusicTracks: MusicTrack[] = [...DEFAULT_MUSIC_TRACKS, ...customTracks];
+  const activeMusicTrack: MusicTrack = allMusicTracks.find((t) => t.id === selectedTrackId) || allMusicTracks[0];
+
   const toggleMusicPreview = () => {
-    if (!bgMusicUrl) return;
+    if (!bgMusicEnabled || !activeMusicTrack?.url) return;
     if (isPlayingMusicPreview) {
       if (musicAudioRef.current) {
         musicAudioRef.current.pause();
@@ -96,8 +133,12 @@ export default function Home() {
       return;
     }
     try {
-      const audio = new Audio(bgMusicUrl);
+      if (musicAudioRef.current) {
+        musicAudioRef.current.pause();
+      }
+      const audio = new Audio(activeMusicTrack.url);
       audio.volume = Math.min(1, Math.max(0, bgMusicVolume));
+      audio.loop = true;
       musicAudioRef.current = audio;
       setIsPlayingMusicPreview(true);
       audio.play().catch(() => setIsPlayingMusicPreview(false));
@@ -120,6 +161,7 @@ export default function Home() {
     setBgMusicUploading(true);
     try {
       const fileExt = file.name.split('.').pop() || 'mp3';
+      const cleanBaseName = file.name.replace(/\.[^/.]+$/, '').trim();
       const fileName = `bgm_${crypto.randomUUID()}.${fileExt}`;
       const { data, error } = await supabase.storage.from('shorts').upload(fileName, file, {
         contentType: file.type || 'audio/mpeg',
@@ -127,14 +169,42 @@ export default function Home() {
       });
       if (error) throw error;
       const { data: publicData } = supabase.storage.from('shorts').getPublicUrl(fileName);
-      setBgMusicUrl(publicData.publicUrl);
-      setMessage({ type: 'success', text: 'Background music uploaded successfully!' });
+      const newTrack: MusicTrack = {
+        id: `custom_${Date.now()}`,
+        name: `📁 ${cleanBaseName}`,
+        url: publicData.publicUrl,
+        isCustom: true
+      };
+      const updated = [...customTracks, newTrack];
+      setCustomTracks(updated);
+      try {
+        localStorage.setItem('custom_bg_tracks', JSON.stringify(updated));
+      } catch {}
+      setSelectedTrackId(newTrack.id);
+      handleToggleBgMusic(true);
+      setMessage({ type: 'success', text: `Added "${file.name}" to music dropdown!` });
     } catch (err: any) {
       console.error('Error uploading background music:', err);
       setMessage({ type: 'error', text: err.message || 'Failed to upload background music.' });
     } finally {
       setBgMusicUploading(false);
       e.target.value = '';
+    }
+  };
+
+  const handleDeleteCustomTrack = (trackId: string) => {
+    const updated = customTracks.filter((t) => t.id !== trackId);
+    setCustomTracks(updated);
+    try {
+      localStorage.setItem('custom_bg_tracks', JSON.stringify(updated));
+    } catch {}
+    if (selectedTrackId === trackId) {
+      setSelectedTrackId(DEFAULT_MUSIC_TRACKS[0].id);
+      if (musicAudioRef.current) {
+        musicAudioRef.current.pause();
+        musicAudioRef.current = null;
+        setIsPlayingMusicPreview(false);
+      }
     }
   };
 
@@ -486,7 +556,9 @@ export default function Home() {
         throw new Error('Invalid JSON format. Please check your syntax.');
       }
 
-      const finalVoiceId = selectedVoiceId === 'custom' ? customVoiceId.trim() : selectedVoiceId;
+      const finalVoiceId = selectedVoiceId === 'custom' ? (customVoiceId.trim() || 'pNInz6obpgDQGcFmaJgB') : selectedVoiceId;
+      const finalBgMusicUrl = bgMusicEnabled ? (activeMusicTrack?.url || null) : null;
+      const finalBgMusicVolume = bgMusicEnabled ? bgMusicVolume : undefined;
 
       const response = await fetch('/api/queue-video', {
         method: 'POST',
@@ -495,13 +567,15 @@ export default function Home() {
           data_json: {
             ...parsedJson,
             voice_id: parsedJson.voice_id || finalVoiceId,
-            bg_music_url: bgMusicUrl || parsedJson.bg_music_url || undefined,
-            bg_music_volume: bgMusicUrl ? bgMusicVolume : parsedJson.bg_music_volume
+            bg_music_url: finalBgMusicUrl || undefined,
+            bg_music_volume: finalBgMusicVolume,
+            bg_music_enabled: bgMusicEnabled
           }, 
           showSubtitles, 
           duration,
-          bg_music_url: bgMusicUrl || undefined,
-          bg_music_volume: bgMusicUrl ? bgMusicVolume : undefined
+          bg_music_url: finalBgMusicUrl || undefined,
+          bg_music_volume: finalBgMusicVolume,
+          bg_music_enabled: bgMusicEnabled
         })
       });
 
@@ -788,108 +862,155 @@ export default function Home() {
             </div>
 
             {/* --- Background Music & Volume --- */}
-            <div className="bg-slate-50 dark:bg-slate-900/60 p-5 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-4">
-              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+            <div className={`p-5 rounded-2xl border transition-all space-y-4 ${
+              bgMusicEnabled 
+                ? 'bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-700/80 shadow-sm' 
+                : 'bg-gray-50/70 dark:bg-gray-900/40 border-gray-200 dark:border-gray-800 opacity-90'
+            }`}>
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
                 <div>
                   <h3 className="text-sm font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
                     <span>🎵</span>
-                    <span>Background Music (Optional)</span>
+                    <span>Background Music</span>
                   </h3>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                    Upload your own music track and configure background audio volume.
+                    Select a music track from the dropdown or upload your own audio.
                   </p>
                 </div>
-                {bgMusicUrl && (
-                  <span className="text-[11px] bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold px-3 py-1 rounded-full border border-emerald-300 dark:border-emerald-800 w-fit flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span>Music Active ({Math.round(bgMusicVolume * 100)}%)</span>
-                  </span>
-                )}
+
+                {/* Enable / Disable Button Toggle */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleBgMusic(!bgMusicEnabled)}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border shadow-sm ${
+                      bgMusicEnabled
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700 active:scale-95'
+                        : 'bg-white hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600'
+                    }`}
+                    title={bgMusicEnabled ? 'Click to disable background music' : 'Click to enable background music'}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${bgMusicEnabled ? 'bg-white animate-pulse' : 'bg-gray-400'}`}></span>
+                    <span>{bgMusicEnabled ? 'Music: Enabled ✓' : 'Music: Disabled (Off)'}</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Audio Upload */}
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
-                    Audio Track (.mp3, .wav)
-                  </label>
-                  <div className="flex gap-2">
-                    <label className="flex-1 cursor-pointer bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:border-blue-500 text-gray-700 dark:text-gray-200 text-xs font-semibold py-2.5 px-3.5 rounded-xl transition flex items-center justify-between shadow-sm">
-                      <span className="truncate">
-                        {bgMusicUploading 
-                          ? 'Uploading audio...' 
-                          : bgMusicUrl 
-                            ? '✓ Music File Attached' 
-                            : 'Upload Music File...'}
-                      </span>
-                      <span className="text-blue-600 dark:text-blue-400 font-bold text-xs ml-2">Browse</span>
-                      <input 
-                        type="file" 
-                        accept="audio/*" 
-                        className="hidden" 
-                        onChange={handleBgMusicUpload}
-                        disabled={bgMusicUploading} 
-                      />
+              {bgMusicEnabled ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                  {/* Music Track Dropdown & Actions */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                      Select Track
                     </label>
-
-                    {bgMusicUrl && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={toggleMusicPreview}
-                          className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                            isPlayingMusicPreview
-                              ? 'bg-red-500 text-white shadow animate-pulse'
-                              : 'bg-blue-100 hover:bg-blue-200 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
-                          }`}
-                          title="Preview background music"
-                        >
-                          <span>{isPlayingMusicPreview ? '⏹ Stop' : '▶ Preview'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (musicAudioRef.current) {
-                              musicAudioRef.current.pause();
-                              musicAudioRef.current = null;
-                            }
+                    <div className="flex gap-2">
+                      <select
+                        value={selectedTrackId}
+                        onChange={(e) => {
+                          setSelectedTrackId(e.target.value);
+                          if (musicAudioRef.current) {
+                            musicAudioRef.current.pause();
+                            musicAudioRef.current = null;
                             setIsPlayingMusicPreview(false);
-                            setBgMusicUrl('');
-                          }}
+                          }
+                        }}
+                        className="flex-1 px-3.5 py-2.5 text-xs font-semibold border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 shadow-sm focus:ring-2 focus:ring-blue-500 truncate"
+                      >
+                        <optgroup label="Default Tracks">
+                          {DEFAULT_MUSIC_TRACKS.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                        {customTracks.length > 0 && (
+                          <optgroup label="Your Uploaded Tracks">
+                            {customTracks.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                      </select>
+
+                      {/* Preview Button */}
+                      <button
+                        type="button"
+                        onClick={toggleMusicPreview}
+                        className={`px-3 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm whitespace-nowrap ${
+                          isPlayingMusicPreview
+                            ? 'bg-red-500 text-white animate-pulse'
+                            : 'bg-blue-100 hover:bg-blue-200 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                        }`}
+                        title="Preview audio track"
+                      >
+                        <span>{isPlayingMusicPreview ? '⏹ Stop' : '▶ Play'}</span>
+                      </button>
+
+                      {/* If custom track is selected, allow deleting it */}
+                      {activeMusicTrack?.isCustom && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCustomTrack(activeMusicTrack.id)}
                           className="px-2.5 py-2.5 rounded-xl text-xs font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900 transition"
-                          title="Remove music"
+                          title="Remove this uploaded track"
                         >
                           ✕
                         </button>
-                      </>
-                    )}
-                  </div>
-                </div>
+                      )}
 
-                {/* Volume Slider */}
-                <div className="space-y-1.5 bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 flex flex-col justify-center">
-                  <div className="flex justify-between items-center text-xs font-bold text-gray-700 dark:text-gray-300">
-                    <span>Music Volume</span>
-                    <span className="text-blue-600 dark:text-blue-400 font-mono">{Math.round(bgMusicVolume * 100)}%</span>
+                      {/* Upload New Track Button */}
+                      <label
+                        className={`px-3 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer border shadow-sm whitespace-nowrap ${
+                          bgMusicUploading
+                            ? 'bg-gray-200 text-gray-500 cursor-not-allowed border-gray-300'
+                            : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-600'
+                        }`}
+                        title="Upload new audio file (.mp3, .wav)"
+                      >
+                        <span>{bgMusicUploading ? '⏳' : '+ Upload'}</span>
+                        <input
+                          type="file"
+                          accept="audio/*"
+                          className="hidden"
+                          onChange={handleBgMusicUpload}
+                          disabled={bgMusicUploading}
+                        />
+                      </label>
+                    </div>
                   </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={bgMusicVolume}
-                    onChange={(e) => {
-                      const v = parseFloat(e.target.value);
-                      setBgMusicVolume(v);
-                      if (musicAudioRef.current) {
-                        musicAudioRef.current.volume = v;
-                      }
-                    }}
-                    className="w-full accent-blue-600 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg cursor-pointer"
-                  />
-                  <span className="text-[10px] text-gray-400">Recommended: 10%–20% for balanced voiceover</span>
+
+                  {/* Volume Slider */}
+                  <div className="space-y-1.5 bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 flex flex-col justify-center">
+                    <div className="flex justify-between items-center text-xs font-bold text-gray-700 dark:text-gray-300">
+                      <span>Music Volume</span>
+                      <span className="text-blue-600 dark:text-blue-400 font-mono">{Math.round(bgMusicVolume * 100)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={bgMusicVolume}
+                      onChange={(e) => {
+                        const v = parseFloat(e.target.value);
+                        setBgMusicVolume(v);
+                        if (musicAudioRef.current) {
+                          musicAudioRef.current.volume = v;
+                        }
+                      }}
+                      className="w-full accent-blue-600 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg cursor-pointer"
+                    />
+                    <span className="text-[10px] text-gray-400">Recommended: 10%–20% for balanced voiceover</span>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="bg-gray-100 dark:bg-gray-800/80 p-3.5 rounded-xl border border-gray-200 dark:border-gray-700/60 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                  <span>🔇</span>
+                  <span>Background music is turned off. Videos will be generated with voiceover narration and sound effects only.</span>
+                </div>
+              )}
             </div>
 
             <div className="pt-4 flex justify-between items-center">

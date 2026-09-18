@@ -18,7 +18,17 @@ export interface QuizJson {
   show_subtitles?: boolean;
   bg_music_url?: string;
   bg_music_volume?: number;
+  bg_music_enabled?: boolean;
 }
+
+const resolveAudioUrl = (url?: string) => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url;
+  }
+  const clean = url.startsWith('/') ? url.slice(1) : url;
+  return staticFile(clean);
+};
 
 export const getQuestionTiming = (q: Question, fps: number) => {
   const textLength = q.question.length + q.options.join(' ').length;
@@ -253,8 +263,8 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
   return (
     <AbsoluteFill style={{ backgroundColor: '#1b1d28', fontFamily: '"Montserrat", sans-serif', color: 'white' }}>
       {/* Background Music Track */}
-      {bg_music_url && (
-        <Audio src={bg_music_url} volume={bg_music_volume ?? 0.15} loop />
+      {bg_music_url && data_json.bg_music_enabled !== false && (
+        <Audio src={resolveAudioUrl(bg_music_url)} volume={bg_music_volume ?? 0.15} loop />
       )}
 
       {/* Background Audio Track - legacy fallback for single track */}

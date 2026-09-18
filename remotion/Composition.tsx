@@ -19,7 +19,17 @@ interface DataJson {
   show_subtitles?: boolean;
   bg_music_url?: string;
   bg_music_volume?: number;
+  bg_music_enabled?: boolean;
 }
+
+const resolveAudioUrl = (url?: string) => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url;
+  }
+  const clean = url.startsWith('/') ? url.slice(1) : url;
+  return staticFile(clean);
+};
 
 function formatNumberWithUnit(val: number, yAxisLabel?: string): string {
   if (val === undefined || val === null || isNaN(val)) return '0';
@@ -207,8 +217,8 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
       {data_json.tts_url && <Audio src={data_json.tts_url} volume={0.9} />}
 
       {/* Background Music Track */}
-      {data_json.bg_music_url && (
-        <Audio src={data_json.bg_music_url} volume={data_json.bg_music_volume ?? 0.15} loop />
+      {data_json.bg_music_url && data_json.bg_music_enabled !== false && (
+        <Audio src={resolveAudioUrl(data_json.bg_music_url)} volume={data_json.bg_music_volume ?? 0.15} loop />
       )}
 
       {/* Graph Paper Grid Background */}
