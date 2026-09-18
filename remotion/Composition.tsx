@@ -19,6 +19,78 @@ interface DataJson {
   show_subtitles?: boolean;
 }
 
+function formatNumberWithUnit(val: number, yAxisLabel?: string): string {
+  if (val === undefined || val === null || isNaN(val)) return '0';
+
+  const label = (yAxisLabel || '').trim();
+  const labelLower = label.toLowerCase();
+
+  // 1. Detect standard metric unit from yAxisLabel
+  let unitSuffix = '';
+  if (labelLower.includes('trillion') || /\b(\$)?t\b/i.test(label)) {
+    unitSuffix = ' T';
+  } else if (labelLower.includes('billion') || /\b(\$)?b\b/i.test(label)) {
+    unitSuffix = ' B';
+  } else if (labelLower.includes('million') || /\b(\$)?m\b/i.test(label)) {
+    unitSuffix = ' M';
+  } else if (labelLower.includes('thousand') || /\b(\$)?k\b/i.test(label)) {
+    unitSuffix = ' K';
+  } else if (labelLower.includes('%') || labelLower.includes('percent')) {
+    unitSuffix = '%';
+  } else {
+    // Check if label specifies a unit in parentheses, e.g. "Capacity (GWh)" -> "GWh"
+    const parenMatch = label.match(/\(([^)]+)\)/);
+    if (parenMatch && parenMatch[1]) {
+      const inside = parenMatch[1].trim();
+      const insideLower = inside.toLowerCase();
+      if (insideLower.includes('million')) unitSuffix = ' M';
+      else if (insideLower.includes('billion')) unitSuffix = ' B';
+      else if (insideLower.includes('trillion')) unitSuffix = ' T';
+      else if (insideLower.includes('thousand')) unitSuffix = ' K';
+      else if (inside.length <= 6) unitSuffix = ` ${inside}`;
+    }
+  }
+
+  // 2. If a unit was found from yAxisLabel:
+  if (unitSuffix) {
+    if (unitSuffix.includes('M') && val >= 1_000_000) {
+      val = val / 1_000_000;
+    } else if (unitSuffix.includes('B') && val >= 1_000_000_000) {
+      val = val / 1_000_000_000;
+    } else if (unitSuffix.includes('T') && val >= 1_000_000_000_000) {
+      val = val / 1_000_000_000_000;
+    } else if (unitSuffix.includes('K') && val >= 1_000) {
+      val = val / 1_000;
+    }
+
+    const formattedNum = Number.isInteger(val)
+      ? val.toLocaleString()
+      : (val < 10 ? val.toFixed(1) : Math.round(val).toLocaleString());
+    return `${formattedNum}${unitSuffix}`;
+  }
+
+  // 3. Fallback: Automatically abbreviate raw large values
+  const absVal = Math.abs(val);
+  if (absVal >= 1_000_000_000_000) {
+    const num = val / 1_000_000_000_000;
+    return `${num % 1 === 0 ? num : num.toFixed(1)} T`;
+  }
+  if (absVal >= 1_000_000_000) {
+    const num = val / 1_000_000_000;
+    return `${num % 1 === 0 ? num : num.toFixed(1)} B`;
+  }
+  if (absVal >= 1_000_000) {
+    const num = val / 1_000_000;
+    return `${num % 1 === 0 ? num : num.toFixed(1)} M`;
+  }
+  if (absVal >= 10_000) {
+    const num = val / 1_000;
+    return `${num % 1 === 0 ? num : num.toFixed(1)} K`;
+  }
+
+  return Math.round(val).toLocaleString();
+}
+
 export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = ({ data_json, topic }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames, width, height } = useVideoConfig();
@@ -132,6 +204,22 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
       {/* Audio Track */}
       {data_json.tts_url && <Audio src={data_json.tts_url} volume={0.9} />}
 
+      {/* Graph Paper Grid Background */}
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        backgroundImage: `
+          linear-gradient(rgba(255, 255, 255, 0.12) 1.5px, transparent 1.5px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.12) 1.5px, transparent 1.5px),
+          linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px)
+        `,
+        backgroundSize: '100px 100px, 100px 100px, 20px 20px, 20px 20px',
+        backgroundPosition: '-1.5px -1.5px, -1.5px -1.5px, -1px -1px, -1px -1px',
+        pointerEvents: 'none',
+        zIndex: 0
+      }} />
+
       <Sequence durationInFrames={chartDuration}>
         <AbsoluteFill style={{ opacity: chartOpacity }}>
           {/* Header Topic */}
@@ -141,11 +229,12 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
             width: '100%',
             opacity: titleOpacity, 
             transform: `scale(${titleScale})`, 
-            fontSize: 60, 
-            fontWeight: 900, 
+            fontSize: 54, 
+            fontWeight: 700, 
             textAlign: 'center',
-            textShadow: '4px 4px 15px rgba(0,0,0,0.6)',
-            color: '#f8f9fa'
+            textShadow: '3px 3px 12px rgba(0,0,0,0.6)',
+            color: '#f8f9fa',
+            padding: '0 40px'
           }}>
             {topic || "Animated Line Chart"}
           </div>
@@ -184,9 +273,9 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
               top: chartY + chartH / 2,
               left: 80,
               transform: 'translate(-50%, -50%) rotate(-90deg)',
-              fontSize: 32,
-              fontWeight: 800,
-              color: 'rgba(255,255,255,0.6)',
+              fontSize: 28,
+              fontWeight: 600,
+              color: 'rgba(255,255,255,0.65)',
               letterSpacing: 2,
               textTransform: 'uppercase'
             }}>
@@ -199,9 +288,9 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
               top: chartY + chartH + 20,
               left: chartX + chartW / 2,
               transform: 'translate(-50%, 0)',
-              fontSize: 32,
-              fontWeight: 800,
-              color: 'rgba(255,255,255,0.6)',
+              fontSize: 28,
+              fontWeight: 600,
+              color: 'rgba(255,255,255,0.65)',
               letterSpacing: 2,
               textTransform: 'uppercase'
             }}>
@@ -249,9 +338,9 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
 
                 {/* Label and Value grouped */}
                 <div style={{
-                  backgroundColor: 'rgba(0,0,0,0.6)',
-                  padding: '10px 20px',
-                  borderRadius: 20,
+                  backgroundColor: 'rgba(0,0,0,0.65)',
+                  padding: '8px 18px',
+                  borderRadius: 18,
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'center',
@@ -259,27 +348,27 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
                   whiteSpace: 'nowrap',
                   zIndex: 5
                 }}>
-                  <span style={{ fontSize: 24, fontWeight: 700, color: '#e0e0e0' }}>{pathData.item.label}</span>
-                  <span style={{ fontSize: 32, fontWeight: 900, color: pathData.color }}>
-                    {Math.round(curVal).toLocaleString()}
+                  <span style={{ fontSize: 22, fontWeight: 600, color: '#e2e8f0' }}>{pathData.item.label}</span>
+                  <span style={{ fontSize: 28, fontWeight: 700, color: pathData.color }}>
+                    {formatNumberWithUnit(curVal, y_axis_label)}
                   </span>
                 </div>
               </div>
             );
           })}
 
-          {/* Dynamic Timeline Text (Smooth Increment) */}
+          {/* Dynamic Timeline Text (Smooth Increment) positioned between graph bottom and avatars */}
           <div style={{
             position: 'absolute',
-            bottom: 300,
+            bottom: 390,
             width: '100%',
             textAlign: 'center',
-            fontSize: 100,
-            fontWeight: 900,
-            color: 'rgba(255,255,255,0.2)',
+            fontSize: 84,
+            fontWeight: 700,
+            color: 'rgba(255,255,255,0.35)',
             textTransform: 'uppercase',
-            letterSpacing: '10px',
-            zIndex: 0
+            letterSpacing: '8px',
+            zIndex: 1
           }}>
             {displayedLabel}
           </div>
@@ -294,7 +383,8 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
             justifyContent: 'center',
             gap: 20,
             padding: '0 100px',
-            flexWrap: 'wrap'
+            flexWrap: 'wrap',
+            zIndex: 2
           }}>
             {paths.map((pathData, idx) => (
               <div key={idx} style={{
@@ -317,8 +407,8 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
                   ) : null}
                 </div>
                 <div style={{
-                  fontSize: 26,
-                  fontWeight: 'bold',
+                  fontSize: 24,
+                  fontWeight: 600,
                   color: 'white',
                   textAlign: 'center',
                   lineHeight: 1.2,
@@ -338,18 +428,19 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
             <Sequence from={15}>
               <div style={{
                 position: 'absolute',
-                bottom: 80,
+                bottom: 60,
                 left: 100,
                 right: 100,
                 textAlign: 'center',
-                fontSize: 50,
-                fontWeight: 800,
-                textShadow: '4px 4px 15px rgba(0,0,0,0.8)',
+                fontSize: 44,
+                fontWeight: 600,
+                textShadow: '3px 3px 12px rgba(0,0,0,0.8)',
                 backgroundColor: 'rgba(0,0,0,0.6)',
-                padding: '25px',
+                padding: '20px 25px',
                 borderRadius: 20,
-                border: '4px solid rgba(255,255,255,0.1)',
-                opacity: subtitleOpacity
+                border: '3px solid rgba(255,255,255,0.1)',
+                opacity: subtitleOpacity,
+                zIndex: 10
               }}>
                 {script}
               </div>
@@ -366,32 +457,33 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
           alignItems: 'center', 
           justifyContent: 'center',
           opacity: winnerOpacity,
-          transform: `scale(${winnerScale})`
+          transform: `scale(${winnerScale})`,
+          zIndex: 20
         }}>
           {/* Winner Sound Effect */}
           <Audio src={staticFile('winner.mp3')} volume={1} />
 
           <h1 style={{
-            fontSize: 80,
-            fontWeight: 900,
+            fontSize: 74,
+            fontWeight: 700,
             color: '#f1c40f',
-            textShadow: '0 10px 20px rgba(0,0,0,0.8)',
-            marginBottom: 40,
+            textShadow: '0 8px 18px rgba(0,0,0,0.8)',
+            marginBottom: 35,
             textTransform: 'uppercase',
-            letterSpacing: '5px'
+            letterSpacing: '4px'
           }}>
             Winner!
           </h1>
 
           <div style={{
-            width: 350,
-            height: 350,
+            width: 340,
+            height: 340,
             borderRadius: '50%',
             backgroundColor: '#333',
-            border: `15px solid #f1c40f`,
+            border: `12px solid #f1c40f`,
             boxShadow: '0 15px 40px rgba(241,196,15,0.6)',
             overflow: 'hidden',
-            marginBottom: 50
+            marginBottom: 40
           }}>
             {winner.image_url ? (
               <Img src={winner.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -399,10 +491,10 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
           </div>
 
           <div style={{
-            fontSize: 70,
-            fontWeight: 900,
+            fontSize: 62,
+            fontWeight: 700,
             color: '#ffffff',
-            textShadow: '0 8px 15px rgba(0,0,0,0.6)',
+            textShadow: '0 6px 12px rgba(0,0,0,0.6)',
             textAlign: 'center',
             marginBottom: 20
           }}>
@@ -410,15 +502,15 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
           </div>
 
           <div style={{
-            fontSize: 60,
-            fontWeight: 800,
+            fontSize: 52,
+            fontWeight: 700,
             color: '#2ecc71',
             backgroundColor: 'rgba(0,0,0,0.5)',
-            padding: '15px 40px',
-            borderRadius: 30,
+            padding: '14px 38px',
+            borderRadius: 28,
             boxShadow: '0 8px 20px rgba(0,0,0,0.5)'
           }}>
-            {Math.round(winner.finalValue).toLocaleString()}
+            {formatNumberWithUnit(winner.finalValue, y_axis_label)}
           </div>
         </AbsoluteFill>
       </Sequence>
