@@ -24,6 +24,26 @@ type VideoItem = {
   created_at: string;
 };
 
+export function getVideoFormat(video: VideoItem): string {
+  const raw = video.data_json?.format || video.data_json?.type;
+  if (raw) {
+    const lower = String(raw).toLowerCase();
+    if (lower.includes('quiz')) return 'Quiz';
+    if (lower.includes('rather')) return 'Would You Rather';
+    if (lower.includes('comparison') || lower.includes('data')) return 'Data Comparison';
+    if (lower.includes('aesthetic')) return 'Aesthetic';
+    if (lower.includes('arena') || lower.includes('clash')) return 'Arena Clash';
+    return String(raw);
+  }
+  // Detect by content structure if format/type was omitted
+  if (video.data_json?.questions && Array.isArray(video.data_json.questions)) return 'Quiz';
+  if (video.data_json?.scenarios && Array.isArray(video.data_json.scenarios)) return 'Would You Rather';
+  if (video.data_json?.items && Array.isArray(video.data_json.items)) return 'Data Comparison';
+  if (video.data_json?.scenes && Array.isArray(video.data_json.scenes)) return 'Aesthetic';
+  if (video.data_json?.fighter_a || video.data_json?.fighter_b) return 'Arena Clash';
+  return 'Other';
+}
+
 export default function Home() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [loading, setLoading] = useState(false);
@@ -486,7 +506,7 @@ export default function Home() {
     try {
       const { data, error } = await supabase
         .from('shorts_queue')
-        .select('id, topic, status, video_url, created_at, data_json->format, data_json->duration_seconds, data_json->script')
+        .select('id, topic, status, video_url, created_at, data_json')
         .order('created_at', { ascending: false });
       if (!error && data) {
         const mapped: VideoItem[] = data.map((item: any) => ({
@@ -495,16 +515,46 @@ export default function Home() {
           status: item.status,
           video_url: item.video_url,
           created_at: item.created_at,
-          data_json: {
-            format: item.format,
-            duration_seconds: item.duration_seconds,
-            script: item.script,
-          }
+          data_json: item.data_json || {},
         }));
         setVideos(mapped);
       }
     } catch (e) {
       console.error('Failed to fetch videos:', e);
+    }
+  };
+
+  const handleUpdateVideo = async (id: string, newTopic: string, newDescription: string) => {
+    try {
+      const res = await fetch(`/api/videos/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: newTopic, description: newDescription }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setVideos((prev) =>
+          prev.map((v) => {
+            if (v.id === id) {
+              return {
+                ...v,
+                topic: newTopic,
+                data_json: {
+                  ...v.data_json,
+                  topic: newTopic,
+                  description: newDescription,
+                },
+              };
+            }
+            return v;
+          })
+        );
+        return { success: true };
+      } else {
+        return { success: false, error: data.error || 'Failed to update video' };
+      }
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error updating video' };
     }
   };
 
@@ -1174,40 +1224,60 @@ export default function Home() {
         {step === 3 && (
           <div className="space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Videos Dashboard</h2>
-              <div className="flex gap-4 w-full md:w-auto">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Videos Dashboard</h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Manage videos, edit titles and descriptions, watch fullscreen, and auto-sync with Admin.
+                </p>
+              </div>
+              <div className="flex gap-4 w-full md:w-auto items-center">
                 <select
                   value={filterFormat}
                   onChange={(e) => setFilterFormat(e.target.value)}
-                  className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white outline-none"
+                  className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white outline-none font-semibold text-sm shadow-sm cursor-pointer"
                 >
-                  <option value="All">All Categories</option>
-                  <option value="Data Comparison">Data Comparison</option>
-                  <option value="Would You Rather">Would You Rather</option>
-                  <option value="Quiz">Quiz</option>
-                  <option value="Arena Clash">Arena Clash</option>
+                  <option value="All">All Categories ({videos.length})</option>
+                  <option value="Data Comparison">
+                    📊 Data Comparison ({videos.filter((v) => getVideoFormat(v) === 'Data Comparison').length})
+                  </option>
+                  <option value="Would You Rather">
+                    🤔 Would You Rather ({videos.filter((v) => getVideoFormat(v) === 'Would You Rather').length})
+                  </option>
+                  <option value="Quiz">
+                    ❓ Quiz ({videos.filter((v) => getVideoFormat(v) === 'Quiz').length})
+                  </option>
+                  <option value="Aesthetic">
+                    🌸 Aesthetic ({videos.filter((v) => getVideoFormat(v) === 'Aesthetic').length})
+                  </option>
+                  <option value="Arena Clash">
+                    ⚔️ Arena Clash ({videos.filter((v) => getVideoFormat(v) === 'Arena Clash').length})
+                  </option>
                 </select>
                 <button 
                   onClick={() => { setStep(1); setTopic(''); }}
-                  className="px-6 py-3 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-xl font-medium transition-colors whitespace-nowrap"
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-colors shadow-md shadow-blue-500/20 whitespace-nowrap flex items-center gap-1.5"
                 >
-                  + Create Video
+                  <span>+</span> Create Video
                 </button>
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-6">
-              {videos.filter(v => filterFormat === 'All' || v.data_json?.format === filterFormat).map(video => (
-                <VideoCard 
-                  key={video.id} 
-                  video={video} 
-                  onDelete={handleDelete} 
-                  onRewrite={handleRewrite} 
-                />
-              ))}
-              {videos.filter(v => filterFormat === 'All' || v.data_json?.format === filterFormat).length === 0 && (
+              {videos
+                .filter((v) => filterFormat === 'All' || getVideoFormat(v) === filterFormat)
+                .map((video) => (
+                  <VideoCard 
+                    key={video.id} 
+                    video={video} 
+                    onDelete={handleDelete} 
+                    onRewrite={handleRewrite}
+                    onUpdate={handleUpdateVideo}
+                  />
+                ))}
+              {videos.filter((v) => filterFormat === 'All' || getVideoFormat(v) === filterFormat).length === 0 && (
                 <div className="text-center p-12 text-gray-500 bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700">
-                  No videos found for this category.
+                  <p className="text-base font-semibold">No videos found for category &ldquo;{filterFormat}&rdquo;.</p>
+                  <p className="text-xs text-gray-400 mt-1">Select &ldquo;All Categories&rdquo; or create a new video.</p>
                 </div>
               )}
             </div>
@@ -1385,44 +1455,245 @@ export default function Home() {
   );
 }
 
-function VideoCard({ video, onDelete, onRewrite }: { video: VideoItem, onDelete: (id: string) => void, onRewrite: (id: string, duration: number) => void }) {
+function VideoCard({ 
+  video, 
+  onDelete, 
+  onRewrite,
+  onUpdate 
+}: { 
+  video: VideoItem; 
+  onDelete: (id: string) => void; 
+  onRewrite: (id: string, duration: number) => void;
+  onUpdate: (id: string, topic: string, description: string) => Promise<{ success: boolean; error?: string }>;
+}) {
   const defaultDuration = video.data_json?.duration_seconds || 15;
   const [duration, setDuration] = useState(defaultDuration);
+  const [topic, setTopic] = useState(video.topic || '');
+  const [description, setDescription] = useState(
+    video.data_json?.description || 
+    video.data_json?.script || 
+    `${video.topic || 'Shorts'} #shorts #viral #trending`
+  );
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Pending': return 'bg-yellow-100 text-yellow-800 animate-pulse';
-      case 'Rendering': return 'bg-blue-100 text-blue-800 animate-pulse';
-      case 'Needs_Approval': return 'bg-purple-100 text-purple-800';
-      case 'Approved': case 'Published': case 'Completed': return 'bg-green-100 text-green-800';
-      case 'Failed': case 'Rejected': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+  useEffect(() => {
+    setTopic(video.topic || '');
+    setDescription(
+      video.data_json?.description || 
+      video.data_json?.script || 
+      `${video.topic || 'Shorts'} #shorts #viral #trending`
+    );
+  }, [video.topic, video.data_json?.description, video.data_json?.script]);
+
+  const handleFullscreen = () => {
+    const el = videoRef.current;
+    if (!el) return;
+    if (el.requestFullscreen) {
+      el.requestFullscreen();
+    } else if ((el as any).webkitRequestFullscreen) {
+      (el as any).webkitRequestFullscreen();
+    } else if ((el as any).webkitEnterFullscreen) {
+      (el as any).webkitEnterFullscreen();
+    } else if ((el as any).msRequestFullscreen) {
+      (el as any).msRequestFullscreen();
     }
   };
 
+  const handleSave = async () => {
+    if (!topic.trim()) {
+      alert('Video title cannot be empty.');
+      return;
+    }
+    setIsSaving(true);
+    setSaveFeedback(null);
+    try {
+      const result = await onUpdate(video.id, topic, description);
+      if (result.success) {
+        setSaveFeedback('✓ Synced with Admin!');
+        setIsEditing(false);
+        setTimeout(() => setSaveFeedback(null), 3500);
+      } else {
+        setSaveFeedback(result.error || 'Failed to sync.');
+      }
+    } catch (err: any) {
+      setSaveFeedback('Error syncing changes.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Pending': return 'bg-yellow-100 dark:bg-yellow-950/60 text-yellow-800 dark:text-yellow-300 animate-pulse';
+      case 'Rendering': return 'bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 animate-pulse';
+      case 'Needs_Approval': return 'bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300';
+      case 'Approved': case 'Published': case 'Completed': return 'bg-green-100 dark:bg-green-950/60 text-green-800 dark:text-green-300';
+      case 'Failed': case 'Rejected': return 'bg-red-100 dark:bg-red-950/60 text-red-800 dark:text-red-300';
+      default: return 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300';
+    }
+  };
+
+  const formatBadge = getVideoFormat(video);
+
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-md p-6 border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row gap-6">
+    <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-md p-6 border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row gap-6 transition-all hover:shadow-lg">
       <div className="flex-1 space-y-4">
-        <div className="flex items-start justify-between">
-          <div>
-            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-2 inline-block shadow-sm ${getStatusColor(video.status)}`}>
-              {video.status === 'Pending' ? 'Rendering / Pending' : video.status}
-            </span>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">{video.topic || 'Untitled'}</h3>
+        
+        {/* Header & Status Row */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1.5 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider inline-block shadow-sm ${getStatusColor(video.status)}`}>
+                {video.status === 'Pending' ? 'Rendering / Pending' : video.status}
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600">
+                {formatBadge}
+              </span>
+              {saveFeedback && (
+                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800 animate-in fade-in">
+                  {saveFeedback}
+                </span>
+              )}
+            </div>
+
+            {/* Title Display or Edit */}
+            {isEditing ? (
+              <div className="pt-1">
+                <label className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider block mb-1">
+                  Title (Topic):
+                </label>
+                <input
+                  type="text"
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value)}
+                  className="w-full px-3.5 py-2 border border-blue-500 dark:border-blue-400 rounded-xl bg-white dark:bg-gray-900 text-gray-900 dark:text-white font-bold text-lg outline-none ring-2 ring-blue-500/20"
+                  placeholder="Enter video title..."
+                />
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 pt-1">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white leading-tight">
+                  {video.topic || 'Untitled'}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(true)}
+                  className="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition shrink-0"
+                  title="Edit title and description"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
+              </div>
+            )}
           </div>
-          <button onClick={() => onDelete(video.id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            {!isEditing && (
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/50 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-400 font-semibold text-xs rounded-xl transition border border-blue-200 dark:border-blue-800 flex items-center gap-1"
+              >
+                <span>✏️</span>
+                <span>Edit</span>
+              </button>
+            )}
+            <button 
+              onClick={() => onDelete(video.id)} 
+              className="text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 p-2 rounded-xl transition-colors border border-transparent hover:border-red-100 dark:hover:border-red-900/40"
+              title="Delete Video"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </div>
         </div>
 
-        <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-xl text-sm text-gray-700 dark:text-gray-300">
-          <span className="font-semibold block mb-1">Script ({defaultDuration}s):</span>
-          {video.data_json?.script || 'No script generated.'}
-        </div>
+        {/* Description (Replaces Script) */}
+        {isEditing ? (
+          <div className="space-y-2 bg-blue-50/40 dark:bg-blue-950/20 p-4 rounded-2xl border border-blue-200 dark:border-blue-900/60">
+            <div className="flex justify-between items-center">
+              <label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                <span>📝</span>
+                <span>Description (Social Media Caption):</span>
+              </label>
+              <span className="text-[11px] text-blue-600 dark:text-blue-400 font-medium">
+                Auto-syncs to Admin, YouTube, Facebook & Instagram
+              </span>
+            </div>
+            <textarea
+              rows={4}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full px-3.5 py-2.5 border border-blue-400 dark:border-blue-500 rounded-xl bg-white dark:bg-gray-900 text-gray-800 dark:text-white text-sm outline-none ring-2 ring-blue-500/20 leading-relaxed font-sans"
+              placeholder="Enter video description / hashtags..."
+            />
+            <div className="flex items-center justify-between pt-1">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-md transition flex items-center gap-1.5 active:scale-95"
+                >
+                  {isSaving ? (
+                    <>
+                      <span className="animate-spin">⏳</span>
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>💾</span>
+                      <span>Save & Sync to Admin</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditing(false);
+                    setTopic(video.topic || '');
+                    setDescription(
+                      video.data_json?.description || 
+                      video.data_json?.script || 
+                      `${video.topic || 'Shorts'} #shorts #viral #trending`
+                    );
+                  }}
+                  className="px-3.5 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs font-semibold rounded-xl transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-gray-50 dark:bg-gray-900/80 p-4 rounded-2xl text-sm text-gray-700 dark:text-gray-300 border border-gray-100 dark:border-gray-800 space-y-1">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                <span>📝</span> Description:
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                Edit Description
+              </button>
+            </div>
+            <p className="whitespace-pre-line leading-relaxed text-xs sm:text-sm">
+              {description || 'No description generated yet.'}
+            </p>
+          </div>
+        )}
 
-        <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-xl border border-gray-100 dark:border-gray-800">
+        {/* Duration Slider & Rewrite Action (Kept below Description) */}
+        <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-2xl border border-gray-100 dark:border-gray-800">
           <div className="flex-1">
             <label className="text-xs text-gray-500 font-medium block mb-1">Target Duration: {duration}s</label>
             <input 
@@ -1434,19 +1705,36 @@ function VideoCard({ video, onDelete, onRewrite }: { video: VideoItem, onDelete:
           </div>
           <button 
             onClick={() => onRewrite(video.id, duration)}
-            className="px-4 py-2 bg-blue-100 text-blue-700 hover:bg-blue-200 font-semibold rounded-lg text-sm transition-colors"
+            className="px-4 py-2 bg-blue-100 hover:bg-blue-200 dark:bg-blue-950/60 dark:hover:bg-blue-900 text-blue-700 dark:text-blue-300 font-semibold rounded-xl text-sm transition-colors border border-blue-200 dark:border-blue-800 shrink-0"
           >
             Rewrite
           </button>
         </div>
       </div>
       
-      {/* Video Preview */}
-      <div className="w-full md:w-48 shrink-0 flex items-center justify-center bg-black rounded-xl overflow-hidden aspect-[9/16]">
+      {/* Video Preview with Fullscreen Feature */}
+      <div className="relative w-full md:w-48 shrink-0 flex flex-col items-center justify-center bg-black rounded-2xl overflow-hidden aspect-[9/16] shadow-inner group">
         {video.video_url ? (
-          <video src={video.video_url} controls className="w-full h-full object-cover" />
+          <>
+            <video 
+              ref={videoRef}
+              src={video.video_url} 
+              controls 
+              playsInline
+              className="w-full h-full object-cover" 
+            />
+            <button
+              type="button"
+              onClick={handleFullscreen}
+              title="Watch in Fullscreen"
+              className="absolute top-2 right-2 bg-black/75 hover:bg-black text-white px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 backdrop-blur-md transition-all shadow-md hover:scale-105 active:scale-95 border border-white/20"
+            >
+              <span>⛶</span>
+              <span>Fullscreen</span>
+            </button>
+          </>
         ) : (
-          <div className="text-gray-500 text-sm font-medium flex flex-col items-center">
+          <div className="text-gray-500 text-sm font-medium flex flex-col items-center p-4 text-center">
             {video.status === 'Pending' ? (
               <>
                 <svg className="animate-spin h-6 w-6 text-white mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>

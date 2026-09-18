@@ -54,7 +54,7 @@ async function uploadToFacebook(video, localFilePath) {
         access_token: accessToken,
         file_url: video.video_url,
         title: video.topic,
-        description: `${video.topic}\n\n#shorts #reels #viral #trending`,
+        description: video.data_json?.description || `${video.topic}\n\n#shorts #reels #viral #trending`,
         published: 'true',
       });
 
@@ -79,7 +79,7 @@ async function uploadToFacebook(video, localFilePath) {
   const formData = new FormData();
   formData.append('access_token', accessToken);
   formData.append('title', video.topic);
-  formData.append('description', `${video.topic}\n\n#shorts #reels #viral #trending`);
+  formData.append('description', video.data_json?.description || `${video.topic}\n\n#shorts #reels #viral #trending`);
   formData.append('published', 'true');
 
   const fileBuffer = fs.readFileSync(localFilePath);
@@ -127,7 +127,7 @@ async function uploadToInstagram(video, localFilePath) {
   const containerParams = new URLSearchParams({
     media_type: 'REELS',
     video_url: video.video_url,
-    caption: `${video.topic}\n\n#reels #shorts #viral #trending`,
+    caption: video.data_json?.description || `${video.topic}\n\n#reels #shorts #viral #trending`,
     access_token: accessToken,
   });
 
@@ -207,8 +207,8 @@ async function uploadToYouTube(video, localFilePath, youtube) {
     requestBody: {
       snippet: {
         title: video.topic,
-        description: `${video.topic}\n\n#shorts #data #comparison`,
-        tags: ['shorts', 'data', 'comparison'],
+        description: video.data_json?.description || `${video.topic}\n\n#shorts #viral #trending`,
+        tags: ['shorts', 'viral', 'trending'],
         categoryId: '24', // Entertainment
       },
       status: {

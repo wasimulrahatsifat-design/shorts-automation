@@ -19,6 +19,7 @@ interface VideoItem {
     facebook_id?: string;
     instagram_id?: string;
     format?: string;
+    description?: string;
   };
 }
 
@@ -338,7 +339,17 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
                         <h3 className="text-base font-bold text-gray-900 dark:text-white line-clamp-2 leading-tight">
                           {video.topic}
                         </h3>
-                        <p className="text-[11px] text-gray-400 mt-1">
+                        {video.data_json?.description && (
+                          <div className="mt-2 text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/60 p-2.5 rounded-xl border border-gray-100 dark:border-gray-800">
+                            <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider block mb-1">
+                              Description / Caption:
+                            </span>
+                            <p className="line-clamp-3 whitespace-pre-line leading-relaxed">
+                              {video.data_json.description}
+                            </p>
+                          </div>
+                        )}
+                        <p className="text-[11px] text-gray-400 mt-1.5">
                           Created {new Date(video.created_at).toLocaleDateString()}
                         </p>
                       </div>
