@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     // Generate TTS Audio
     let tts_url = null;
     let tts_urls = [];
-    const voiceId = 'pNInz6obpgDQGcFmaJgB'; // Adam
+    const voiceId = data_json.voice_id || 'pNInz6obpgDQGcFmaJgB'; // Default to Adam if not specified
     
     const fetchElevenLabs = async (text: string) => {
       const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;

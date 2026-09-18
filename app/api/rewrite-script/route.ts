@@ -120,7 +120,7 @@ export async function POST(request: Request) {
     // 3. Generate New TTS
     let tts_url = null;
     let tts_urls: string[] = [];
-    const voiceId = 'pNInz6obpgDQGcFmaJgB'; // Adam
+    const voiceId = row.data_json?.voice_id || 'pNInz6obpgDQGcFmaJgB'; // Adam default
 
     const fetchElevenLabs = async (text: string) => {
       const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;

@@ -7,6 +7,7 @@ import {
   saveImageToLibrary,
   syncImagesFromSupabase,
 } from '../lib/image-library';
+import { POPULAR_VOICES, VoiceOption } from '../lib/voices';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -34,6 +35,10 @@ export default function Home() {
   const [duration, setDuration] = useState(15);
   const [showSubtitles, setShowSubtitles] = useState(true);
   const [filterFormat, setFilterFormat] = useState('All');
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string>('pNInz6obpgDQGcFmaJgB');
+  const [customVoiceId, setCustomVoiceId] = useState<string>('');
+  const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
+  const audioPreviewRef = useRef<HTMLAudioElement | null>(null);
 
   // Step 2 State
   const [draftJson, setDraftJson] = useState('');
@@ -58,6 +63,48 @@ export default function Home() {
       setImageLibrary(lib);
     });
   }, []);
+
+  // Stop audio preview on unmount
+  useEffect(() => {
+    return () => {
+      if (audioPreviewRef.current) {
+        audioPreviewRef.current.pause();
+        audioPreviewRef.current = null;
+      }
+    };
+  }, []);
+
+  const togglePlayVoicePreview = (voice: VoiceOption) => {
+    if (playingVoiceId === voice.id) {
+      if (audioPreviewRef.current) {
+        audioPreviewRef.current.pause();
+        audioPreviewRef.current = null;
+      }
+      setPlayingVoiceId(null);
+      return;
+    }
+
+    if (audioPreviewRef.current) {
+      audioPreviewRef.current.pause();
+    }
+
+    try {
+      const audio = new Audio(voice.previewUrl);
+      audioPreviewRef.current = audio;
+      setPlayingVoiceId(voice.id);
+      audio.play().catch(() => setPlayingVoiceId(null));
+      audio.onended = () => {
+        setPlayingVoiceId(null);
+        audioPreviewRef.current = null;
+      };
+      audio.onerror = () => {
+        setPlayingVoiceId(null);
+        audioPreviewRef.current = null;
+      };
+    } catch (e) {
+      setPlayingVoiceId(null);
+    }
+  };
 
   // Parse draftJson for unique image keywords & Auto-Match from persistent Image Library!
   useEffect(() => {
@@ -349,7 +396,10 @@ export default function Home() {
       });
       const data = await response.json();
       if (response.ok && data.success) {
-        setDraftJson(JSON.stringify(data.data, null, 2));
+        const payload = data.data;
+        const finalVoiceId = selectedVoiceId === 'custom' ? customVoiceId.trim() : selectedVoiceId;
+        payload.voice_id = finalVoiceId;
+        setDraftJson(JSON.stringify(payload, null, 2));
         setStep(2);
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to generate draft.' });
@@ -372,11 +422,16 @@ export default function Home() {
         throw new Error('Invalid JSON format. Please check your syntax.');
       }
 
+      const finalVoiceId = selectedVoiceId === 'custom' ? customVoiceId.trim() : selectedVoiceId;
+
       const response = await fetch('/api/queue-video', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          data_json: parsedJson, 
+          data_json: {
+            ...parsedJson,
+            voice_id: parsedJson.voice_id || finalVoiceId
+          }, 
           showSubtitles, 
           duration 
         })
@@ -549,6 +604,121 @@ export default function Home() {
               </div>
             </div>
 
+            {/* --- AI Voice Selection --- */}
+            <div className="bg-slate-50 dark:bg-slate-900/60 p-5 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                    <span>🎙️</span>
+                    <span>AI ভয়েস নির্বাচন (Voiceover Narrator)</span>
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    আপনার ভিডিওর জন্য যেকোনো জনপ্রিয় কণ্ঠস্বর বেছে নিন এবং সরাসরি নমুনা অডিও শুনে পছন্দ করুন।
+                  </p>
+                </div>
+                <span className="text-[11px] bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold px-3 py-1 rounded-full border border-blue-200 dark:border-blue-800 w-fit">
+                  {selectedVoiceId === 'custom'
+                    ? '✨ Custom Voice'
+                    : `বর্তমান: ${POPULAR_VOICES.find((v) => v.id === selectedVoiceId)?.name || 'Adam'}`}
+                </span>
+              </div>
+
+              {/* Voice Cards Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {POPULAR_VOICES.map((v) => {
+                  const isSelected = selectedVoiceId === v.id;
+                  const isPlaying = playingVoiceId === v.id;
+                  return (
+                    <div
+                      key={v.id}
+                      onClick={() => setSelectedVoiceId(v.id)}
+                      className={`cursor-pointer p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-2.5 ${
+                        isSelected
+                          ? 'border-blue-500 bg-blue-50/90 dark:bg-blue-950/60 shadow-md ring-2 ring-blue-500/20'
+                          : 'border-gray-200 dark:border-gray-700/80 bg-white dark:bg-gray-800/80 hover:border-blue-300 dark:hover:border-blue-700'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-gray-900 dark:text-white">{v.name}</span>
+                          <span
+                            className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                              v.gender === 'Female'
+                                ? 'bg-pink-100 dark:bg-pink-950 text-pink-700 dark:text-pink-300'
+                                : 'bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300'
+                            }`}
+                          >
+                            {v.gender}
+                          </span>
+                        </div>
+                        {isSelected && (
+                          <span className="text-xs bg-blue-600 text-white font-black rounded-full px-1.5 py-0.2">✓</span>
+                        )}
+                      </div>
+
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">
+                        {v.description}
+                      </p>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          togglePlayVoicePreview(v);
+                        }}
+                        className={`text-xs font-bold py-1.5 px-3 rounded-lg flex items-center justify-center gap-1.5 transition ${
+                          isPlaying
+                            ? 'bg-red-500 text-white shadow animate-pulse'
+                            : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200'
+                        }`}
+                        title="কণ্ঠস্বরের নমুনা শুনুন"
+                      >
+                        <span>{isPlaying ? '⏹ থামুন' : '▶ নমুনা শুনুন'}</span>
+                      </button>
+                    </div>
+                  );
+                })}
+
+                {/* Custom Voice Card */}
+                <div
+                  onClick={() => setSelectedVoiceId('custom')}
+                  className={`cursor-pointer p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-2.5 ${
+                    selectedVoiceId === 'custom'
+                      ? 'border-blue-500 bg-blue-50/90 dark:bg-blue-950/60 shadow-md ring-2 ring-blue-500/20'
+                      : 'border-gray-200 dark:border-gray-700/80 bg-white dark:bg-gray-800/80 hover:border-blue-300 dark:hover:border-blue-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-sm text-gray-900 dark:text-white">✨ কাস্টম ভয়েস (Custom ID)</span>
+                    {selectedVoiceId === 'custom' && (
+                      <span className="text-xs bg-blue-600 text-white font-black rounded-full px-1.5 py-0.2">✓</span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                    ElevenLabs থেকে যেকোনো ক্লোন করা বা পছন্দের Voice ID সরাসরি ব্যবহার করুন।
+                  </p>
+                  <span className="text-xs font-bold text-blue-600 dark:text-blue-400 py-1">
+                    আইডি লিখুন ✎
+                  </span>
+                </div>
+              </div>
+
+              {selectedVoiceId === 'custom' && (
+                <div className="pt-2">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
+                    ElevenLabs Voice ID পেস্ট করুন:
+                  </label>
+                  <input
+                    type="text"
+                    value={customVoiceId}
+                    onChange={(e) => setCustomVoiceId(e.target.value)}
+                    placeholder="যেমন: pNInz6obpgDQGcFmaJgB বা আপনার ক্লোন করা ভয়েস ID"
+                    className="w-full px-4 py-2.5 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-mono focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              )}
+            </div>
+
             <div className="pt-4 flex justify-between items-center">
               <label className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-medium cursor-pointer">
                 <input 
@@ -576,8 +746,16 @@ export default function Home() {
         {/* --- STEP 2: Script Generation & Editing --- */}
         {step === 2 && (
           <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-8 border border-gray-100 dark:border-gray-700 space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Step 2: Review & Edit Script</h2>
-            <p className="text-gray-500">You can manually tweak the script, labels, or data values before rendering the final video.</p>
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Step 2: Review & Edit Script</h2>
+                <p className="text-gray-500 text-sm">You can manually tweak the script, labels, or data values before rendering the final video.</p>
+              </div>
+              <span className="text-xs bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-bold px-3.5 py-1.5 rounded-full border border-indigo-200 dark:border-indigo-800 flex items-center gap-1.5 w-fit">
+                <span>🎙️</span>
+                <span>ভয়েস: {POPULAR_VOICES.find((v) => v.id === selectedVoiceId)?.name || (selectedVoiceId === 'custom' ? 'Custom Voice' : 'Adam')}</span>
+              </span>
+            </div>
             
             <textarea
               value={draftJson}
