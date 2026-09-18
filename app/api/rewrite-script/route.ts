@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { Octokit } from 'octokit';
 import { generateGeminiJson } from '@/lib/gemini';
+import { fetchElevenLabsTTS } from '@/lib/elevenlabs';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -75,25 +76,7 @@ export async function POST(request: Request) {
     let tts_urls: string[] = [];
     const voiceId = row.data_json?.voice_id || 'pNInz6obpgDQGcFmaJgB'; // Adam default
 
-    const fetchElevenLabs = async (text: string) => {
-      const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
-      const payload = JSON.stringify({ text, model_id: 'eleven_multilingual_v2' });
-      let res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'xi-api-key': process.env.ELEVENLABS_API_KEY || '' },
-        body: payload,
-      });
-      if (!res.ok && (res.status === 429 || res.status === 401) && process.env.ELEVENLABS_API_KEY_2) {
-        console.log('Falling back to ELEVENLABS_API_KEY_2');
-        res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'xi-api-key': process.env.ELEVENLABS_API_KEY_2 || '' },
-          body: payload,
-        });
-      }
-      if (!res.ok) throw new Error(`ElevenLabs API error: ${res.statusText}`);
-      return res;
-    };
+    const fetchElevenLabs = (text: string) => fetchElevenLabsTTS(text, voiceId);
 
     try {
       if ((videoFormat === 'Quiz' || Array.isArray(newItems)) && newItems && newItems.length > 0 && newItems[0].question) {
