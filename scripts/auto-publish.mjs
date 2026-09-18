@@ -238,7 +238,9 @@ async function main() {
 
   const targetVideoId = process.env.TARGET_VIDEO_ID || null;
   const targetPlatform = (process.env.TARGET_PLATFORM || 'all').toLowerCase();
-  console.log(`Auto-Publish Config: targetVideoId=${targetVideoId || 'any scheduled'}, targetPlatform=${targetPlatform}`);
+  const forcePublish = process.env.FORCE_PUBLISH === 'true';
+  const now = new Date();
+  console.log(`Auto-Publish Config: targetVideoId=${targetVideoId || 'any scheduled'}, targetPlatform=${targetPlatform}, forcePublish=${forcePublish}`);
 
   // 1. Fetch videos to process
   let videos = [];
@@ -253,14 +255,35 @@ async function main() {
       console.error('Error fetching target video:', error);
       process.exit(1);
     }
-    videos = data || [];
+    const found = data && data[0];
+    if (!found) {
+      console.log(`Target video [${targetVideoId}] not found. Exiting gracefully.`);
+      process.exit(0);
+    }
+
+    // Schedule Guard: If not forced, ensure the scheduled time has actually arrived!
+    const targetScheduledTime = targetPlatform === 'youtube'
+      ? (found.data_json?.youtube_scheduled_time || found.scheduled_time)
+      : targetPlatform === 'meta'
+      ? (found.data_json?.meta_scheduled_time || found.scheduled_time)
+      : found.scheduled_time;
+
+    if (targetScheduledTime && !forcePublish) {
+      const scheduledDate = new Date(targetScheduledTime);
+      if (scheduledDate.getTime() > (now.getTime() + 60000)) {
+        console.log(`[Schedule Guard] Video [${targetVideoId}] is scheduled for ${targetScheduledTime}, which is in the future. Skipping upload for now.`);
+        process.exit(0);
+      }
+    }
+
+    videos = [found];
   } else {
-    console.log('Checking for scheduled videos due to be published...');
+    console.log(`Checking for scheduled videos due to be published at or before ${now.toISOString()}...`);
     const { data, error } = await supabase
       .from('shorts_queue')
       .select('*')
       .eq('status', 'Scheduled')
-      .lte('scheduled_time', new Date().toISOString());
+      .lte('scheduled_time', now.toISOString());
 
     if (error) {
       console.error('Error fetching scheduled videos:', error);

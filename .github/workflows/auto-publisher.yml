@@ -1,7 +1,7 @@
 name: Auto-Publish
 on:
   schedule:
-    - cron: '0 * * * *' # Run every hour
+    - cron: '*/15 * * * *' # Run every 15 minutes to check for due scheduled posts
   workflow_dispatch: # Allow manual trigger and webhook dispatch with target parameters
     inputs:
       video_id:
@@ -12,6 +12,10 @@ on:
         description: 'Target platform: youtube, meta, or all'
         required: false
         default: 'all'
+      force:
+        description: 'Force publish immediately ignoring future scheduled_time'
+        required: false
+        default: 'false'
 
 jobs:
   publish:
@@ -43,4 +47,6 @@ jobs:
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
           TARGET_VIDEO_ID: ${{ github.event.inputs.video_id }}
           TARGET_PLATFORM: ${{ github.event.inputs.target }}
+          FORCE_PUBLISH: ${{ github.event.inputs.force }}
         run: node scripts/auto-publish.mjs
+

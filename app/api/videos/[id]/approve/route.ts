@@ -61,10 +61,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       throw updateError;
     }
 
-    // Trigger auto-publisher workflow with target platform and video_id
+    // Only trigger immediate auto-publisher workflow if publish_now is true OR scheduled_time has already arrived
+    const isDueNow = publish_now || new Date(finalScheduledTime).getTime() <= (Date.now() + 60000); // 1 min margin
+
     const owner = process.env.GITHUB_OWNER;
     const repo = process.env.GITHUB_REPO;
-    if (owner && repo) {
+    if (isDueNow && owner && repo) {
       try {
         await octokit.rest.actions.createWorkflowDispatch({
           owner,
@@ -74,15 +76,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           inputs: {
             video_id: id,
             target: platform,
+            force: 'true',
           },
         });
-        console.log(`Successfully triggered auto-publisher.yml for video ${id} on platform ${platform}`);
+        console.log(`Successfully triggered immediate auto-publisher.yml for video ${id} on platform ${platform}`);
       } catch (ghError: any) {
         console.error('Failed to trigger auto-publisher GitHub Action:', ghError.message || ghError);
       }
+    } else if (!isDueNow) {
+      console.log(`Video ${id} scheduled for future time: ${finalScheduledTime}. Immediate upload skipped; will be published when scheduled time arrives.`);
     }
 
-    return NextResponse.json({ success: true, platform, scheduled_time: finalScheduledTime });
+    return NextResponse.json({ 
+      success: true, 
+      platform, 
+      scheduled_time: finalScheduledTime,
+      is_due_now: isDueNow 
+    });
   } catch (error: any) {
     console.error('Error approving video:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
