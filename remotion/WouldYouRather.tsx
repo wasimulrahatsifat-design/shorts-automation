@@ -17,6 +17,8 @@ export interface WouldYouRatherJson {
   scenarios?: Scenario[];
   tts_urls?: string[] | null;
   show_subtitles?: boolean;
+  bg_music_url?: string;
+  bg_music_volume?: number;
 }
 
 export const getWyrTiming = (s: Scenario, fps: number) => {
@@ -34,7 +36,7 @@ export const getWyrTiming = (s: Scenario, fps: number) => {
   };
 };
 
-const WyrRound: React.FC<{ scenarioData: Scenario, topic: string }> = ({ scenarioData, topic }) => {
+const WyrRound: React.FC<{ scenarioData: Scenario; topic: string; isLastRound?: boolean }> = ({ scenarioData, topic, isLastRound }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -59,9 +61,13 @@ const WyrRound: React.FC<{ scenarioData: Scenario, topic: string }> = ({ scenari
 
   const isAHigher = percent_a >= percent_b;
 
-  // Flash effect: if timer is just done, flash the higher one for 1 sec (30 frames)
-  const flashA = isAHigher && frame > (timerStartFrame + timerFrames) && frame < (timerStartFrame + timerFrames + 30);
-  const flashB = !isAHigher && frame > (timerStartFrame + timerFrames) && frame < (timerStartFrame + timerFrames + 30);
+  // Flash effect: if timer is just done, flash the higher one for 1 sec (30 frames) (only if not last round)
+  const flashA = !isLastRound && isAHigher && frame > (timerStartFrame + timerFrames) && frame < (timerStartFrame + timerFrames + 30);
+  const flashB = !isLastRound && !isAHigher && frame > (timerStartFrame + timerFrames) && frame < (timerStartFrame + timerFrames + 30);
+
+  // True vibrant green
+  const VIBRANT_GREEN = '#22c55e';
+  const VIBRANT_RED = '#ef4444';
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#111', fontFamily: '"Montserrat", sans-serif' }}>
@@ -71,8 +77,8 @@ const WyrRound: React.FC<{ scenarioData: Scenario, topic: string }> = ({ scenari
         <Audio src={staticFile('timer.mp3')} volume={0.8} />
       </Sequence>
       
-      {/* Correct/Reveal Sound */}
-      {isTimerDone && (
+      {/* Reveal Sound (only for rounds with results) */}
+      {isTimerDone && !isLastRound && (
         <Sequence from={timerStartFrame + timerFrames} durationInFrames={30}>
           <Audio src={staticFile('correct.mp3')} volume={1} />
         </Sequence>
@@ -92,16 +98,37 @@ const WyrRound: React.FC<{ scenarioData: Scenario, topic: string }> = ({ scenari
         overflow: 'hidden'
       }}>
         {image_url_a && (
-          <Img src={image_url_a} style={{ position: 'absolute', width: '100%', height: '100%', objectFit: 'cover', opacity: isTimerDone && !isAHigher ? 0.3 : 0.8 }} />
+          <Img 
+            src={image_url_a} 
+            style={{ 
+              position: 'absolute', 
+              width: '100%', 
+              height: '100%', 
+              objectFit: 'cover', 
+              opacity: isTimerDone && !isLastRound && !isAHigher ? 0.3 : 0.85 
+            }} 
+          />
         )}
         {flashA && <div style={{ position: 'absolute', inset: 0, backgroundColor: 'white', opacity: 0.5, zIndex: 5 }} />}
         
         {/* Black gradient to make text readable */}
         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '60%', background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)', zIndex: 1 }} />
         
-        <h2 style={{ fontSize: 60, fontWeight: 900, color: 'white', textShadow: '2px 2px 10px rgba(0,0,0,0.8)', zIndex: 2, textAlign: 'center', padding: '0 80px' }}>
-          {option_a}
-        </h2>
+        {/* Option A Text: Disappears when percentage / result is shown */}
+        {!isTimerDone && (
+          <h2 style={{ 
+            fontSize: 58, 
+            fontWeight: 800, 
+            color: 'white', 
+            textShadow: '2px 2px 12px rgba(0,0,0,0.9)', 
+            zIndex: 2, 
+            textAlign: 'center', 
+            padding: '0 70px',
+            lineHeight: 1.25
+          }}>
+            {option_a}
+          </h2>
+        )}
       </div>
 
       {/* Bottom Panel (Scenario B) */}
@@ -118,52 +145,96 @@ const WyrRound: React.FC<{ scenarioData: Scenario, topic: string }> = ({ scenari
         overflow: 'hidden'
       }}>
         {image_url_b && (
-          <Img src={image_url_b} style={{ position: 'absolute', width: '100%', height: '100%', objectFit: 'cover', opacity: isTimerDone && isAHigher ? 0.3 : 0.8 }} />
+          <Img 
+            src={image_url_b} 
+            style={{ 
+              position: 'absolute', 
+              width: '100%', 
+              height: '100%', 
+              objectFit: 'cover', 
+              opacity: isTimerDone && !isLastRound && isAHigher ? 0.3 : 0.85 
+            }} 
+          />
         )}
         {flashB && <div style={{ position: 'absolute', inset: 0, backgroundColor: 'white', opacity: 0.5, zIndex: 5 }} />}
         
         {/* Black gradient to make text readable */}
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '60%', background: 'linear-gradient(to bottom, rgba(0,0,0,0.9), transparent)', zIndex: 1 }} />
         
-        <h2 style={{ fontSize: 60, fontWeight: 900, color: 'white', textShadow: '2px 2px 10px rgba(0,0,0,0.8)', zIndex: 2, textAlign: 'center', padding: '0 80px' }}>
-          {option_b}
-        </h2>
+        {/* Option B Text: Disappears when percentage / result is shown */}
+        {!isTimerDone && (
+          <h2 style={{ 
+            fontSize: 58, 
+            fontWeight: 800, 
+            color: 'white', 
+            textShadow: '2px 2px 12px rgba(0,0,0,0.9)', 
+            zIndex: 2, 
+            textAlign: 'center', 
+            padding: '0 70px',
+            lineHeight: 1.25
+          }}>
+            {option_b}
+          </h2>
+        )}
       </div>
 
       {/* Center UI */}
       {isTimerDone ? (
-        <div style={{
-          position: 'absolute',
-          top: '50%', left: '50%',
-          transform: `translate(-50%, -50%) scale(${resultScale})`,
-          width: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 10,
-          gap: 40
-        }}>
-          {/* Top Percentage */}
+        // For the last round, DO NOT show percentage! Show callout or clean view
+        isLastRound ? (
           <div style={{
-            fontSize: 140, fontWeight: 900, 
-            color: isAHigher ? '#2a9d8f' : '#e63946',
-            textShadow: '0px 10px 30px rgba(0,0,0,1)',
-            transform: 'translateY(-60px)'
+            position: 'absolute',
+            top: '50%', left: '50%',
+            transform: `translate(-50%, -50%) scale(${resultScale})`,
+            zIndex: 15,
+            backgroundColor: 'rgba(0,0,0,0.75)',
+            padding: '24px 44px',
+            borderRadius: 30,
+            border: '2px solid rgba(255,255,255,0.2)',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.7)',
+            textAlign: 'center',
+            whiteSpace: 'nowrap'
           }}>
-            {percent_a}%
+            <span style={{ fontSize: 44, fontWeight: 800, color: '#f8fafc', letterSpacing: '1px' }}>
+              Comment Your Choice!
+            </span>
           </div>
-          
-          {/* Bottom Percentage */}
+        ) : (
           <div style={{
-            fontSize: 140, fontWeight: 900, 
-            color: !isAHigher ? '#2a9d8f' : '#e63946',
-            textShadow: '0px 10px 30px rgba(0,0,0,1)',
-            transform: 'translateY(60px)'
+            position: 'absolute',
+            top: '50%', left: '50%',
+            transform: `translate(-50%, -50%) scale(${resultScale})`,
+            width: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 15,
+            gap: 50
           }}>
-            {percent_b}%
+            {/* Top Percentage with True Vibrant Green */}
+            <div style={{
+              fontSize: 145, 
+              fontWeight: 900, 
+              color: isAHigher ? VIBRANT_GREEN : VIBRANT_RED,
+              textShadow: '0px 10px 30px rgba(0,0,0,1)',
+              transform: 'translateY(-60px)'
+            }}>
+              {percent_a}%
+            </div>
+            
+            {/* Bottom Percentage with True Vibrant Green */}
+            <div style={{
+              fontSize: 145, 
+              fontWeight: 900, 
+              color: !isAHigher ? VIBRANT_GREEN : VIBRANT_RED,
+              textShadow: '0px 10px 30px rgba(0,0,0,1)',
+              transform: 'translateY(60px)'
+            }}>
+              {percent_b}%
+            </div>
           </div>
-        </div>
+        )
       ) : (
         <div style={{
           position: 'absolute',
@@ -193,9 +264,9 @@ const WyrRound: React.FC<{ scenarioData: Scenario, topic: string }> = ({ scenari
   );
 };
 
-export const WouldYouRather: React.FC<{ data_json: WouldYouRatherJson, topic: string }> = ({ data_json, topic }) => {
+export const WouldYouRather: React.FC<{ data_json: WouldYouRatherJson; topic: string }> = ({ data_json, topic }) => {
   const { fps } = useVideoConfig();
-  const { scenarios, tts_urls } = data_json;
+  const { scenarios, tts_urls, bg_music_url, bg_music_volume } = data_json;
 
   if (!scenarios || !Array.isArray(scenarios)) {
     return <AbsoluteFill style={{ backgroundColor: '#111' }}><h1 style={{ color: 'white' }}>Invalid Data</h1></AbsoluteFill>;
@@ -203,26 +274,59 @@ export const WouldYouRather: React.FC<{ data_json: WouldYouRatherJson, topic: st
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#111' }}>
+      {/* Background Music Support */}
+      {bg_music_url && (
+        <Audio src={bg_music_url} volume={bg_music_volume ?? 0.15} loop />
+      )}
+
       <Series>
         {scenarios.map((scenario, index) => {
           const timing = getWyrTiming(scenario, fps);
           const ttsUrl = tts_urls && tts_urls[index] ? tts_urls[index] : null;
+          const isLastRound = index === scenarios.length - 1;
 
           return (
             <Series.Sequence key={index} durationInFrames={timing.totalFrames}>
               {ttsUrl && <Audio src={ttsUrl} volume={0.9} />}
-              <WyrRound scenarioData={scenario} topic={topic} />
+              <WyrRound scenarioData={scenario} topic={topic} isLastRound={isLastRound} />
             </Series.Sequence>
           );
         })}
-        {/* Outro */}
-        <Series.Sequence durationInFrames={3 * fps}>
-           {tts_urls && tts_urls.length > scenarios.length && (
-              <Audio src={tts_urls[scenarios.length]} volume={0.9} />
-           )}
-           <AbsoluteFill style={{ backgroundColor: '#111', justifyContent: 'center', alignItems: 'center' }}>
-             <h1 style={{ color: 'white', fontSize: 80, fontFamily: '"Montserrat", sans-serif', fontWeight: 900 }}>Thanks for watching!</h1>
-           </AbsoluteFill>
+
+        {/* Outro: "Write down in the comment section." ... "Thanks." */}
+        <Series.Sequence durationInFrames={Math.round(3.5 * fps)}>
+          {tts_urls && tts_urls.length > scenarios.length && (
+            <Audio src={tts_urls[scenarios.length]} volume={0.9} />
+          )}
+          <AbsoluteFill style={{ 
+            backgroundColor: '#0a0a0a', 
+            display: 'flex', 
+            flexDirection: 'column', 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            padding: '0 60px',
+            fontFamily: '"Montserrat", sans-serif'
+          }}>
+            <h1 style={{ 
+              color: '#ffffff', 
+              fontSize: 66, 
+              fontWeight: 800, 
+              textAlign: 'center', 
+              lineHeight: 1.3,
+              textShadow: '0 10px 30px rgba(0,0,0,0.9)'
+            }}>
+              Write down in the comment section.
+            </h1>
+            <p style={{ 
+              color: '#22c55e', 
+              fontSize: 54, 
+              fontWeight: 800, 
+              marginTop: 28,
+              textShadow: '0 6px 20px rgba(34,197,94,0.45)'
+            }}>
+              Thanks.
+            </p>
+          </AbsoluteFill>
         </Series.Sequence>
       </Series>
     </AbsoluteFill>

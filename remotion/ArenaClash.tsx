@@ -26,6 +26,8 @@ export interface ArenaClashData {
     special_power?: string;
   }[];
   tts_url?: string;
+  bg_music_url?: string;
+  bg_music_volume?: number;
 }
 
 export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> = ({
@@ -218,8 +220,12 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
         overflow: 'hidden',
       }}
     >
-      {/* 1. Background Battle Music (Energetic Arcade BGM) */}
-      <Audio src={staticFile('audio/battle_bgm.wav')} volume={0.32} loop />
+      {/* 1. Background Battle Music (Custom or Energetic Arcade BGM) */}
+      <Audio 
+        src={data_json.bg_music_url || staticFile('audio/battle_bgm.wav')} 
+        volume={data_json.bg_music_volume ?? 0.32} 
+        loop 
+      />
 
       {/* 2. Sequenced Sound Effects (Bounce, Hit, Gun, Item, Explosion, Winner) */}
       {soundEvents.map((ev, idx) => {

@@ -40,6 +40,13 @@ export default function Home() {
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
   const audioPreviewRef = useRef<HTMLAudioElement | null>(null);
 
+  // Background Music State
+  const [bgMusicUrl, setBgMusicUrl] = useState<string>('');
+  const [bgMusicVolume, setBgMusicVolume] = useState<number>(0.15); // default 15%
+  const [bgMusicUploading, setBgMusicUploading] = useState<boolean>(false);
+  const [isPlayingMusicPreview, setIsPlayingMusicPreview] = useState<boolean>(false);
+  const musicAudioRef = useRef<HTMLAudioElement | null>(null);
+
   // Step 2 State
   const [draftJson, setDraftJson] = useState('');
   const [magicInstruction, setMagicInstruction] = useState('');
@@ -71,8 +78,65 @@ export default function Home() {
         audioPreviewRef.current.pause();
         audioPreviewRef.current = null;
       }
+      if (musicAudioRef.current) {
+        musicAudioRef.current.pause();
+        musicAudioRef.current = null;
+      }
     };
   }, []);
+
+  const toggleMusicPreview = () => {
+    if (!bgMusicUrl) return;
+    if (isPlayingMusicPreview) {
+      if (musicAudioRef.current) {
+        musicAudioRef.current.pause();
+        musicAudioRef.current = null;
+      }
+      setIsPlayingMusicPreview(false);
+      return;
+    }
+    try {
+      const audio = new Audio(bgMusicUrl);
+      audio.volume = Math.min(1, Math.max(0, bgMusicVolume));
+      musicAudioRef.current = audio;
+      setIsPlayingMusicPreview(true);
+      audio.play().catch(() => setIsPlayingMusicPreview(false));
+      audio.onended = () => {
+        setIsPlayingMusicPreview(false);
+        musicAudioRef.current = null;
+      };
+      audio.onerror = () => {
+        setIsPlayingMusicPreview(false);
+        musicAudioRef.current = null;
+      };
+    } catch {
+      setIsPlayingMusicPreview(false);
+    }
+  };
+
+  const handleBgMusicUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBgMusicUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop() || 'mp3';
+      const fileName = `bgm_${crypto.randomUUID()}.${fileExt}`;
+      const { data, error } = await supabase.storage.from('shorts').upload(fileName, file, {
+        contentType: file.type || 'audio/mpeg',
+        upsert: true
+      });
+      if (error) throw error;
+      const { data: publicData } = supabase.storage.from('shorts').getPublicUrl(fileName);
+      setBgMusicUrl(publicData.publicUrl);
+      setMessage({ type: 'success', text: 'Background music uploaded successfully!' });
+    } catch (err: any) {
+      console.error('Error uploading background music:', err);
+      setMessage({ type: 'error', text: err.message || 'Failed to upload background music.' });
+    } finally {
+      setBgMusicUploading(false);
+      e.target.value = '';
+    }
+  };
 
   const togglePlayVoicePreview = (voice: VoiceOption) => {
     if (playingVoiceId === voice.id) {
@@ -430,10 +494,14 @@ export default function Home() {
         body: JSON.stringify({ 
           data_json: {
             ...parsedJson,
-            voice_id: parsedJson.voice_id || finalVoiceId
+            voice_id: parsedJson.voice_id || finalVoiceId,
+            bg_music_url: bgMusicUrl || parsedJson.bg_music_url || undefined,
+            bg_music_volume: bgMusicUrl ? bgMusicVolume : parsedJson.bg_music_volume
           }, 
           showSubtitles, 
-          duration 
+          duration,
+          bg_music_url: bgMusicUrl || undefined,
+          bg_music_volume: bgMusicUrl ? bgMusicVolume : undefined
         })
       });
 
@@ -610,16 +678,16 @@ export default function Home() {
                 <div>
                   <h3 className="text-sm font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
                     <span>🎙️</span>
-                    <span>AI ভয়েস নির্বাচন (Voiceover Narrator)</span>
+                    <span>Voiceover Narrator</span>
                   </h3>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                    আপনার ভিডিওর জন্য যেকোনো জনপ্রিয় কণ্ঠস্বর বেছে নিন এবং সরাসরি নমুনা অডিও শুনে পছন্দ করুন।
+                    Select a natural AI narrator or preview sample audio for your video.
                   </p>
                 </div>
                 <span className="text-[11px] bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold px-3 py-1 rounded-full border border-blue-200 dark:border-blue-800 w-fit">
                   {selectedVoiceId === 'custom'
                     ? '✨ Custom Voice'
-                    : `বর্তমান: ${POPULAR_VOICES.find((v) => v.id === selectedVoiceId)?.name || 'Adam'}`}
+                    : `Active: ${POPULAR_VOICES.find((v) => v.id === selectedVoiceId)?.name || 'Adam'}`}
                 </span>
               </div>
 
@@ -671,9 +739,9 @@ export default function Home() {
                             ? 'bg-red-500 text-white shadow animate-pulse'
                             : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200'
                         }`}
-                        title="কণ্ঠস্বরের নমুনা শুনুন"
+                        title="Preview Voice Sample"
                       >
-                        <span>{isPlaying ? '⏹ থামুন' : '▶ নমুনা শুনুন'}</span>
+                        <span>{isPlaying ? '⏹ Stop' : '▶ Preview'}</span>
                       </button>
                     </div>
                   );
@@ -689,16 +757,16 @@ export default function Home() {
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-sm text-gray-900 dark:text-white">✨ কাস্টম ভয়েস (Custom ID)</span>
+                    <span className="font-bold text-sm text-gray-900 dark:text-white">✨ Custom Voice ID</span>
                     {selectedVoiceId === 'custom' && (
                       <span className="text-xs bg-blue-600 text-white font-black rounded-full px-1.5 py-0.2">✓</span>
                     )}
                   </div>
                   <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                    ElevenLabs থেকে যেকোনো ক্লোন করা বা পছন্দের Voice ID সরাসরি ব্যবহার করুন।
+                    Use any cloned or favorite ElevenLabs Voice ID directly.
                   </p>
                   <span className="text-xs font-bold text-blue-600 dark:text-blue-400 py-1">
-                    আইডি লিখুন ✎
+                    Set Custom ID ✎
                   </span>
                 </div>
               </div>
@@ -706,17 +774,122 @@ export default function Home() {
               {selectedVoiceId === 'custom' && (
                 <div className="pt-2">
                   <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">
-                    ElevenLabs Voice ID পেস্ট করুন:
+                    Paste ElevenLabs Voice ID:
                   </label>
                   <input
                     type="text"
                     value={customVoiceId}
                     onChange={(e) => setCustomVoiceId(e.target.value)}
-                    placeholder="যেমন: pNInz6obpgDQGcFmaJgB বা আপনার ক্লোন করা ভয়েস ID"
+                    placeholder="e.g., pNInz6obpgDQGcFmaJgB or your cloned voice ID"
                     className="w-full px-4 py-2.5 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-mono focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               )}
+            </div>
+
+            {/* --- Background Music & Volume --- */}
+            <div className="bg-slate-50 dark:bg-slate-900/60 p-5 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                    <span>🎵</span>
+                    <span>Background Music (Optional)</span>
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    Upload your own music track and configure background audio volume.
+                  </p>
+                </div>
+                {bgMusicUrl && (
+                  <span className="text-[11px] bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold px-3 py-1 rounded-full border border-emerald-300 dark:border-emerald-800 w-fit flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>Music Active ({Math.round(bgMusicVolume * 100)}%)</span>
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Audio Upload */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                    Audio Track (.mp3, .wav)
+                  </label>
+                  <div className="flex gap-2">
+                    <label className="flex-1 cursor-pointer bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:border-blue-500 text-gray-700 dark:text-gray-200 text-xs font-semibold py-2.5 px-3.5 rounded-xl transition flex items-center justify-between shadow-sm">
+                      <span className="truncate">
+                        {bgMusicUploading 
+                          ? 'Uploading audio...' 
+                          : bgMusicUrl 
+                            ? '✓ Music File Attached' 
+                            : 'Upload Music File...'}
+                      </span>
+                      <span className="text-blue-600 dark:text-blue-400 font-bold text-xs ml-2">Browse</span>
+                      <input 
+                        type="file" 
+                        accept="audio/*" 
+                        className="hidden" 
+                        onChange={handleBgMusicUpload}
+                        disabled={bgMusicUploading} 
+                      />
+                    </label>
+
+                    {bgMusicUrl && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={toggleMusicPreview}
+                          className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                            isPlayingMusicPreview
+                              ? 'bg-red-500 text-white shadow animate-pulse'
+                              : 'bg-blue-100 hover:bg-blue-200 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                          }`}
+                          title="Preview background music"
+                        >
+                          <span>{isPlayingMusicPreview ? '⏹ Stop' : '▶ Preview'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (musicAudioRef.current) {
+                              musicAudioRef.current.pause();
+                              musicAudioRef.current = null;
+                            }
+                            setIsPlayingMusicPreview(false);
+                            setBgMusicUrl('');
+                          }}
+                          className="px-2.5 py-2.5 rounded-xl text-xs font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900 transition"
+                          title="Remove music"
+                        >
+                          ✕
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Volume Slider */}
+                <div className="space-y-1.5 bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 flex flex-col justify-center">
+                  <div className="flex justify-between items-center text-xs font-bold text-gray-700 dark:text-gray-300">
+                    <span>Music Volume</span>
+                    <span className="text-blue-600 dark:text-blue-400 font-mono">{Math.round(bgMusicVolume * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={bgMusicVolume}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      setBgMusicVolume(v);
+                      if (musicAudioRef.current) {
+                        musicAudioRef.current.volume = v;
+                      }
+                    }}
+                    className="w-full accent-blue-600 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg cursor-pointer"
+                  />
+                  <span className="text-[10px] text-gray-400">Recommended: 10%–20% for balanced voiceover</span>
+                </div>
+              </div>
             </div>
 
             <div className="pt-4 flex justify-between items-center">
@@ -753,7 +926,7 @@ export default function Home() {
               </div>
               <span className="text-xs bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-bold px-3.5 py-1.5 rounded-full border border-indigo-200 dark:border-indigo-800 flex items-center gap-1.5 w-fit">
                 <span>🎙️</span>
-                <span>ভয়েস: {POPULAR_VOICES.find((v) => v.id === selectedVoiceId)?.name || (selectedVoiceId === 'custom' ? 'Custom Voice' : 'Adam')}</span>
+                <span>Voice: {POPULAR_VOICES.find((v) => v.id === selectedVoiceId)?.name || (selectedVoiceId === 'custom' ? 'Custom Voice' : 'Adam')}</span>
               </span>
             </div>
             
@@ -769,15 +942,15 @@ export default function Home() {
                 <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
                   <h3 className="font-bold text-lg text-blue-900 dark:text-blue-100 flex items-center gap-2">
                     <span>🖼️</span>
-                    <span>Required Images (ভিডিওর ছবিসমূহ)</span>
+                    <span>Required Visual Assets</span>
                   </h3>
                   <span className="text-[11px] bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-bold px-3 py-1 rounded-full border border-emerald-300 dark:border-emerald-800 flex items-center gap-1.5 w-fit">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span>অটোমেটিক ইমেজ মেমোরি সক্রিয় (Auto-Memory Active)</span>
+                    <span>Smart Memory Active</span>
                   </span>
                 </div>
                 <p className="text-xs text-blue-700 dark:text-blue-300">
-                  যেকোনো ছবি একবার আপলোড করলে সিস্টেম স্বয়ংক্রিয়ভাবে মনে রাখে। ছবি কাটা পড়া রোধ করতে <strong>✂️ ক্রপ</strong> বাটনে চেপে ড্র্যাগ ও জুম করে মুখ বা বিষয়বস্তু ঠিক মাঝখানে সেট করতে পারবেন।
+                  Uploaded images are automatically remembered for future videos. Click <strong>✂️ Crop</strong> to adjust framing and center key subjects.
                 </p>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -791,19 +964,19 @@ export default function Home() {
                         <div className="relative w-32 h-24 rounded-xl overflow-hidden border-2 border-emerald-500 shadow-md bg-slate-950 flex items-center justify-center">
                           <img src={req.file} alt={req.keyword} className="w-full h-full object-contain" />
                           <div className="absolute top-0 right-0 bg-emerald-500 text-white rounded-bl-lg px-2 py-0.5 text-[9px] font-black tracking-wider">
-                            ✓ সংরক্ষিত
+                            ✓ Saved
                           </div>
                         </div>
                       ) : (
                         <div className="w-32 h-24 rounded-xl bg-gray-100 dark:bg-gray-700/60 border-2 border-dashed border-gray-300 dark:border-gray-600 flex flex-col items-center justify-center text-gray-400 text-xs gap-1 font-semibold">
                           <span>📷</span>
-                          <span>ছবি প্রয়োজন</span>
+                          <span>Image Required</span>
                         </div>
                       )}
                       
                       <div className="flex gap-2 w-full pt-1">
                         <label className="flex-1 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-2 px-3 rounded-xl transition-all shadow flex items-center justify-center gap-1.5">
-                          <span>{req.file ? '🔄 পরিবর্তন' : '📷 আপলোড'}</span>
+                          <span>{req.file ? '🔄 Replace' : '📷 Upload'}</span>
                           <input 
                             type="file" 
                             accept="image/*" 
@@ -816,10 +989,10 @@ export default function Home() {
                             type="button"
                             onClick={() => openCropModal(req.keyword, req.file!)}
                             className="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 text-xs font-bold rounded-xl transition border border-slate-300 dark:border-slate-600 flex items-center gap-1"
-                            title="ছবি ড্র্যাগ ও জুম করে পজিশন ঠিক করুন"
+                            title="Drag and zoom to position subject"
                           >
                             <span>✂️</span>
-                            <span>ক্রপ</span>
+                            <span>Crop</span>
                           </button>
                         )}
                       </div>
@@ -927,10 +1100,10 @@ export default function Home() {
                 <div>
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                     <span>✂️</span>
-                    <span>ছবি অ্যাডজাস্ট ও ফ্রেম সেট করুন</span>
+                    <span>Adjust & Frame Subject</span>
                   </h3>
                   <p className="text-xs text-blue-600 dark:text-blue-400 font-semibold mt-0.5">
-                    বিষয়বস্তু: <span className="underline">{cropTargetKeyword}</span>
+                    Target: <span className="underline">{cropTargetKeyword}</span>
                   </p>
                 </div>
                 <button
@@ -946,10 +1119,10 @@ export default function Home() {
               <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl p-3 text-xs text-amber-800 dark:text-amber-300 space-y-1">
                 <p className="font-semibold flex items-center gap-1.5">
                   <span>💡</span>
-                  <span>ছবি কাটা পড়া রোধ করার নিয়ম:</span>
+                  <span>Framing Guidelines:</span>
                 </p>
                 <p>
-                  মাউস দিয়ে ড্র্যাগ করে বা নিচের স্লাইডার দিয়ে জুম ইন/আউট করুন। পুরো ছবি দেখাতে চাইলে <strong>Fit</strong> চাপুন।
+                  Drag the image or use the zoom slider to position the subject. Click <strong>Fit</strong> to display the entire image within frame.
                 </p>
               </div>
 
@@ -1003,7 +1176,7 @@ export default function Home() {
               <div className="space-y-3 bg-gray-50 dark:bg-gray-800/60 p-4 rounded-2xl border border-gray-100 dark:border-gray-800">
                 <div className="flex items-center gap-3">
                   <span className="text-xs font-bold text-gray-600 dark:text-gray-300 whitespace-nowrap">
-                    🔍 জুম:
+                    🔍 Zoom:
                   </span>
                   <button
                     type="button"
@@ -1031,30 +1204,30 @@ export default function Home() {
                 </div>
 
                 <div className="flex items-center justify-between gap-2 pt-1">
-                  <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">প্রিসেট:</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Presets:</span>
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={handleFitCrop}
                       className="px-3 py-1 bg-blue-100 dark:bg-blue-950/80 hover:bg-blue-200 dark:hover:bg-blue-900 text-blue-700 dark:text-blue-300 text-xs font-bold rounded-lg transition border border-blue-200 dark:border-blue-800"
-                      title="পুরো ছবি যাতে ফ্রেমের মধ্যে দেখা যায়"
+                      title="Keep entire image inside frame"
                     >
-                      📐 Fit (পুরো ছবি)
+                      📐 Fit
                     </button>
                     <button
                       type="button"
                       onClick={handleFillCrop}
                       className="px-3 py-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-xs font-bold rounded-lg transition"
-                      title="ফ্রেম ভর্তি করে দেখাতে"
+                      title="Fill entire frame"
                     >
-                      🖼️ Fill (ফ্রেম ভর্তি)
+                      🖼️ Fill
                     </button>
                     <button
                       type="button"
                       onClick={() => { setCropPan({ x: 0, y: 0 }); handleFitCrop(); }}
                       className="px-2.5 py-1 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs rounded-lg transition"
                     >
-                      রিসেট
+                      Reset
                     </button>
                   </div>
                 </div>
@@ -1067,7 +1240,7 @@ export default function Home() {
                   onClick={() => { setCropModalOpen(false); setRawCropImageSrc(null); }}
                   className="px-5 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 font-semibold text-sm rounded-xl transition"
                 >
-                  বাতিল
+                  Cancel
                 </button>
                 <button
                   type="button"
@@ -1075,7 +1248,7 @@ export default function Home() {
                   className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-lg transition active:scale-95 flex items-center gap-2"
                 >
                   <span>✓</span>
-                  <span>সেট ও সেভ করুন</span>
+                  <span>Save & Apply</span>
                 </button>
               </div>
 

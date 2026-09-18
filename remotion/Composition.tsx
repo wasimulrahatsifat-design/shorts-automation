@@ -17,6 +17,8 @@ interface DataJson {
   items: DataItem[];
   tts_url?: string;
   show_subtitles?: boolean;
+  bg_music_url?: string;
+  bg_music_volume?: number;
 }
 
 function formatNumberWithUnit(val: number, yAxisLabel?: string): string {
@@ -203,6 +205,11 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
     }}>
       {/* Audio Track */}
       {data_json.tts_url && <Audio src={data_json.tts_url} volume={0.9} />}
+
+      {/* Background Music Track */}
+      {data_json.bg_music_url && (
+        <Audio src={data_json.bg_music_url} volume={data_json.bg_music_volume ?? 0.15} loop />
+      )}
 
       {/* Graph Paper Grid Background */}
       <div style={{

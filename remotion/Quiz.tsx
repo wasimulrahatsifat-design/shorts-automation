@@ -16,6 +16,8 @@ export interface QuizJson {
   tts_url?: string | null;
   tts_urls?: string[] | null;
   show_subtitles?: boolean;
+  bg_music_url?: string;
+  bg_music_volume?: number;
 }
 
 export const getQuestionTiming = (q: Question, fps: number) => {
@@ -235,7 +237,7 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
   const { fps, durationInFrames } = useVideoConfig();
   const frame = useCurrentFrame();
 
-  const { script, questions = [], tts_url, tts_urls, show_subtitles } = data_json;
+  const { script, questions = [], tts_url, tts_urls, show_subtitles, bg_music_url, bg_music_volume } = data_json;
 
   // Fallback if no questions are provided
   if (!questions || questions.length === 0) {
@@ -250,6 +252,11 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#1b1d28', fontFamily: '"Montserrat", sans-serif', color: 'white' }}>
+      {/* Background Music Track */}
+      {bg_music_url && (
+        <Audio src={bg_music_url} volume={bg_music_volume ?? 0.15} loop />
+      )}
+
       {/* Background Audio Track - legacy fallback for single track */}
       {tts_url && (!tts_urls || tts_urls.length === 0) && <Audio src={tts_url} volume={0.9} />}
 

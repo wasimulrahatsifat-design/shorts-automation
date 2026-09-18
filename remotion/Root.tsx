@@ -59,9 +59,9 @@ export const RemotionRoot: React.FC = () => {
               const readingFrames = Math.round(readingSeconds * 30);
               totalFrames += readingFrames + (5 * 30); // timer 3s + reveal 2s
             }
-            return { durationInFrames: totalFrames + (3 * 30) }; // + outro
+            return { durationInFrames: totalFrames + Math.round(3.5 * 30) }; // + outro
           }
-          return { durationInFrames: 450 };
+          return { durationInFrames: 600 };
         }}
         defaultProps={{
           data_json: {

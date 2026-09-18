@@ -114,8 +114,8 @@ export async function POST(request: Request) {
           tts_urls.push(url);
         }
         
-        // Add "Thanks for watching" outro TTS
-        const outroUrl = await generateTTSForText("Thanks for watching!");
+        // Add "Write down in the comment section. ... Thanks." outro TTS
+        const outroUrl = await generateTTSForText("Write down in the comment section. ... Thanks.");
         tts_urls.push(outroUrl);
       } else {
         const elResponse = await fetchElevenLabs(newScript);

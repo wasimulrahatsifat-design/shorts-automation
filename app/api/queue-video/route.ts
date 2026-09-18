@@ -72,8 +72,8 @@ export async function POST(request: Request) {
           tts_urls.push(url);
         }
         
-        // Add "Thanks for watching" outro TTS
-        const outroUrl = await generateTTSForText("Thanks for watching!");
+        // Add "Write down in the comment section. ... Thanks." outro TTS
+        const outroUrl = await generateTTSForText("Write down in the comment section. ... Thanks.");
         tts_urls.push(outroUrl);
       } else if (data_json.format === 'AestheticVideo') {
         // Aesthetic videos don't require TTS audio
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
         const readingSeconds = (textLength / 15) + 1;
         totalSeconds += readingSeconds + 5; // timer 3s + reveal 2s
       }
-      finalDuration = Math.round(totalSeconds + 3); // + outro
+      finalDuration = Math.round(totalSeconds + 3.5); // + outro
     } else if (data_json.format === 'Quiz' && data_json.questions) {
       let totalSeconds = 0;
       for (const q of data_json.questions) {
@@ -127,6 +127,8 @@ export async function POST(request: Request) {
             ...data_json,
             tts_url: tts_url,
             tts_urls: tts_urls,
+            bg_music_url: body.bg_music_url || data_json.bg_music_url || undefined,
+            bg_music_volume: typeof body.bg_music_volume === 'number' ? body.bg_music_volume : data_json.bg_music_volume,
             show_subtitles: showSubtitles,
             duration_seconds: finalDuration
           },

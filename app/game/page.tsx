@@ -1106,10 +1106,10 @@ export default function GamePage() {
 
                       <label
                         className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition text-[9px] text-white font-bold"
-                        title="নতুন ছবি আপলোড ও ক্রপ করুন"
+                        title="Upload and crop image"
                       >
                         <span className="text-base">📷</span>
-                        <span className="text-[8px]">আপলোড</span>
+                        <span className="text-[8px]">Upload</span>
                         <input type="file" accept="image/*" onChange={(e) => handleImageUpload(idx, e)} className="hidden" />
                       </label>
                     </div>
@@ -1119,16 +1119,16 @@ export default function GamePage() {
                         <button
                           type="button"
                           onClick={() => openCropModal(idx, fighter.image_url!)}
-                          title="ছবি ক্রপ বা পজিশন ঠিক করুন"
+                          title="Crop and position image"
                           className="text-[9px] px-1.5 py-0.5 bg-cyan-950/90 hover:bg-cyan-900 text-cyan-300 rounded border border-cyan-700/60 font-bold transition flex items-center gap-0.5"
                         >
                           <span>✂️</span>
-                          <span>ক্রপ</span>
+                          <span>Crop</span>
                         </button>
                         <button
                           type="button"
                           onClick={() => updateContestant(idx, { image_url: null })}
-                          title="ছবি মুছুন"
+                          title="Remove image"
                           className="text-[9px] px-1.5 py-0.5 bg-rose-950/90 hover:bg-rose-900 text-rose-300 rounded border border-rose-700/60 font-bold transition"
                         >
                           ✕
@@ -1380,9 +1380,9 @@ export default function GamePage() {
                 <div>
                   <h3 className="text-sm font-black text-white flex items-center gap-2">
                     <span>✂️</span>
-                    <span>ছবি কতটুকু দেখাবে সিলেক্ট করুন</span>
+                    <span>Adjust & Frame Image</span>
                   </h3>
-                  <p className="text-[11px] text-slate-400">ছবি টেনে ইচ্ছামতো পজিশন করুন এবং জুম অ্যাডজাস্ট করুন</p>
+                  <p className="text-[11px] text-slate-400">Drag to reposition subject and adjust zoom slider</p>
                 </div>
                 <button
                   type="button"
@@ -1435,13 +1435,13 @@ export default function GamePage() {
                     <div />
                   </div>
                 </div>
-                <span className="text-[10px] text-slate-400 mt-2">👆 ছবির উপর চেপে ধরে ইচ্ছামতো সরান (Pan / Drag)</span>
+                <span className="text-[10px] text-slate-400 mt-2">👆 Click and drag image to adjust frame</span>
               </div>
 
               {/* Zoom & Framing Controls */}
               <div className="space-y-2 bg-slate-950 p-3.5 rounded-2xl border border-slate-800">
                 <div className="flex justify-between items-center text-xs font-bold text-slate-300">
-                  <span>🔍 জুম (Zoom)</span>
+                  <span>🔍 Zoom</span>
                   <span className="text-cyan-400 font-mono text-[11px]">{Math.round(cropScale * 100)}%</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1477,21 +1477,21 @@ export default function GamePage() {
                     onClick={handleFitCrop}
                     className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold rounded-lg transition"
                   >
-                    🔍 পুরো ছবি ফিট
+                    🔍 Fit
                   </button>
                   <button
                     type="button"
                     onClick={handleFillCrop}
                     className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold rounded-lg transition"
                   >
-                    🖼️ বক্স পূর্ণ (Fill)
+                    🖼️ Fill
                   </button>
                   <button
                     type="button"
                     onClick={() => setCropPan({ x: 0, y: 0 })}
                     className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold rounded-lg transition"
                   >
-                    🔄 সেন্টার
+                    🔄 Center
                   </button>
                 </div>
               </div>
@@ -1503,7 +1503,7 @@ export default function GamePage() {
                   onClick={() => setCropModalOpen(false)}
                   className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs transition"
                 >
-                  বাতিল (Cancel)
+                  Cancel
                 </button>
                 <button
                   type="button"
@@ -1511,7 +1511,7 @@ export default function GamePage() {
                   className="flex-1 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-xl font-black text-xs transition shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-1.5"
                 >
                   <span>✓</span>
-                  <span>ক্রপ সেভ করুন (Save)</span>
+                  <span>Save & Apply</span>
                 </button>
               </div>
             </div>

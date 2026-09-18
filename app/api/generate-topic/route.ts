@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       Return a structured JSON object with EXACTLY these fields:
       - "topic": The generated topic as a string.
       - "format": "Would You Rather".
-      - "scenarios": An array of EXACTLY 3 objects. Each object MUST have:
+      - "scenarios": An array of EXACTLY 4 objects. Each object MUST have:
         - "option_a": String. KEEP THIS EXTREMELY SHORT (e.g., "never feel pain again", "unlimited money", "be able to fly"). Do NOT include "Would you rather" in this string.
         - "option_b": String. KEEP THIS EXTREMELY SHORT (e.g., "never feel sadness again", "unlimited time", "breathe underwater"). Do NOT include "or" in this string.
         - "image_keyword_a": A VERY SPECIFIC search keyword for Wikipedia to find an image for option A.
@@ -125,8 +125,8 @@ export async function POST(request: Request) {
           tts_urls.push(url);
         }
         
-        // Add "Thanks for watching" outro TTS
-        const outroUrl = await generateTTSForText("Thanks for watching!");
+        // Add "Write down in the comment section. ... Thanks." outro TTS
+        const outroUrl = await generateTTSForText("Write down in the comment section. ... Thanks.");
         tts_urls.push(outroUrl);
       } else {
         const elResponse = await fetchElevenLabs(script);
