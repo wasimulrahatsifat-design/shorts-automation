@@ -51,6 +51,23 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
     fetchVideos(activePlatform);
   }, [activePlatform]);
 
+  useEffect(() => {
+    const checkDueScheduler = async () => {
+      try {
+        const res = await fetch('/api/videos/publish-due', { method: 'POST' });
+        const data = await res.json();
+        if (data.triggered > 0) {
+          fetchVideos(activePlatform);
+        }
+      } catch (e) {
+        // silent
+      }
+    };
+    checkDueScheduler();
+    const interval = setInterval(checkDueScheduler, 45000);
+    return () => clearInterval(interval);
+  }, [activePlatform]);
+
   const fetchVideos = async (platform: 'youtube' | 'meta') => {
     setLoading(true);
     try {

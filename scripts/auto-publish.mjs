@@ -339,14 +339,18 @@ async function main() {
     const isYtScheduled = currentYtStatus === 'Scheduled';
     const isYtTimeDue = ytScheduledTime && new Date(ytScheduledTime).getTime() <= (now.getTime() + 60000); // 1 min buffer
     const isYtAlreadyPublished = currentYtStatus === 'Published';
-    const isYtUploading = currentYtStatus === 'Uploading';
+    const isYtUploading = currentYtStatus === 'Uploading' && (
+      video.data_json?.youtube_uploading_at && (now.getTime() - new Date(video.data_json.youtube_uploading_at).getTime() < 10 * 60 * 1000)
+    );
 
     // Check Meta schedule
     const metaScheduledTime = video.data_json?.meta_scheduled_time || video.scheduled_time;
     const isMetaScheduled = currentMetaStatus === 'Scheduled';
     const isMetaTimeDue = metaScheduledTime && new Date(metaScheduledTime).getTime() <= (now.getTime() + 60000);
     const isMetaAlreadyPublished = currentMetaStatus === 'Published';
-    const isMetaUploading = currentMetaStatus === 'Uploading';
+    const isMetaUploading = currentMetaStatus === 'Uploading' && (
+      video.data_json?.meta_uploading_at && (now.getTime() - new Date(video.data_json.meta_uploading_at).getTime() < 10 * 60 * 1000)
+    );
 
     // STRICT PLATFORM ISOLATION:
     // YouTube can ONLY be published if:
@@ -380,8 +384,14 @@ async function main() {
 
     // Acquire in-progress lock before downloading & uploading to prevent duplicate uploads
     const lockDataJson = { ...(video.data_json || {}) };
-    if (shouldPublishYouTube) lockDataJson.youtube_status = 'Uploading';
-    if (shouldPublishMeta) lockDataJson.meta_status = 'Uploading';
+    if (shouldPublishYouTube) {
+      lockDataJson.youtube_status = 'Uploading';
+      lockDataJson.youtube_uploading_at = new Date().toISOString();
+    }
+    if (shouldPublishMeta) {
+      lockDataJson.meta_status = 'Uploading';
+      lockDataJson.meta_uploading_at = new Date().toISOString();
+    }
 
     await supabase
       .from('shorts_queue')
@@ -457,7 +467,7 @@ async function main() {
       }
 
       // 4. Update Database Status & Platform Tracking
-      const updatedDataJson = { ...(video.data_json || {}) };
+      const updatedDataJson = { ...(video.data_json || {}), ...(lockDataJson || {}) };
       if (shouldPublishYouTube) {
         if (uploadResults.youtube) {
           updatedDataJson.youtube_status = 'Published';
@@ -481,13 +491,15 @@ async function main() {
       const isMetaDone = updatedDataJson.meta_status === 'Published';
       const isStillScheduled = updatedDataJson.youtube_status === 'Scheduled' || updatedDataJson.meta_status === 'Scheduled';
 
-      let overallStatus = video.status;
+      let overallStatus = 'Scheduled';
       if (isYtDone && isMetaDone) {
         overallStatus = 'Published';
       } else if (isYtDone || isMetaDone) {
-        overallStatus = isStillScheduled ? 'Scheduled' : 'Partially_Published';
+        overallStatus = isStillScheduled ? 'Scheduled' : 'Published';
       } else if (isStillScheduled) {
         overallStatus = 'Scheduled';
+      } else {
+        overallStatus = 'Needs_Approval';
       }
 
       console.log(`\nUpload summary for [${video.id}]:`, uploadResults);
