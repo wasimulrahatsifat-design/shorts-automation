@@ -38,6 +38,13 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
+    const target = queryPlatform || initialPlatform;
+    if (target && (target === 'youtube' || target === 'meta')) {
+      setActivePlatform(target);
+    }
+  }, [queryPlatform, initialPlatform]);
+
+  useEffect(() => {
     fetchVideos(activePlatform);
   }, [activePlatform]);
 

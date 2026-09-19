@@ -747,10 +747,10 @@ export default function Home() {
             >
               Dashboard
             </button>
-            <Link href="/admin/youtube" className="px-4 py-3 rounded-xl bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300 font-medium hover:bg-red-200 dark:hover:bg-red-900/60 transition-all text-center border border-red-200 dark:border-red-900/50 flex items-center justify-center gap-1.5 text-sm">
+            <Link href="/admin?tab=youtube" className="px-4 py-3 rounded-xl bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300 font-medium hover:bg-red-200 dark:hover:bg-red-900/60 transition-all text-center border border-red-200 dark:border-red-900/50 flex items-center justify-center gap-1.5 text-sm">
               <span>🔴</span> YouTube Approval
             </Link>
-            <Link href="/admin/meta" className="px-4 py-3 rounded-xl bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-medium hover:bg-blue-200 dark:hover:bg-blue-900/60 transition-all text-center border border-blue-200 dark:border-blue-900/50 flex items-center justify-center gap-1.5 text-sm">
+            <Link href="/admin?tab=meta" className="px-4 py-3 rounded-xl bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-medium hover:bg-blue-200 dark:hover:bg-blue-900/60 transition-all text-center border border-blue-200 dark:border-blue-900/50 flex items-center justify-center gap-1.5 text-sm">
               <span>🔵</span> FB & IG Approval
             </Link>
           </div>
@@ -816,7 +816,7 @@ export default function Home() {
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-sm font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
                   <span>🎬</span>
-                  <span>End Title (ভিডিওর শেষের লেখা ও ভয়েস)</span>
+                  <span>End Title (Ending Screen Text & Voice)</span>
                 </label>
                 <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
                   AI will speak & display this text at the end
@@ -826,11 +826,11 @@ export default function Home() {
                 type="text" 
                 value={endTitle}
                 onChange={(e) => setEndTitle(e.target.value)}
-                placeholder="ভিডিওর শেষে যা বলবে ও দেখাবে লিখুন (e.g. Subscribe for more! বা Comment your answer!)..."
+                placeholder="Enter ending text (e.g., Subscribe for more! or Comment your thoughts)..."
                 className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 shadow-sm"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
-                ভিডিওর শেষে আর "Thanks for watching" বলবে না — এখানে যা লিখবেন, AI ভয়েস সেটাই বলবে এবং স্ক্রিনে দেখাবে।
+                Custom outro: Whatever you type here will be spoken by AI voiceover and displayed on-screen at the end of the video.
               </p>
             </div>
 

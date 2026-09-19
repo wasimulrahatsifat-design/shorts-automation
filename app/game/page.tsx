@@ -1011,10 +1011,10 @@ export default function GamePage() {
             <Link href="/aesthetic" className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-purple-300 border border-slate-800 transition">
               Aesthetic
             </Link>
-            <Link href="/admin/youtube" className="px-3 py-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-900/50 transition flex items-center gap-1">
+            <Link href="/admin?tab=youtube" className="px-3 py-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-900/50 transition flex items-center gap-1">
               <span>🔴</span> YouTube
             </Link>
-            <Link href="/admin/meta" className="px-3 py-1.5 rounded-lg bg-blue-950/40 hover:bg-blue-900/60 text-blue-300 border border-blue-900/50 transition flex items-center gap-1">
+            <Link href="/admin?tab=meta" className="px-3 py-1.5 rounded-lg bg-blue-950/40 hover:bg-blue-900/60 text-blue-300 border border-blue-900/50 transition flex items-center gap-1">
               <span>🔵</span> FB & IG
             </Link>
           </nav>

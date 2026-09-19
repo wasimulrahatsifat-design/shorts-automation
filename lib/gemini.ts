@@ -68,7 +68,7 @@ export function parseGeminiJson(rawText: string): any {
 /**
  * Executes a generation request across models and backup keys with JSON constraint.
  */
-export async function generateGeminiJson(prompt: string): Promise<any> {
+export async function generateGeminiJson(prompt: string, options?: { temperature?: number }): Promise<any> {
   // Delete GOOGLE_API_KEY to prevent @google/genai SDK from prioritizing it over GEMINI_API_KEY
   delete process.env.GOOGLE_API_KEY;
   const ai1 = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -82,7 +82,8 @@ export async function generateGeminiJson(prompt: string): Promise<any> {
           model,
           contents: prompt,
           config: {
-            responseMimeType: 'application/json'
+            responseMimeType: 'application/json',
+            temperature: options?.temperature ?? 0.95
           }
         });
         if (response.text) return response.text;
