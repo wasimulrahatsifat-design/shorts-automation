@@ -17,6 +17,7 @@ interface DataJson {
   items: DataItem[];
   tts_url?: string;
   show_subtitles?: boolean;
+  end_title?: string;
   bg_music_url?: string;
   bg_music_volume?: number;
   bg_music_enabled?: boolean;
@@ -529,6 +530,24 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
           }}>
             {formatNumberWithUnit(winner.finalValue, y_axis_label)}
           </div>
+
+          {data_json.end_title && (
+            <div style={{
+              marginTop: 25,
+              fontSize: 40,
+              fontWeight: 800,
+              color: '#ffffff',
+              backgroundColor: 'rgba(255,255,255,0.15)',
+              padding: '12px 36px',
+              borderRadius: 24,
+              border: '2px solid rgba(255,255,255,0.3)',
+              textAlign: 'center',
+              textShadow: '0 4px 15px rgba(0,0,0,0.8)',
+              maxWidth: '85%'
+            }}>
+              {data_json.end_title}
+            </div>
+          )}
         </AbsoluteFill>
       </Sequence>
 

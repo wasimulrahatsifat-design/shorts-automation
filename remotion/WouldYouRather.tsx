@@ -17,6 +17,7 @@ export interface WouldYouRatherJson {
   scenarios?: Scenario[];
   tts_urls?: string[] | null;
   show_subtitles?: boolean;
+  end_title?: string;
   bg_music_url?: string;
   bg_music_volume?: number;
   bg_music_enabled?: boolean;
@@ -303,7 +304,7 @@ export const WouldYouRather: React.FC<{ data_json: WouldYouRatherJson; topic: st
           );
         })}
 
-        {/* Outro: "Write down in the comment section." ... "Thanks." */}
+        {/* Outro Sequence */}
         <Series.Sequence durationInFrames={Math.round(3.5 * fps)}>
           {tts_urls && tts_urls.length > scenarios.length && (
             <Audio src={tts_urls[scenarios.length]} volume={0.9} />
@@ -323,19 +324,22 @@ export const WouldYouRather: React.FC<{ data_json: WouldYouRatherJson; topic: st
               fontWeight: 800, 
               textAlign: 'center', 
               lineHeight: 1.3,
-              textShadow: '0 10px 30px rgba(0,0,0,0.9)'
+              textShadow: '0 10px 30px rgba(0,0,0,0.9)',
+              maxWidth: '90%'
             }}>
-              Write down in the comment section.
+              {data_json.end_title || 'Write down in the comment section.'}
             </h1>
-            <p style={{ 
-              color: '#22c55e', 
-              fontSize: 54, 
-              fontWeight: 800, 
-              marginTop: 28,
-              textShadow: '0 6px 20px rgba(34,197,94,0.45)'
-            }}>
-              Thanks.
-            </p>
+            {!data_json.end_title && (
+              <p style={{ 
+                color: '#22c55e', 
+                fontSize: 54, 
+                fontWeight: 800, 
+                marginTop: 28,
+                textShadow: '0 6px 20px rgba(34,197,94,0.45)'
+              }}>
+                Thanks.
+              </p>
+            )}
           </AbsoluteFill>
         </Series.Sequence>
       </Series>

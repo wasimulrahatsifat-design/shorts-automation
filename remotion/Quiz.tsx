@@ -16,6 +16,7 @@ export interface QuizJson {
   tts_url?: string | null;
   tts_urls?: string[] | null;
   show_subtitles?: boolean;
+  end_title?: string;
   bg_music_url?: string;
   bg_music_volume?: number;
   bg_music_enabled?: boolean;
@@ -288,9 +289,16 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
           {tts_urls && tts_urls[questions.length] && (
             <Audio src={tts_urls[questions.length]} volume={0.9} />
           )}
-          <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center' }}>
-            <div style={{ fontSize: 80, fontWeight: 'bold', textShadow: '0px 10px 30px rgba(0,0,0,0.8)' }}>
-              Thanks for watching!
+          <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center', padding: '0 50px', textAlign: 'center' }}>
+            <div style={{ 
+              fontSize: 74, 
+              fontWeight: 800, 
+              textShadow: '0px 10px 30px rgba(0,0,0,0.9)',
+              color: '#ffffff',
+              lineHeight: 1.3,
+              maxWidth: '90%'
+            }}>
+              {data_json.end_title || 'Thanks for watching!'}
             </div>
           </AbsoluteFill>
         </Series.Sequence>

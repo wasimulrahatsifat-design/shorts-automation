@@ -26,6 +26,7 @@ export interface ArenaClashData {
     special_power?: string;
   }[];
   tts_url?: string;
+  end_title?: string;
   bg_music_url?: string;
   bg_music_volume?: number;
   bg_music_enabled?: boolean;
@@ -621,6 +622,25 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
           >
             {frameWinner.name} WINS!
           </div>
+
+          {data_json.end_title && (
+            <div
+              style={{
+                marginTop: 20,
+                fontSize: 38,
+                fontWeight: 800,
+                color: '#ffffff',
+                backgroundColor: 'rgba(0,0,0,0.65)',
+                padding: '10px 32px',
+                borderRadius: 20,
+                border: '2px solid rgba(255,255,255,0.25)',
+                textAlign: 'center',
+                maxWidth: '85%',
+              }}
+            >
+              {data_json.end_title}
+            </div>
+          )}
         </div>
       )}
     </AbsoluteFill>

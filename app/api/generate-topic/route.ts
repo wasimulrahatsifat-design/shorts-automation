@@ -19,6 +19,7 @@ export async function POST(request: Request) {
   try {
     let showSubtitles = true;
     let videoFormat = 'Data Comparison';
+    let endTitle = '';
     try {
       const body = await request.json();
       if (typeof body.showSubtitles === 'boolean') {
@@ -26,6 +27,9 @@ export async function POST(request: Request) {
       }
       if (body.videoFormat) {
         videoFormat = body.videoFormat;
+      }
+      if (body.endTitle) {
+        endTitle = body.endTitle;
       }
     } catch (e) {
       // Ignored if no body is passed
@@ -79,6 +83,10 @@ export async function POST(request: Request) {
       throw new Error('Invalid data format returned from Gemini: missing script.');
     }
 
+    if (endTitle && endTitle.trim()) {
+      dataPayload.end_title = endTitle.trim();
+    }
+
     // Fetch images based on format
     // No image generation is done here anymore. The frontend handles image uploads.
 
@@ -106,8 +114,9 @@ export async function POST(request: Request) {
           tts_urls.push(url);
         }
         
-        // Add "Thanks for watching" outro TTS
-        const outroUrl = await generateTTSForText("Thanks for watching!");
+        // Add custom end_title outro TTS
+        const outroText = (dataPayload.end_title || '').trim() || "Subscribe for more!";
+        const outroUrl = await generateTTSForText(outroText);
         tts_urls.push(outroUrl);
       } else if (videoFormat === 'Would You Rather' && dataPayload.scenarios) {
         const generateTTSForText = async (text: string) => {
@@ -125,11 +134,16 @@ export async function POST(request: Request) {
           tts_urls.push(url);
         }
         
-        // Add "Write down in the comment section. ... Thanks." outro TTS
-        const outroUrl = await generateTTSForText("Write down in the comment section. ... Thanks.");
+        // Add custom end_title outro TTS
+        const outroText = (dataPayload.end_title || '').trim() || "Write down in the comment section. ... Thanks.";
+        const outroUrl = await generateTTSForText(outroText);
         tts_urls.push(outroUrl);
       } else {
-        const elResponse = await fetchElevenLabs(script);
+        let fullScript = script;
+        if (dataPayload.end_title && typeof dataPayload.end_title === 'string' && dataPayload.end_title.trim() && !script.includes(dataPayload.end_title.trim())) {
+          fullScript = `${script.trim()} ... ${dataPayload.end_title.trim()}`;
+        }
+        const elResponse = await fetchElevenLabs(fullScript);
         if (!elResponse.ok) throw new Error(`ElevenLabs API error: ${elResponse.statusText}`);
         const audioBuffer = Buffer.from(await elResponse.arrayBuffer());
         const ttsFileName = `tts_${crypto.randomUUID()}.mp3`;

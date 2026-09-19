@@ -52,8 +52,9 @@ export async function POST(request: Request) {
           tts_urls.push(url);
         }
         
-        // Add "Thanks for watching" outro TTS
-        const outroUrl = await generateTTSForText("Thanks for watching!");
+        // Add custom end_title outro TTS
+        const outroText = (data_json.end_title || '').trim() || "Subscribe for more!";
+        const outroUrl = await generateTTSForText(outroText);
         tts_urls.push(outroUrl);
         
       } else if (data_json.format === 'Would You Rather' && data_json.scenarios) {
@@ -72,8 +73,9 @@ export async function POST(request: Request) {
           tts_urls.push(url);
         }
         
-        // Add "Write down in the comment section. ... Thanks." outro TTS
-        const outroUrl = await generateTTSForText("Write down in the comment section. ... Thanks.");
+        // Add custom end_title outro TTS
+        const outroText = (data_json.end_title || '').trim() || "Write down in the comment section. ... Thanks.";
+        const outroUrl = await generateTTSForText(outroText);
         tts_urls.push(outroUrl);
       } else if (data_json.format === 'AestheticVideo') {
         // Aesthetic videos don't require TTS audio
@@ -82,8 +84,12 @@ export async function POST(request: Request) {
         // Arena Clash without script can use optional announcer tts_url
         tts_url = data_json.tts_url || null;
       } else {
-        // Standard single TTS logic
-        const elResponse = await fetchElevenLabs(script);
+        // Standard single TTS logic - append end_title if present
+        let fullScript = script;
+        if (data_json.end_title && typeof data_json.end_title === 'string' && data_json.end_title.trim() && !script.includes(data_json.end_title.trim())) {
+          fullScript = `${script.trim()} ... ${data_json.end_title.trim()}`;
+        }
+        const elResponse = await fetchElevenLabs(fullScript);
         if (!elResponse.ok) throw new Error(`ElevenLabs API error: ${elResponse.statusText}`);
         const audioBuffer = Buffer.from(await elResponse.arrayBuffer());
         const ttsFileName = `tts_${crypto.randomUUID()}.mp3`;

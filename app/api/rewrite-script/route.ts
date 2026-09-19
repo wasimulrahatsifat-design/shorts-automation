@@ -95,8 +95,9 @@ export async function POST(request: Request) {
           tts_urls.push(url);
         }
         
-        // Add "Thanks for watching" outro TTS
-        const outroUrl = await generateTTSForText("Thanks for watching!");
+        // Add custom end_title outro TTS
+        const outroText = (row.data_json?.end_title || '').trim() || "Subscribe for more!";
+        const outroUrl = await generateTTSForText(outroText);
         tts_urls.push(outroUrl);
       } else if (videoFormat === 'Would You Rather' && newItems && newItems.length > 0 && newItems[0].option_a) {
         const generateTTSForText = async (text: string) => {
@@ -114,11 +115,16 @@ export async function POST(request: Request) {
           tts_urls.push(url);
         }
         
-        // Add "Write down in the comment section. ... Thanks." outro TTS
-        const outroUrl = await generateTTSForText("Write down in the comment section. ... Thanks.");
+        // Add custom end_title outro TTS
+        const outroText = (row.data_json?.end_title || '').trim() || "Write down in the comment section. ... Thanks.";
+        const outroUrl = await generateTTSForText(outroText);
         tts_urls.push(outroUrl);
       } else {
-        const elResponse = await fetchElevenLabs(newScript);
+        let fullScript = newScript;
+        if (row.data_json?.end_title && typeof row.data_json.end_title === 'string' && row.data_json.end_title.trim() && !newScript.includes(row.data_json.end_title.trim())) {
+          fullScript = `${newScript.trim()} ... ${row.data_json.end_title.trim()}`;
+        }
+        const elResponse = await fetchElevenLabs(fullScript);
         if (!elResponse.ok) throw new Error(`ElevenLabs API error: ${elResponse.statusText}`);
         const audioBuffer = Buffer.from(await elResponse.arrayBuffer());
         const ttsFileName = `tts_${crypto.randomUUID()}.mp3`;

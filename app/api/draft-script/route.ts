@@ -68,7 +68,13 @@ export async function POST(request: Request) {
       throw new Error('Invalid data format returned from Gemini: missing script.');
     }
 
-    // No image generation is done here anymore. The frontend handles image uploads.
+    if (body.endTitle && typeof body.endTitle === 'string' && body.endTitle.trim()) {
+      dataPayload.end_title = body.endTitle.trim();
+    } else if (!dataPayload.end_title) {
+      dataPayload.end_title = videoFormat === 'Would You Rather' 
+        ? 'Write down in the comment section.' 
+        : 'Subscribe for more!';
+    }
 
     return NextResponse.json({ success: true, data: dataPayload });
   } catch (error: any) {

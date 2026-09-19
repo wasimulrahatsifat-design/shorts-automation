@@ -53,6 +53,7 @@ export default function Home() {
   // Step 1 State
   const [topic, setTopic] = useState('');
   const [videoFormat, setVideoFormat] = useState('Data Comparison');
+  const [endTitle, setEndTitle] = useState('Subscribe for more!');
   const [duration, setDuration] = useState(15);
   const [showSubtitles, setShowSubtitles] = useState(true);
   const [filterFormat, setFilterFormat] = useState('All');
@@ -499,6 +500,13 @@ export default function Home() {
   useEffect(() => {
     if (videoFormat === 'Quiz') {
       setDuration(80); // 16 seconds per question * 5 questions = 80s
+      if (!endTitle || endTitle === 'Write down in the comment section.' || endTitle === 'Thanks for watching!') {
+        setEndTitle('Subscribe for more quizzes!');
+      }
+    } else if (videoFormat === 'Would You Rather') {
+      if (!endTitle || endTitle === 'Subscribe for more quizzes!' || endTitle === 'Thanks for watching!') {
+        setEndTitle('Write down in the comment section.');
+      }
     }
   }, [videoFormat]);
 
@@ -576,13 +584,15 @@ export default function Home() {
       const response = await fetch('/api/draft-script', { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic, videoFormat })
+        body: JSON.stringify({ topic, videoFormat, endTitle })
       });
       const data = await response.json();
       if (response.ok && data.success) {
         const payload = data.data;
         const finalVoiceId = selectedVoiceId === 'custom' ? customVoiceId.trim() : selectedVoiceId;
         payload.voice_id = finalVoiceId;
+        payload.end_title = (endTitle && endTitle.trim()) || payload.end_title || 'Subscribe for more!';
+        setEndTitle(payload.end_title);
         setDraftJson(JSON.stringify(payload, null, 2));
         setStep(2);
       } else {
@@ -609,6 +619,7 @@ export default function Home() {
       const finalVoiceId = selectedVoiceId === 'custom' ? (customVoiceId.trim() || 'pNInz6obpgDQGcFmaJgB') : selectedVoiceId;
       const finalBgMusicUrl = bgMusicEnabled ? (activeMusicTrack?.url || null) : null;
       const finalBgMusicVolume = bgMusicEnabled ? bgMusicVolume : undefined;
+      const finalEndTitle = (parsedJson.end_title || endTitle || '').trim();
 
       const response = await fetch('/api/queue-video', {
         method: 'POST',
@@ -616,6 +627,7 @@ export default function Home() {
         body: JSON.stringify({ 
           data_json: {
             ...parsedJson,
+            end_title: finalEndTitle,
             voice_id: parsedJson.voice_id || finalVoiceId,
             bg_music_url: finalBgMusicUrl || undefined,
             bg_music_volume: finalBgMusicVolume,
@@ -797,6 +809,29 @@ export default function Home() {
                   Suggest Topic
                 </button>
               </div>
+            </div>
+
+            {/* --- End Title Input Box --- */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                  <span>🎬</span>
+                  <span>End Title (ভিডিওর শেষের লেখা ও ভয়েস)</span>
+                </label>
+                <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                  AI will speak & display this text at the end
+                </span>
+              </div>
+              <input 
+                type="text" 
+                value={endTitle}
+                onChange={(e) => setEndTitle(e.target.value)}
+                placeholder="ভিডিওর শেষে যা বলবে ও দেখাবে লিখুন (e.g. Subscribe for more! বা Comment your answer!)..."
+                className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 shadow-sm"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+                ভিডিওর শেষে আর "Thanks for watching" বলবে না — এখানে যা লিখবেন, AI ভয়েস সেটাই বলবে এবং স্ক্রিনে দেখাবে।
+              </p>
             </div>
 
             {/* --- AI Voice Selection --- */}
@@ -1104,9 +1139,46 @@ export default function Home() {
               </span>
             </div>
             
+            {/* Quick End Title Editor in Step 2 */}
+            <div className="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex-1 w-full">
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1.5">
+                  <span>🎬</span>
+                  <span>End Title (Spoken & Displayed at Video End):</span>
+                </label>
+                <input
+                  type="text"
+                  value={endTitle}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setEndTitle(val);
+                    try {
+                      const parsed = JSON.parse(draftJson);
+                      parsed.end_title = val;
+                      setDraftJson(JSON.stringify(parsed, null, 2));
+                    } catch {}
+                  }}
+                  placeholder="e.g. Subscribe for more! / Write down in the comments / etc."
+                  className="w-full px-3.5 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <span className="text-[11px] text-gray-400 dark:text-gray-500 max-w-[200px] leading-tight">
+                Whatever is entered here will be spoken by AI voice and displayed on-screen.
+              </span>
+            </div>
+
             <textarea
               value={draftJson}
-              onChange={(e) => setDraftJson(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setDraftJson(val);
+                try {
+                  const parsed = JSON.parse(val);
+                  if (typeof parsed.end_title === 'string') {
+                    setEndTitle(parsed.end_title);
+                  }
+                } catch {}
+              }}
               className="w-full h-[300px] font-mono text-sm px-4 py-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 resize-none focus:ring-2 focus:ring-blue-500"
             />
 
