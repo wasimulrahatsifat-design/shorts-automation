@@ -236,8 +236,9 @@ async function main() {
 
   const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-  const targetVideoId = process.env.TARGET_VIDEO_ID || null;
-  const targetPlatform = (process.env.TARGET_PLATFORM || 'all').toLowerCase();
+  const targetVideoId = (process.env.TARGET_VIDEO_ID || '').trim() || null;
+  const rawTargetPlatform = (process.env.TARGET_PLATFORM || '').toLowerCase().trim();
+  const targetPlatform = rawTargetPlatform || 'all';
   const forcePublish = process.env.FORCE_PUBLISH === 'true';
   const now = new Date();
   console.log(`Auto-Publish Config: targetVideoId=${targetVideoId || 'any scheduled'}, targetPlatform=${targetPlatform}, forcePublish=${forcePublish}`);
@@ -261,29 +262,15 @@ async function main() {
       process.exit(0);
     }
 
-    // Schedule Guard: If not forced, ensure the scheduled time has actually arrived!
-    const targetScheduledTime = targetPlatform === 'youtube'
-      ? (found.data_json?.youtube_scheduled_time || found.scheduled_time)
-      : targetPlatform === 'meta'
-      ? (found.data_json?.meta_scheduled_time || found.scheduled_time)
-      : found.scheduled_time;
-
-    if (targetScheduledTime && !forcePublish) {
-      const scheduledDate = new Date(targetScheduledTime);
-      if (scheduledDate.getTime() > (now.getTime() + 60000)) {
-        console.log(`[Schedule Guard] Video [${targetVideoId}] is scheduled for ${targetScheduledTime}, which is in the future. Skipping upload for now.`);
-        process.exit(0);
-      }
-    }
-
     videos = [found];
   } else {
+    // Scheduled Cron Job Mode: Find videos that are in a scheduled state
     console.log(`Checking for scheduled videos due to be published at or before ${now.toISOString()}...`);
     const { data, error } = await supabase
       .from('shorts_queue')
       .select('*')
-      .eq('status', 'Scheduled')
-      .lte('scheduled_time', now.toISOString());
+      .not('video_url', 'is', null)
+      .in('status', ['Scheduled', 'Partially_Published', 'Needs_Approval']);
 
     if (error) {
       console.error('Error fetching scheduled videos:', error);
@@ -297,12 +284,12 @@ async function main() {
     process.exit(0);
   }
 
-  // Initialize YouTube OAuth2 Client if credentials exist and YouTube is targeted
+  // Initialize YouTube OAuth2 Client if credentials exist and YouTube could be targeted
   let youtube = null;
-  const doYouTube = targetPlatform === 'all' || targetPlatform === 'youtube';
-  const doMeta = targetPlatform === 'all' || targetPlatform === 'meta' || targetPlatform === 'facebook-instagram';
+  const allowsYouTubeGlobal = targetPlatform === 'all' || targetPlatform === 'youtube';
+  const allowsMetaGlobal = targetPlatform === 'all' || targetPlatform === 'meta' || targetPlatform === 'facebook-instagram';
 
-  if (doYouTube) {
+  if (allowsYouTubeGlobal) {
     const ytClientId = process.env.YOUTUBE_CLIENT_ID;
     const ytClientSecret = process.env.YOUTUBE_CLIENT_SECRET;
     const ytRefreshToken = process.env.YOUTUBE_REFRESH_TOKEN;
@@ -331,18 +318,75 @@ async function main() {
     }
   }
 
-  console.log(`Processing ${videos.length} video(s)...`);
+  console.log(`Processing ${videos.length} candidate video(s)...`);
 
   for (const video of videos) {
     console.log(`\n======================================================`);
     console.log(`Processing video: [${video.id}] "${video.topic}"`);
-    console.log(`Target platform filter: ${targetPlatform}`);
+    console.log(`Target platform filter: "${targetPlatform}", Force: ${forcePublish}`);
     console.log(`======================================================`);
 
     if (!video.video_url) {
       console.error('Video does not have a video_url. Skipping.');
       continue;
     }
+
+    const currentYtStatus = video.data_json?.youtube_status;
+    const currentMetaStatus = video.data_json?.meta_status;
+
+    // Check YouTube schedule
+    const ytScheduledTime = video.data_json?.youtube_scheduled_time || video.scheduled_time;
+    const isYtScheduled = currentYtStatus === 'Scheduled';
+    const isYtTimeDue = ytScheduledTime && new Date(ytScheduledTime).getTime() <= (now.getTime() + 60000); // 1 min buffer
+    const isYtAlreadyPublished = currentYtStatus === 'Published';
+    const isYtUploading = currentYtStatus === 'Uploading';
+
+    // Check Meta schedule
+    const metaScheduledTime = video.data_json?.meta_scheduled_time || video.scheduled_time;
+    const isMetaScheduled = currentMetaStatus === 'Scheduled';
+    const isMetaTimeDue = metaScheduledTime && new Date(metaScheduledTime).getTime() <= (now.getTime() + 60000);
+    const isMetaAlreadyPublished = currentMetaStatus === 'Published';
+    const isMetaUploading = currentMetaStatus === 'Uploading';
+
+    // STRICT PLATFORM ISOLATION:
+    // YouTube can ONLY be published if:
+    // 1. YouTube is targeted (all or youtube).
+    // 2. YouTube is NOT already published and NOT currently uploading.
+    // 3. EITHER forcePublish is true (from direct user 1-click publish)
+    //    OR (video was approved/scheduled for YouTube AND scheduled time has arrived).
+    const shouldPublishYouTube = allowsYouTubeGlobal && !isYtAlreadyPublished && !isYtUploading && (
+      (forcePublish && (targetPlatform === 'youtube' || targetPlatform === 'all')) ||
+      (isYtScheduled && isYtTimeDue)
+    );
+
+    // Meta can ONLY be published if:
+    // 1. Meta is targeted (all or meta).
+    // 2. Meta is NOT already published and NOT currently uploading.
+    // 3. EITHER forcePublish is true (from direct user 1-click publish)
+    //    OR (video was approved/scheduled for Meta AND scheduled time has arrived).
+    const shouldPublishMeta = allowsMetaGlobal && !isMetaAlreadyPublished && !isMetaUploading && (
+      (forcePublish && (targetPlatform === 'meta' || targetPlatform === 'all')) ||
+      (isMetaScheduled && isMetaTimeDue)
+    );
+
+    console.log(`Platform evaluation for [${video.id}]:`);
+    console.log(`- YouTube: shouldPublish=${shouldPublishYouTube} (status=${currentYtStatus}, scheduled=${ytScheduledTime || 'none'}, isDue=${isYtTimeDue})`);
+    console.log(`- Meta:    shouldPublish=${shouldPublishMeta} (status=${currentMetaStatus}, scheduled=${metaScheduledTime || 'none'}, isDue=${isMetaTimeDue})`);
+
+    if (!shouldPublishYouTube && !shouldPublishMeta) {
+      console.log(`Video [${video.id}] has no pending due actions for platform "${targetPlatform}". Skipping.`);
+      continue;
+    }
+
+    // Acquire in-progress lock before downloading & uploading to prevent duplicate uploads
+    const lockDataJson = { ...(video.data_json || {}) };
+    if (shouldPublishYouTube) lockDataJson.youtube_status = 'Uploading';
+    if (shouldPublishMeta) lockDataJson.meta_status = 'Uploading';
+
+    await supabase
+      .from('shorts_queue')
+      .update({ data_json: lockDataJson })
+      .eq('id', video.id);
 
     // Download the MP4 from Supabase Storage
     console.log('Downloading video file from Supabase Storage...');
@@ -353,6 +397,11 @@ async function main() {
 
     if (downloadError) {
       console.error('Failed to download video from Supabase:', downloadError);
+      // Revert locks on download error
+      await supabase
+        .from('shorts_queue')
+        .update({ data_json: video.data_json })
+        .eq('id', video.id);
       continue;
     }
 
@@ -368,75 +417,78 @@ async function main() {
     const uploadedIds = {};
 
     try {
-      // 1. YouTube Upload
-      if (doYouTube) {
-        if (video.data_json?.youtube_status === 'Published') {
-          console.log('Skipping YouTube: Already published to YouTube.');
-          uploadResults.youtube = true;
-        } else {
-          try {
-            const ytId = await uploadToYouTube(video, localFilePath, youtube);
-            if (ytId) {
-              uploadResults.youtube = true;
-              uploadedIds.youtube_id = ytId;
-            }
-          } catch (ytError) {
-            console.error('YouTube upload encountered an error:', ytError.message || ytError);
+      // 1. YouTube Upload (ONLY if shouldPublishYouTube is true)
+      if (shouldPublishYouTube) {
+        try {
+          const ytId = await uploadToYouTube(video, localFilePath, youtube);
+          if (ytId) {
+            uploadResults.youtube = true;
+            uploadedIds.youtube_id = ytId;
           }
+        } catch (ytError) {
+          console.error('YouTube upload encountered an error:', ytError.message || ytError);
         }
       }
 
-      // 2. Facebook Page Upload
-      if (doMeta) {
-        if (video.data_json?.meta_status === 'Published') {
-          console.log('Skipping Facebook: Already published to Meta.');
-          uploadResults.facebook = true;
-        } else {
-          try {
-            const fbId = await uploadToFacebook(video, localFilePath);
-            if (fbId) {
-              uploadResults.facebook = true;
-              uploadedIds.facebook_id = fbId;
-            }
-          } catch (fbError) {
-            console.error('Facebook upload encountered an error:', fbError.message || fbError);
+      // 2. Facebook Page Upload (ONLY if shouldPublishMeta is true)
+      if (shouldPublishMeta) {
+        try {
+          const fbId = await uploadToFacebook(video, localFilePath);
+          if (fbId) {
+            uploadResults.facebook = true;
+            uploadedIds.facebook_id = fbId;
           }
+        } catch (fbError) {
+          console.error('Facebook upload encountered an error:', fbError.message || fbError);
         }
       }
 
-      // 3. Instagram Reels Upload
-      if (doMeta) {
-        if (video.data_json?.meta_status === 'Published') {
-          console.log('Skipping Instagram: Already published to Meta.');
-          uploadResults.instagram = true;
-        } else {
-          try {
-            const igId = await uploadToInstagram(video, localFilePath);
-            if (igId) {
-              uploadResults.instagram = true;
-              uploadedIds.instagram_id = igId;
-            }
-          } catch (igError) {
-            console.error('Instagram Reels upload encountered an error:', igError.message || igError);
+      // 3. Instagram Reels Upload (ONLY if shouldPublishMeta is true)
+      if (shouldPublishMeta) {
+        try {
+          const igId = await uploadToInstagram(video, localFilePath);
+          if (igId) {
+            uploadResults.instagram = true;
+            uploadedIds.instagram_id = igId;
           }
+        } catch (igError) {
+          console.error('Instagram Reels upload encountered an error:', igError.message || igError);
         }
       }
 
       // 4. Update Database Status & Platform Tracking
       const updatedDataJson = { ...(video.data_json || {}) };
-      if (uploadResults.youtube && doYouTube) {
-        updatedDataJson.youtube_status = 'Published';
-        if (uploadedIds.youtube_id) updatedDataJson.youtube_id = uploadedIds.youtube_id;
+      if (shouldPublishYouTube) {
+        if (uploadResults.youtube) {
+          updatedDataJson.youtube_status = 'Published';
+          if (uploadedIds.youtube_id) updatedDataJson.youtube_id = uploadedIds.youtube_id;
+        } else {
+          updatedDataJson.youtube_status = 'Failed';
+        }
       }
-      if ((uploadResults.facebook || uploadResults.instagram) && doMeta) {
-        updatedDataJson.meta_status = 'Published';
-        if (uploadedIds.facebook_id) updatedDataJson.facebook_id = uploadedIds.facebook_id;
-        if (uploadedIds.instagram_id) updatedDataJson.instagram_id = uploadedIds.instagram_id;
+
+      if (shouldPublishMeta) {
+        if (uploadResults.facebook || uploadResults.instagram) {
+          updatedDataJson.meta_status = 'Published';
+          if (uploadedIds.facebook_id) updatedDataJson.facebook_id = uploadedIds.facebook_id;
+          if (uploadedIds.instagram_id) updatedDataJson.instagram_id = uploadedIds.instagram_id;
+        } else {
+          updatedDataJson.meta_status = 'Failed';
+        }
       }
 
       const isYtDone = updatedDataJson.youtube_status === 'Published';
       const isMetaDone = updatedDataJson.meta_status === 'Published';
-      const overallStatus = (isYtDone && isMetaDone) ? 'Published' : (isYtDone || isMetaDone ? 'Partially_Published' : video.status);
+      const isStillScheduled = updatedDataJson.youtube_status === 'Scheduled' || updatedDataJson.meta_status === 'Scheduled';
+
+      let overallStatus = video.status;
+      if (isYtDone && isMetaDone) {
+        overallStatus = 'Published';
+      } else if (isYtDone || isMetaDone) {
+        overallStatus = isStillScheduled ? 'Scheduled' : 'Partially_Published';
+      } else if (isStillScheduled) {
+        overallStatus = 'Scheduled';
+      }
 
       console.log(`\nUpload summary for [${video.id}]:`, uploadResults);
       console.log(`New platform statuses: YouTube=${updatedDataJson.youtube_status || 'Pending'}, Meta=${updatedDataJson.meta_status || 'Pending'}, Overall=${overallStatus}`);

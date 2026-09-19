@@ -11,7 +11,7 @@ on:
       target:
         description: 'Target platform: youtube, meta, or all'
         required: false
-        default: 'all'
+        default: ''
       force:
         description: 'Force publish immediately ignoring future scheduled_time'
         required: false
@@ -45,8 +45,8 @@ jobs:
           FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_ACCESS_TOKEN }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
-          TARGET_VIDEO_ID: ${{ github.event.inputs.video_id }}
-          TARGET_PLATFORM: ${{ github.event.inputs.target }}
-          FORCE_PUBLISH: ${{ github.event.inputs.force }}
+          TARGET_VIDEO_ID: ${{ inputs.video_id || github.event.inputs.video_id || '' }}
+          TARGET_PLATFORM: ${{ inputs.target || github.event.inputs.target || '' }}
+          FORCE_PUBLISH: ${{ inputs.force || github.event.inputs.force || 'false' }}
         run: node scripts/auto-publish.mjs
 

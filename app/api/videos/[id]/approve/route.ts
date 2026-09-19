@@ -35,10 +35,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const updatedDataJson = { ...currentDataJson };
 
     if (platform === 'youtube') {
-      updatedDataJson.youtube_status = publish_now ? 'Scheduled' : 'Scheduled';
+      if (currentDataJson.youtube_status === 'Published') {
+        return NextResponse.json({ success: false, error: 'Video is already uploaded to YouTube.' }, { status: 400 });
+      }
+      if (currentDataJson.youtube_status === 'Uploading') {
+        return NextResponse.json({ success: false, error: 'Video is currently uploading to YouTube. Please wait.' }, { status: 400 });
+      }
+      updatedDataJson.youtube_status = 'Scheduled';
       updatedDataJson.youtube_scheduled_time = finalScheduledTime;
     } else if (platform === 'meta') {
-      updatedDataJson.meta_status = publish_now ? 'Scheduled' : 'Scheduled';
+      if (currentDataJson.meta_status === 'Published') {
+        return NextResponse.json({ success: false, error: 'Video is already published to Facebook and Instagram.' }, { status: 400 });
+      }
+      if (currentDataJson.meta_status === 'Uploading') {
+        return NextResponse.json({ success: false, error: 'Video is currently being published to Facebook and Instagram. Please wait.' }, { status: 400 });
+      }
+      updatedDataJson.meta_status = 'Scheduled';
       updatedDataJson.meta_scheduled_time = finalScheduledTime;
     } else {
       updatedDataJson.youtube_status = 'Scheduled';
@@ -47,11 +59,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       updatedDataJson.meta_scheduled_time = finalScheduledTime;
     }
 
+    // Determine row status
+    const isYtDone = updatedDataJson.youtube_status === 'Published';
+    const isMetaDone = updatedDataJson.meta_status === 'Published';
+    const rowStatus = (isYtDone && isMetaDone) 
+      ? 'Published' 
+      : 'Scheduled';
+
     // Update the video row in Supabase
     const { error: updateError } = await supabase
       .from('shorts_queue')
       .update({
-        status: 'Scheduled',
+        status: rowStatus,
         scheduled_time: finalScheduledTime,
         data_json: updatedDataJson,
       })

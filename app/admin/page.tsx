@@ -20,6 +20,8 @@ interface VideoItem {
     instagram_id?: string;
     format?: string;
     description?: string;
+    youtube_scheduled_time?: string;
+    meta_scheduled_time?: string;
   };
 }
 
@@ -36,6 +38,7 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [actionLoading, setActionLoading] = useState<{ [id: string]: boolean }>({});
 
   useEffect(() => {
     const target = queryPlatform || initialPlatform;
@@ -88,13 +91,7 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
 
   // Direct 1-Click Publish Now
   const handlePublishNow = async (id: string, platform: 'youtube' | 'meta') => {
-    // Optimistic UI removal from current tab
-    setVideos((prev) => prev.filter((v) => v.id !== id));
-    if (platform === 'youtube') {
-      setCounts((c) => ({ ...c, youtube: Math.max(0, c.youtube - 1) }));
-    } else {
-      setCounts((c) => ({ ...c, meta: Math.max(0, c.meta - 1) }));
-    }
+    setActionLoading((prev) => ({ ...prev, [id]: true }));
 
     try {
       const res = await fetch(`/api/videos/${id}/approve`, {
@@ -113,6 +110,13 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
             ? 'Approved! Uploading as Private to YouTube in background...'
             : 'Approved! Publishing live to Facebook Page & Instagram Reels in background...'
         });
+        // Optimistic UI removal from current tab after successful approval
+        setVideos((prev) => prev.filter((v) => v.id !== id));
+        if (platform === 'youtube') {
+          setCounts((c) => ({ ...c, youtube: Math.max(0, c.youtube - 1) }));
+        } else {
+          setCounts((c) => ({ ...c, meta: Math.max(0, c.meta - 1) }));
+        }
       } else {
         throw new Error(data.error || 'Failed to approve');
       }
@@ -120,6 +124,12 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
       console.error('Failed to approve video', error);
       setActionMessage({ type: 'error', text: error.message || 'Failed to trigger approval.' });
       fetchVideos(activePlatform);
+    } finally {
+      setActionLoading((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
     }
   };
 
@@ -136,14 +146,7 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
 
     setIsModalOpen(false);
     setSelectedVideoId(null);
-
-    // Optimistic UI update
-    setVideos((prev) => prev.filter((v) => v.id !== id));
-    if (platform === 'youtube') {
-      setCounts((c) => ({ ...c, youtube: Math.max(0, c.youtube - 1) }));
-    } else {
-      setCounts((c) => ({ ...c, meta: Math.max(0, c.meta - 1) }));
-    }
+    setActionLoading((prev) => ({ ...prev, [id]: true }));
 
     try {
       const res = await fetch(`/api/videos/${id}/approve`, {
@@ -159,12 +162,34 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
       if (data.success) {
         setActionMessage({
           type: 'success',
-          text: `Scheduled for ${new Date(scheduledTime).toLocaleString()} on ${platform === 'youtube' ? 'YouTube' : 'Facebook & Instagram'}!`
+          text: `Successfully scheduled for ${new Date(scheduledTime).toLocaleString()} on ${platform === 'youtube' ? 'YouTube' : 'Facebook & Instagram'}!`
         });
+        // Update local video state with scheduled timestamp
+        setVideos((prev) => prev.map((v) => {
+          if (v.id !== id) return v;
+          const updatedJson = { ...v.data_json };
+          if (platform === 'youtube') {
+            updatedJson.youtube_status = 'Scheduled';
+            updatedJson.youtube_scheduled_time = scheduledTime;
+          } else {
+            updatedJson.meta_status = 'Scheduled';
+            updatedJson.meta_scheduled_time = scheduledTime;
+          }
+          return { ...v, status: 'Scheduled', scheduled_time: scheduledTime, data_json: updatedJson };
+        }));
+      } else {
+        throw new Error(data.error || 'Failed to schedule');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to schedule video', error);
+      setActionMessage({ type: 'error', text: error.message || 'Failed to schedule video.' });
       fetchVideos(activePlatform);
+    } finally {
+      setActionLoading((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
     }
   };
 
@@ -321,8 +346,17 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {videos.map((video) => {
-              const ytDone = video.data_json?.youtube_status === 'Published';
-              const metaDone = video.data_json?.meta_status === 'Published';
+              const ytStatus = video.data_json?.youtube_status;
+              const metaStatus = video.data_json?.meta_status;
+              const ytDone = ytStatus === 'Published';
+              const metaDone = metaStatus === 'Published';
+              const ytScheduled = ytStatus === 'Scheduled';
+              const metaScheduled = metaStatus === 'Scheduled';
+              const ytUploading = ytStatus === 'Uploading';
+              const metaUploading = metaStatus === 'Uploading';
+              const ytScheduledTime = video.data_json?.youtube_scheduled_time || video.scheduled_time;
+              const metaScheduledTime = video.data_json?.meta_scheduled_time || video.scheduled_time;
+              const isBusy = !!actionLoading[video.id];
 
               return (
                 <div 
@@ -367,20 +401,44 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
                         <span className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border flex items-center gap-1 ${
                           ytDone 
                             ? 'bg-green-50 dark:bg-green-950/60 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800'
+                            : ytUploading
+                            ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 animate-pulse'
+                            : ytScheduled
+                            ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
                             : 'bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800'
                         }`}>
                           <span>🔴 YouTube:</span>
-                          <span>{ytDone ? '✓ Uploaded' : '⏳ Pending'}</span>
+                          <span>
+                            {ytDone 
+                              ? '✓ Uploaded' 
+                              : ytUploading
+                              ? '🚀 Uploading...'
+                              : ytScheduled && ytScheduledTime
+                              ? `📅 Scheduled (${new Date(ytScheduledTime).toLocaleDateString([], { month: 'short', day: 'numeric' })} ${new Date(ytScheduledTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
+                              : '⏳ Pending Approval'}
+                          </span>
                         </span>
 
                         {/* Meta Status Badge */}
                         <span className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border flex items-center gap-1 ${
                           metaDone 
                             ? 'bg-green-50 dark:bg-green-950/60 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800'
+                            : metaUploading
+                            ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 animate-pulse'
+                            : metaScheduled
+                            ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
                             : 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
                         }`}>
                           <span>🔵 FB & IG:</span>
-                          <span>{metaDone ? '✓ Published' : '⏳ Pending'}</span>
+                          <span>
+                            {metaDone 
+                              ? '✓ Published' 
+                              : metaUploading
+                              ? '🚀 Publishing...'
+                              : metaScheduled && metaScheduledTime
+                              ? `📅 Scheduled (${new Date(metaScheduledTime).toLocaleDateString([], { month: 'short', day: 'numeric' })} ${new Date(metaScheduledTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
+                              : '⏳ Pending Approval'}
+                          </span>
                         </span>
                       </div>
                     </div>
@@ -393,7 +451,8 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
                       <div className="flex gap-2">
                         <button
                           onClick={() => handleReject(video.id)}
-                          className="px-3.5 py-2.5 bg-gray-100 hover:bg-rose-50 text-gray-600 hover:text-rose-600 dark:bg-gray-700 dark:hover:bg-rose-950/40 rounded-xl font-bold text-xs transition border border-gray-200 dark:border-gray-600"
+                          disabled={isBusy}
+                          className="px-3.5 py-2.5 bg-gray-100 hover:bg-rose-50 text-gray-600 hover:text-rose-600 dark:bg-gray-700 dark:hover:bg-rose-950/40 rounded-xl font-bold text-xs transition border border-gray-200 dark:border-gray-600 disabled:opacity-50 cursor-pointer"
                           title="Delete video permanently"
                         >
                           🗑️
@@ -401,18 +460,30 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
 
                         <button
                           onClick={() => handlePublishNow(video.id, 'youtube')}
-                          className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-3 rounded-xl transition-all shadow-md shadow-red-500/20 text-xs active:scale-95 flex items-center justify-center gap-1.5"
+                          disabled={isBusy || ytDone || ytUploading}
+                          className="flex-1 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-bold py-2.5 px-3 rounded-xl transition-all shadow-md shadow-red-500/20 text-xs active:scale-95 flex items-center justify-center gap-1.5 disabled:cursor-not-allowed cursor-pointer"
                         >
-                          <span>🔴</span>
-                          <span>Upload to YouTube (Private)</span>
+                          {isBusy || ytUploading ? (
+                            <>
+                              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              <span>Uploading to YouTube...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>🔴</span>
+                              <span>Upload to YouTube (Private)</span>
+                            </>
+                          )}
                         </button>
 
                         <button
                           onClick={() => handleOpenScheduleModal(video.id)}
-                          className="px-3 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-xl font-bold text-xs transition border border-gray-200 dark:border-gray-600"
-                          title="Schedule for future date"
+                          disabled={isBusy || ytDone || ytUploading}
+                          className="px-3.5 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-xl font-bold text-xs transition border border-gray-200 dark:border-gray-600 disabled:opacity-50 cursor-pointer flex items-center gap-1"
+                          title={ytScheduled ? "Change scheduled time" : "Schedule for future date"}
                         >
-                          📅
+                          <span>📅</span>
+                          <span>{ytScheduled ? 'Reschedule' : ''}</span>
                         </button>
                       </div>
                     ) : (
@@ -420,7 +491,8 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
                       <div className="flex gap-2">
                         <button
                           onClick={() => handleReject(video.id)}
-                          className="px-3.5 py-2.5 bg-gray-100 hover:bg-rose-50 text-gray-600 hover:text-rose-600 dark:bg-gray-700 dark:hover:bg-rose-950/40 rounded-xl font-bold text-xs transition border border-gray-200 dark:border-gray-600"
+                          disabled={isBusy}
+                          className="px-3.5 py-2.5 bg-gray-100 hover:bg-rose-50 text-gray-600 hover:text-rose-600 dark:bg-gray-700 dark:hover:bg-rose-950/40 rounded-xl font-bold text-xs transition border border-gray-200 dark:border-gray-600 disabled:opacity-50 cursor-pointer"
                           title="Delete video permanently"
                         >
                           🗑️
@@ -428,18 +500,30 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
 
                         <button
                           onClick={() => handlePublishNow(video.id, 'meta')}
-                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-3 rounded-xl transition-all shadow-md shadow-blue-500/20 text-xs active:scale-95 flex items-center justify-center gap-1.5"
+                          disabled={isBusy || metaDone || metaUploading}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold py-2.5 px-3 rounded-xl transition-all shadow-md shadow-blue-500/20 text-xs active:scale-95 flex items-center justify-center gap-1.5 disabled:cursor-not-allowed cursor-pointer"
                         >
-                          <span>🚀</span>
-                          <span>Publish to FB & IG (Live)</span>
+                          {isBusy || metaUploading ? (
+                            <>
+                              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              <span>Publishing to FB & IG...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>🚀</span>
+                              <span>Publish to FB & IG (Live)</span>
+                            </>
+                          )}
                         </button>
 
                         <button
                           onClick={() => handleOpenScheduleModal(video.id)}
-                          className="px-3 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-xl font-bold text-xs transition border border-gray-200 dark:border-gray-600"
-                          title="Schedule FB & IG for future date"
+                          disabled={isBusy || metaDone || metaUploading}
+                          className="px-3.5 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-xl font-bold text-xs transition border border-gray-200 dark:border-gray-600 disabled:opacity-50 cursor-pointer flex items-center gap-1"
+                          title={metaScheduled ? "Change scheduled time" : "Schedule FB & IG for future date"}
                         >
-                          📅
+                          <span>📅</span>
+                          <span>{metaScheduled ? 'Reschedule' : ''}</span>
                         </button>
                       </div>
                     )}
