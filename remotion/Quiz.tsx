@@ -12,6 +12,7 @@ interface Question {
 export interface QuizJson {
   script: string;
   format?: string;
+  part_title?: string;
   questions?: Question[];
   tts_url?: string | null;
   tts_urls?: string[] | null;
@@ -46,7 +47,7 @@ export const getQuestionTiming = (q: Question, fps: number) => {
   };
 };
 
-const QuizRound: React.FC<{ questionData: Question, topic: string }> = ({ questionData, topic }) => {
+const QuizRound: React.FC<{ questionData: Question, topic: string, partTitle?: string }> = ({ questionData, topic, partTitle }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -90,12 +91,44 @@ const QuizRound: React.FC<{ questionData: Question, topic: string }> = ({ questi
           color: '#facc15',
           textTransform: 'uppercase',
           letterSpacing: 2,
-          marginBottom: 28,
+          marginBottom: partTitle && partTitle.trim() ? 12 : 28,
           textShadow: '0 4px 15px rgba(0,0,0,0.5)',
         }}
       >
         {topic || 'Trivia Time!'}
       </div>
+
+      {/* Optional Part Title (e.g. Part-1, Part-2) centered below title */}
+      {partTitle && partTitle.trim() ? (
+        <div
+          style={{
+            opacity: titleOpacity,
+            transform: `scale(${titleScale})`,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginBottom: 26,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 26,
+              fontWeight: 800,
+              textAlign: 'center',
+              color: '#38bdf8',
+              backgroundColor: 'rgba(56, 189, 248, 0.15)',
+              border: '2px solid rgba(56, 189, 248, 0.45)',
+              borderRadius: 999,
+              padding: '6px 26px',
+              letterSpacing: 2,
+              textTransform: 'uppercase',
+              boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
+            }}
+          >
+            {partTitle.trim()}
+          </div>
+        </div>
+      ) : null}
 
       {/* Image & Question Box */}
       <div
@@ -279,7 +312,7 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
             <Series.Sequence key={idx} durationInFrames={totalFrames}>
               {/* Play individual audio for this specific question */}
               {tts_urls && tts_urls[idx] && <Audio src={tts_urls[idx]} volume={0.9} />}
-              <QuizRound questionData={q} topic={topic} />
+              <QuizRound questionData={q} topic={topic} partTitle={data_json.part_title} />
             </Series.Sequence>
           );
         })}

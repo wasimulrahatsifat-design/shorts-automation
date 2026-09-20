@@ -20,6 +20,7 @@ export async function POST(request: Request) {
     let showSubtitles = true;
     let videoFormat = 'Data Comparison';
     let endTitle = '';
+    let partTitle = '';
     try {
       const body = await request.json();
       if (typeof body.showSubtitles === 'boolean') {
@@ -30,6 +31,9 @@ export async function POST(request: Request) {
       }
       if (body.endTitle) {
         endTitle = body.endTitle;
+      }
+      if (body.partTitle || body.part_title) {
+        partTitle = body.partTitle || body.part_title;
       }
     } catch (e) {
       // Ignored if no body is passed
@@ -116,6 +120,10 @@ export async function POST(request: Request) {
 
     if (endTitle && endTitle.trim()) {
       dataPayload.end_title = endTitle.trim();
+    }
+
+    if (partTitle && partTitle.trim()) {
+      dataPayload.part_title = partTitle.trim();
     }
 
     // Fetch images based on format

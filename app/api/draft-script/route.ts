@@ -112,6 +112,12 @@ export async function POST(request: Request) {
         : 'Subscribe for more!';
     }
 
+    if (body.partTitle && typeof body.partTitle === 'string' && body.partTitle.trim()) {
+      dataPayload.part_title = body.partTitle.trim();
+    } else if (body.part_title && typeof body.part_title === 'string' && body.part_title.trim()) {
+      dataPayload.part_title = body.part_title.trim();
+    }
+
     return NextResponse.json({ success: true, data: dataPayload });
   } catch (error: any) {
     console.error('Error generating draft script:', error);

@@ -52,6 +52,7 @@ export default function Home() {
 
   // Step 1 State
   const [topic, setTopic] = useState('');
+  const [partTitle, setPartTitle] = useState('');
   const [videoFormat, setVideoFormat] = useState('Data Comparison');
   const [endTitle, setEndTitle] = useState('Subscribe for more!');
   const [duration, setDuration] = useState(15);
@@ -584,7 +585,7 @@ export default function Home() {
       const response = await fetch('/api/draft-script', { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic, videoFormat, endTitle })
+        body: JSON.stringify({ topic, videoFormat, endTitle, partTitle })
       });
       const data = await response.json();
       if (response.ok && data.success) {
@@ -592,6 +593,11 @@ export default function Home() {
         const finalVoiceId = selectedVoiceId === 'custom' ? customVoiceId.trim() : selectedVoiceId;
         payload.voice_id = finalVoiceId;
         payload.end_title = (endTitle && endTitle.trim()) || payload.end_title || 'Subscribe for more!';
+        if (partTitle && partTitle.trim()) {
+          payload.part_title = partTitle.trim();
+        } else if (payload.part_title) {
+          setPartTitle(payload.part_title);
+        }
         setEndTitle(payload.end_title);
         setDraftJson(JSON.stringify(payload, null, 2));
         setStep(2);
@@ -620,6 +626,7 @@ export default function Home() {
       const finalBgMusicUrl = bgMusicEnabled ? (activeMusicTrack?.url || null) : null;
       const finalBgMusicVolume = bgMusicEnabled ? bgMusicVolume : undefined;
       const finalEndTitle = (parsedJson.end_title || endTitle || '').trim();
+      const finalPartTitle = (typeof parsedJson.part_title === 'string' ? parsedJson.part_title : partTitle).trim();
 
       const response = await fetch('/api/queue-video', {
         method: 'POST',
@@ -627,6 +634,7 @@ export default function Home() {
         body: JSON.stringify({ 
           data_json: {
             ...parsedJson,
+            part_title: finalPartTitle || undefined,
             end_title: finalEndTitle,
             voice_id: parsedJson.voice_id || finalVoiceId,
             bg_music_url: finalBgMusicUrl || undefined,
@@ -810,6 +818,31 @@ export default function Home() {
                 </button>
               </div>
             </div>
+
+            {/* --- Quiz Part / Series Input Box --- */}
+            {videoFormat === 'Quiz' && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                    <span>🏷️</span>
+                    <span>Quiz Part / Series (Optional)</span>
+                  </label>
+                  <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                    Centered below Quiz title (e.g. Part-1, Part-2)
+                  </span>
+                </div>
+                <input 
+                  type="text" 
+                  value={partTitle}
+                  onChange={(e) => setPartTitle(e.target.value)}
+                  placeholder="e.g. Part-1, Part-2 (Leave blank if not needed)..."
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 shadow-sm"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+                  Appears in the center directly below the quiz title. If left blank, nothing is displayed.
+                </p>
+              </div>
+            )}
 
             {/* --- End Title Input Box --- */}
             <div>
@@ -1167,6 +1200,36 @@ export default function Home() {
               </span>
             </div>
 
+            {/* Quick Part Title Editor in Step 2 for Quiz */}
+            {(videoFormat === 'Quiz' || (draftJson && draftJson.includes('"questions"'))) && (
+              <div className="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex-1 w-full">
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1.5">
+                    <span>🏷️</span>
+                    <span>Quiz Part / Series (Centered below title):</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={partTitle}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPartTitle(val);
+                      try {
+                        const parsed = JSON.parse(draftJson);
+                        parsed.part_title = val;
+                        setDraftJson(JSON.stringify(parsed, null, 2));
+                      } catch {}
+                    }}
+                    placeholder="e.g. Part-1, Part-2 (Leave blank if not needed)"
+                    className="w-full px-3.5 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <span className="text-[11px] text-gray-400 dark:text-gray-500 max-w-[200px] leading-tight">
+                  Displays centered directly under the Quiz title in video. Blank = nothing shown.
+                </span>
+              </div>
+            )}
+
             <textarea
               value={draftJson}
               onChange={(e) => {
@@ -1176,6 +1239,9 @@ export default function Home() {
                   const parsed = JSON.parse(val);
                   if (typeof parsed.end_title === 'string') {
                     setEndTitle(parsed.end_title);
+                  }
+                  if (typeof parsed.part_title === 'string') {
+                    setPartTitle(parsed.part_title);
                   }
                 } catch {}
               }}
@@ -1326,7 +1392,7 @@ export default function Home() {
                   </option>
                 </select>
                 <button 
-                  onClick={() => { setStep(1); setTopic(''); }}
+                  onClick={() => { setStep(1); setTopic(''); setPartTitle(''); }}
                   className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-colors shadow-md shadow-blue-500/20 whitespace-nowrap flex items-center gap-1.5"
                 >
                   <span>+</span> Create Video

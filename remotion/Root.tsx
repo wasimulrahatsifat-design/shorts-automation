@@ -108,6 +108,7 @@ export const RemotionRoot: React.FC = () => {
           data_json: {
             script: "What is the largest planet in our solar system? A, Earth, B, Jupiter, C, Saturn. Which element has the chemical symbol O? A, Gold, B, Oxygen, C, Osmium. What is the capital of Japan? A, Seoul, B, Beijing, C, Tokyo. Who wrote Hamlet? A, Charles Dickens, B, William Shakespeare, C, Jane Austen. What is the speed of light? A, 300,000 km/s, B, 150,000 km/s, C, 1,000,000 km/s.",
             format: "Quiz",
+            part_title: "Part-1",
             tts_urls: [
               "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
               "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
