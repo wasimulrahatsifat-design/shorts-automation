@@ -320,7 +320,24 @@ async function main() {
 
   console.log(`Processing ${videos.length} candidate video(s)...`);
 
-  for (const video of videos) {
+  async function getFreshVideoData(id) {
+    try {
+      const { data, error } = await supabase
+        .from('shorts_queue')
+        .select('*')
+        .eq('id', id)
+        .single();
+      if (error || !data) return null;
+      return data;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  for (const rawVideo of videos) {
+    const fresh = await getFreshVideoData(rawVideo.id);
+    const video = fresh || rawVideo;
+
     console.log(`\n======================================================`);
     console.log(`Processing video: [${video.id}] "${video.topic}"`);
     console.log(`Target platform filter: "${targetPlatform}", Force: ${forcePublish}`);
@@ -338,43 +355,48 @@ async function main() {
     const ytScheduledTime = video.data_json?.youtube_scheduled_time || video.scheduled_time;
     const isYtScheduled = currentYtStatus === 'Scheduled';
     const isYtTimeDue = ytScheduledTime && new Date(ytScheduledTime).getTime() <= (now.getTime() + 60000); // 1 min buffer
-    const isYtAlreadyPublished = currentYtStatus === 'Published';
+    const isYtAlreadyPublished = currentYtStatus === 'Published' || Boolean(video.data_json?.youtube_id);
     const isYtUploading = currentYtStatus === 'Uploading' && (
-      video.data_json?.youtube_uploading_at && (now.getTime() - new Date(video.data_json.youtube_uploading_at).getTime() < 10 * 60 * 1000)
+      video.data_json?.youtube_uploading_at && (now.getTime() - new Date(video.data_json.youtube_uploading_at).getTime() < 5 * 60 * 1000)
     );
 
     // Check Meta schedule
     const metaScheduledTime = video.data_json?.meta_scheduled_time || video.scheduled_time;
     const isMetaScheduled = currentMetaStatus === 'Scheduled';
     const isMetaTimeDue = metaScheduledTime && new Date(metaScheduledTime).getTime() <= (now.getTime() + 60000);
-    const isMetaAlreadyPublished = currentMetaStatus === 'Published';
+    // Meta is considered already published if status is Published OR both Facebook & Instagram IDs exist
+    const isMetaAlreadyPublished = currentMetaStatus === 'Published' || (Boolean(video.data_json?.facebook_id) && Boolean(video.data_json?.instagram_id));
     const isMetaUploading = currentMetaStatus === 'Uploading' && (
-      video.data_json?.meta_uploading_at && (now.getTime() - new Date(video.data_json.meta_uploading_at).getTime() < 10 * 60 * 1000)
+      video.data_json?.meta_uploading_at && (now.getTime() - new Date(video.data_json.meta_uploading_at).getTime() < 5 * 60 * 1000)
     );
 
-    // STRICT PLATFORM ISOLATION:
+    // STRICT PLATFORM ISOLATION & CONCURRENCY GUARDS:
     const isSpecificVideoTarget = Boolean(targetVideoId && targetVideoId === video.id);
 
     // YouTube can ONLY be published if:
-    // 1. YouTube is targeted (all or youtube).
+    // 1. YouTube credentials are provided.
     // 2. YouTube is NOT already published.
-    // 3. EITHER this run was dispatched specifically for this video (isSpecificVideoTarget or forcePublish)
-    //    OR (general cron mode): video is scheduled, due, and not actively uploading by another runner (!isYtUploading).
+    // 3. Not actively uploading by another runner (!isYtUploading).
+    // 4. EITHER targeted directly OR scheduled and due.
     const shouldPublishYouTube = allowsYouTubeGlobal && !isYtAlreadyPublished && (
-      (isSpecificVideoTarget || forcePublish)
+      forcePublish
         ? (targetPlatform === 'youtube' || targetPlatform === 'all')
-        : (!isYtUploading && isYtScheduled && isYtTimeDue)
+        : (isSpecificVideoTarget
+            ? (!isYtUploading && (targetPlatform === 'youtube' || targetPlatform === 'all'))
+            : (!isYtUploading && isYtScheduled && isYtTimeDue))
     );
 
     // Meta can ONLY be published if:
-    // 1. Meta is targeted (all or meta).
-    // 2. Meta is NOT already published.
-    // 3. EITHER this run was dispatched specifically for this video (isSpecificVideoTarget or forcePublish)
-    //    OR (general cron mode): video is scheduled, due, and not actively uploading by another runner (!isMetaUploading).
+    // 1. Meta credentials are provided.
+    // 2. Meta is NOT already fully published.
+    // 3. Not actively uploading by another runner (!isMetaUploading).
+    // 4. EITHER targeted directly OR scheduled and due.
     const shouldPublishMeta = allowsMetaGlobal && !isMetaAlreadyPublished && (
-      (isSpecificVideoTarget || forcePublish)
+      forcePublish
         ? (targetPlatform === 'meta' || targetPlatform === 'all' || targetPlatform === 'facebook-instagram')
-        : (!isMetaUploading && isMetaScheduled && isMetaTimeDue)
+        : (isSpecificVideoTarget
+            ? (!isMetaUploading && (targetPlatform === 'meta' || targetPlatform === 'all' || targetPlatform === 'facebook-instagram'))
+            : (!isMetaUploading && isMetaScheduled && isMetaTimeDue))
     );
 
     console.log(`Platform evaluation for [${video.id}]:`);
@@ -433,47 +455,115 @@ async function main() {
     try {
       // 1. YouTube Upload (ONLY if shouldPublishYouTube is true)
       if (shouldPublishYouTube) {
-        try {
-          const ytId = await uploadToYouTube(video, localFilePath, youtube);
-          if (ytId) {
-            uploadResults.youtube = true;
-            uploadedIds.youtube_id = ytId;
+        const freshRow = await getFreshVideoData(video.id);
+        const freshData = freshRow?.data_json || video.data_json || {};
+        if (freshData.youtube_id || freshData.youtube_status === 'Published') {
+          console.log(`[CONCURRENCY GUARD] YouTube already published for video [${video.id}] (ID: ${freshData.youtube_id}). Skipping duplicate upload.`);
+          uploadResults.youtube = true;
+          uploadedIds.youtube_id = freshData.youtube_id;
+        } else {
+          try {
+            const ytId = await uploadToYouTube(video, localFilePath, youtube);
+            if (ytId) {
+              uploadResults.youtube = true;
+              uploadedIds.youtube_id = ytId;
+              // Immediate DB update to prevent any concurrent runner from uploading YouTube again
+              const currentFresh = await getFreshVideoData(video.id);
+              const curData = currentFresh?.data_json || {};
+              await supabase
+                .from('shorts_queue')
+                .update({
+                  data_json: {
+                    ...curData,
+                    youtube_id: ytId,
+                    youtube_status: 'Published',
+                    youtube_uploaded_at: new Date().toISOString(),
+                  },
+                })
+                .eq('id', video.id);
+              console.log(`[IMMEDIATE DB PERSISTENCE] YouTube ID ${ytId} saved to database.`);
+            }
+          } catch (ytError) {
+            console.error('YouTube upload encountered an error:', ytError.message || ytError);
           }
-        } catch (ytError) {
-          console.error('YouTube upload encountered an error:', ytError.message || ytError);
         }
       }
 
       // 2. Facebook Page Upload (ONLY if shouldPublishMeta is true)
       if (shouldPublishMeta) {
-        try {
-          const fbId = await uploadToFacebook(video, localFilePath);
-          if (fbId) {
-            uploadResults.facebook = true;
-            uploadedIds.facebook_id = fbId;
+        const freshRow = await getFreshVideoData(video.id);
+        const freshData = freshRow?.data_json || video.data_json || {};
+        if (freshData.facebook_id) {
+          console.log(`[CONCURRENCY GUARD] Facebook already published for video [${video.id}] (ID: ${freshData.facebook_id}). Skipping duplicate upload.`);
+          uploadResults.facebook = true;
+          uploadedIds.facebook_id = freshData.facebook_id;
+        } else {
+          try {
+            const fbId = await uploadToFacebook(video, localFilePath);
+            if (fbId) {
+              uploadResults.facebook = true;
+              uploadedIds.facebook_id = fbId;
+              // Immediate DB update to prevent any concurrent runner from uploading to Facebook again!
+              const currentFresh = await getFreshVideoData(video.id);
+              const curData = currentFresh?.data_json || {};
+              await supabase
+                .from('shorts_queue')
+                .update({
+                  data_json: {
+                    ...curData,
+                    facebook_id: fbId,
+                    facebook_uploaded_at: new Date().toISOString(),
+                  },
+                })
+                .eq('id', video.id);
+              console.log(`[IMMEDIATE DB PERSISTENCE] Facebook ID ${fbId} saved to database immediately.`);
+            }
+          } catch (fbError) {
+            console.error('Facebook upload encountered an error:', fbError.message || fbError);
           }
-        } catch (fbError) {
-          console.error('Facebook upload encountered an error:', fbError.message || fbError);
         }
       }
 
       // 3. Instagram Reels Upload (ONLY if shouldPublishMeta is true)
       if (shouldPublishMeta) {
-        try {
-          const igId = await uploadToInstagram(video, localFilePath);
-          if (igId) {
-            uploadResults.instagram = true;
-            uploadedIds.instagram_id = igId;
+        const freshRow = await getFreshVideoData(video.id);
+        const freshData = freshRow?.data_json || video.data_json || {};
+        if (freshData.instagram_id) {
+          console.log(`[CONCURRENCY GUARD] Instagram already published for video [${video.id}] (ID: ${freshData.instagram_id}). Skipping duplicate upload.`);
+          uploadResults.instagram = true;
+          uploadedIds.instagram_id = freshData.instagram_id;
+        } else {
+          try {
+            const igId = await uploadToInstagram(video, localFilePath);
+            if (igId) {
+              uploadResults.instagram = true;
+              uploadedIds.instagram_id = igId;
+              // Immediate DB update to prevent any concurrent runner from uploading to Instagram again!
+              const currentFresh = await getFreshVideoData(video.id);
+              const curData = currentFresh?.data_json || {};
+              await supabase
+                .from('shorts_queue')
+                .update({
+                  data_json: {
+                    ...curData,
+                    instagram_id: igId,
+                    instagram_uploaded_at: new Date().toISOString(),
+                  },
+                })
+                .eq('id', video.id);
+              console.log(`[IMMEDIATE DB PERSISTENCE] Instagram ID ${igId} saved to database immediately.`);
+            }
+          } catch (igError) {
+            console.error('Instagram Reels upload encountered an error:', igError.message || igError);
           }
-        } catch (igError) {
-          console.error('Instagram Reels upload encountered an error:', igError.message || igError);
         }
       }
 
       // 4. Update Database Status & Platform Tracking
-      const updatedDataJson = { ...(video.data_json || {}), ...(lockDataJson || {}) };
+      const finalFresh = await getFreshVideoData(video.id);
+      const updatedDataJson = { ...(finalFresh?.data_json || video.data_json || {}) };
       if (shouldPublishYouTube) {
-        if (uploadResults.youtube) {
+        if (uploadResults.youtube || updatedDataJson.youtube_id) {
           updatedDataJson.youtube_status = 'Published';
           if (uploadedIds.youtube_id) updatedDataJson.youtube_id = uploadedIds.youtube_id;
         } else {
@@ -482,7 +572,7 @@ async function main() {
       }
 
       if (shouldPublishMeta) {
-        if (uploadResults.facebook || uploadResults.instagram) {
+        if (uploadResults.facebook || uploadResults.instagram || updatedDataJson.facebook_id || updatedDataJson.instagram_id) {
           updatedDataJson.meta_status = 'Published';
           if (uploadedIds.facebook_id) updatedDataJson.facebook_id = uploadedIds.facebook_id;
           if (uploadedIds.instagram_id) updatedDataJson.instagram_id = uploadedIds.instagram_id;

@@ -17,6 +17,10 @@ on:
         required: false
         default: 'false'
 
+concurrency:
+  group: publish-${{ inputs.video_id || github.event.inputs.video_id || 'general' }}-${{ inputs.target || github.event.inputs.target || 'all' }}
+  cancel-in-progress: false
+
 jobs:
   publish:
     name: Check and Publish

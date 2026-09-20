@@ -33,27 +33,38 @@ export async function POST(request: Request) {
     let triggeredCount = 0;
 
     for (const v of videos) {
-      const dataJson = v.data_json || {};
+      // Re-fetch fresh state for this video to avoid race conditions between concurrent requests
+      const { data: freshV } = await supabase
+        .from('shorts_queue')
+        .select('*')
+        .eq('id', v.id)
+        .single();
+      const currentV = freshV || v;
+      const dataJson = currentV.data_json || {};
+
       const ytStatus = dataJson.youtube_status;
-      const ytTime = dataJson.youtube_scheduled_time || v.scheduled_time;
+      const ytTime = dataJson.youtube_scheduled_time || currentV.scheduled_time;
       const isYtDue = ytStatus === 'Scheduled' && ytTime && new Date(ytTime).getTime() <= (now.getTime() + 60000);
+      const isYtRecentlyDispatched = dataJson.youtube_dispatched_at && (now.getTime() - new Date(dataJson.youtube_dispatched_at).getTime() < 3 * 60 * 1000);
 
       const metaStatus = dataJson.meta_status;
-      const metaTime = dataJson.meta_scheduled_time || v.scheduled_time;
+      const metaTime = dataJson.meta_scheduled_time || currentV.scheduled_time;
       const isMetaDue = metaStatus === 'Scheduled' && metaTime && new Date(metaTime).getTime() <= (now.getTime() + 60000);
+      const isMetaRecentlyDispatched = dataJson.meta_dispatched_at && (now.getTime() - new Date(dataJson.meta_dispatched_at).getTime() < 3 * 60 * 1000);
 
-      if (isYtDue) {
+      if (isYtDue && !isYtRecentlyDispatched) {
         try {
-          // Lock so we don't dispatch multiple times
+          // Lock in database immediately so any concurrent or subsequent request ignores this video
           const updated = {
             ...dataJson,
             youtube_status: 'Uploading',
             youtube_uploading_at: now.toISOString(),
+            youtube_dispatched_at: now.toISOString(),
           };
           await supabase
             .from('shorts_queue')
             .update({ data_json: updated })
-            .eq('id', v.id);
+            .eq('id', currentV.id);
 
           await octokit.rest.actions.createWorkflowDispatch({
             owner,
@@ -61,29 +72,31 @@ export async function POST(request: Request) {
             workflow_id: 'auto-publisher.yml',
             ref: 'main',
             inputs: {
-              video_id: v.id,
+              video_id: currentV.id,
               target: 'youtube',
-              force: 'true',
+              force: 'false',
             },
           });
           triggeredCount++;
-          console.log(`[Publish Due Scheduler] Dispatched YouTube auto-publisher for video ${v.id}`);
+          console.log(`[Publish Due Scheduler] Dispatched YouTube auto-publisher for video ${currentV.id}`);
         } catch (err: any) {
-          console.error(`Failed to dispatch due YouTube publish for ${v.id}:`, err.message);
+          console.error(`Failed to dispatch due YouTube publish for ${currentV.id}:`, err.message);
         }
       }
 
-      if (isMetaDue) {
+      if (isMetaDue && !isMetaRecentlyDispatched) {
         try {
+          // Lock in database immediately so any concurrent or subsequent request ignores this video
           const updated = {
             ...dataJson,
             meta_status: 'Uploading',
             meta_uploading_at: now.toISOString(),
+            meta_dispatched_at: now.toISOString(),
           };
           await supabase
             .from('shorts_queue')
             .update({ data_json: updated })
-            .eq('id', v.id);
+            .eq('id', currentV.id);
 
           await octokit.rest.actions.createWorkflowDispatch({
             owner,
@@ -91,15 +104,15 @@ export async function POST(request: Request) {
             workflow_id: 'auto-publisher.yml',
             ref: 'main',
             inputs: {
-              video_id: v.id,
+              video_id: currentV.id,
               target: 'meta',
-              force: 'true',
+              force: 'false',
             },
           });
           triggeredCount++;
-          console.log(`[Publish Due Scheduler] Dispatched Meta auto-publisher for video ${v.id}`);
+          console.log(`[Publish Due Scheduler] Dispatched Meta auto-publisher for video ${currentV.id}`);
         } catch (err: any) {
-          console.error(`Failed to dispatch due Meta publish for ${v.id}:`, err.message);
+          console.error(`Failed to dispatch due Meta publish for ${currentV.id}:`, err.message);
         }
       }
     }

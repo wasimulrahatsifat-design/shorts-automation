@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ScheduleModal } from '@/components/ScheduleModal';
@@ -53,22 +53,33 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
     fetchVideos(activePlatform);
   }, [activePlatform]);
 
+  const isCheckingDueRef = useRef(false);
+  const activePlatformRef = useRef(activePlatform);
+
+  useEffect(() => {
+    activePlatformRef.current = activePlatform;
+  }, [activePlatform]);
+
   useEffect(() => {
     const checkDueScheduler = async () => {
+      if (isCheckingDueRef.current) return;
+      isCheckingDueRef.current = true;
       try {
         const res = await fetch('/api/videos/publish-due', { method: 'POST' });
         const data = await res.json();
         if (data.triggered > 0) {
-          fetchVideos(activePlatform);
+          fetchVideos(activePlatformRef.current);
         }
       } catch (e) {
         // silent
+      } finally {
+        isCheckingDueRef.current = false;
       }
     };
     checkDueScheduler();
-    const interval = setInterval(checkDueScheduler, 45000);
+    const interval = setInterval(checkDueScheduler, 60000);
     return () => clearInterval(interval);
-  }, [activePlatform]);
+  }, []);
 
   const fetchVideos = async (platform: 'youtube' | 'meta') => {
     setLoading(true);

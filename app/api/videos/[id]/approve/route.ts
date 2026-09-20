@@ -46,7 +46,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }
       updatedDataJson.youtube_status = publish_now ? 'Uploading' : 'Scheduled';
       if (publish_now) {
-        updatedDataJson.youtube_uploading_at = new Date().toISOString();
+        const nowIso = new Date().toISOString();
+        updatedDataJson.youtube_uploading_at = nowIso;
+        updatedDataJson.youtube_dispatched_at = nowIso;
       }
       updatedDataJson.youtube_scheduled_time = finalScheduledTime;
     } else if (platform === 'meta') {
@@ -61,15 +63,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }
       updatedDataJson.meta_status = publish_now ? 'Uploading' : 'Scheduled';
       if (publish_now) {
-        updatedDataJson.meta_uploading_at = new Date().toISOString();
+        const nowIso = new Date().toISOString();
+        updatedDataJson.meta_uploading_at = nowIso;
+        updatedDataJson.meta_dispatched_at = nowIso;
       }
       updatedDataJson.meta_scheduled_time = finalScheduledTime;
     } else {
       updatedDataJson.youtube_status = publish_now ? 'Uploading' : 'Scheduled';
       updatedDataJson.meta_status = publish_now ? 'Uploading' : 'Scheduled';
       if (publish_now) {
-        updatedDataJson.youtube_uploading_at = new Date().toISOString();
-        updatedDataJson.meta_uploading_at = new Date().toISOString();
+        const nowIso = new Date().toISOString();
+        updatedDataJson.youtube_uploading_at = nowIso;
+        updatedDataJson.youtube_dispatched_at = nowIso;
+        updatedDataJson.meta_uploading_at = nowIso;
+        updatedDataJson.meta_dispatched_at = nowIso;
       }
       updatedDataJson.youtube_scheduled_time = finalScheduledTime;
       updatedDataJson.meta_scheduled_time = finalScheduledTime;
@@ -96,12 +103,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       throw updateError;
     }
 
-    // Only trigger immediate auto-publisher workflow if publish_now is true OR scheduled_time has already arrived
-    const isDueNow = publish_now || new Date(finalScheduledTime).getTime() <= (Date.now() + 60000); // 1 min margin
+    // Only trigger immediate auto-publisher workflow if publish_now is true.
+    // If scheduled for later, do NOT trigger here; the publish-due scheduler will trigger it cleanly at due time.
+    const shouldDispatchImmediately = Boolean(publish_now);
 
     const owner = process.env.GITHUB_OWNER;
     const repo = process.env.GITHUB_REPO;
-    if (isDueNow && owner && repo) {
+    if (shouldDispatchImmediately && owner && repo) {
       try {
         await octokit.rest.actions.createWorkflowDispatch({
           owner,
@@ -118,15 +126,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       } catch (ghError: any) {
         console.error('Failed to trigger auto-publisher GitHub Action:', ghError.message || ghError);
       }
-    } else if (!isDueNow) {
-      console.log(`Video ${id} scheduled for future time: ${finalScheduledTime}. Immediate upload skipped; will be published when scheduled time arrives.`);
+    } else if (!shouldDispatchImmediately) {
+      console.log(`Video ${id} scheduled for future time: ${finalScheduledTime}. Immediate dispatch skipped; will be published when scheduled time arrives.`);
     }
 
     return NextResponse.json({ 
       success: true, 
       platform, 
       scheduled_time: finalScheduledTime,
-      is_due_now: isDueNow 
+      is_due_now: shouldDispatchImmediately 
     });
   } catch (error: any) {
     console.error('Error approving video:', error);

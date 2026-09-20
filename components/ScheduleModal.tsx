@@ -25,12 +25,21 @@ export const ScheduleModal: React.FC<ScheduleModalProps> = ({
   accentColor = 'blue'
 }) => {
   const [scheduledTime, setScheduledTime] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      setIsSubmitting(false);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (scheduledTime) {
+      setIsSubmitting(true);
       // scheduledTime format: YYYY-MM-DDTHH:mm
       const [datePart, timePart] = scheduledTime.split('T');
       const [year, month, day] = datePart.split('-');
@@ -40,6 +49,12 @@ export const ScheduleModal: React.FC<ScheduleModalProps> = ({
       const isoString = dateObj.toISOString();
       onSubmit(isoString);
     }
+  };
+
+  const handlePublishNowClick = () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    onPublishNow?.();
   };
 
   const isRed = accentColor === 'red';
@@ -67,14 +82,15 @@ export const ScheduleModal: React.FC<ScheduleModalProps> = ({
               </span>
               <button
                 type="button"
-                onClick={onPublishNow}
-                className={`w-full py-2.5 px-4 rounded-xl text-white font-bold text-sm shadow-md transition-all active:scale-95 ${
+                onClick={handlePublishNowClick}
+                disabled={isSubmitting}
+                className={`w-full py-2.5 px-4 rounded-xl text-white font-bold text-sm shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
                   isRed
                     ? 'bg-red-600 hover:bg-red-700 shadow-red-500/20'
                     : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
                 }`}
               >
-                {publishNowLabel}
+                {isSubmitting ? 'Processing...' : publishNowLabel}
               </button>
             </div>
           )}
@@ -89,7 +105,8 @@ export const ScheduleModal: React.FC<ScheduleModalProps> = ({
                 id="datetime"
                 value={scheduledTime}
                 onChange={(e) => setScheduledTime(e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                disabled={isSubmitting}
+                className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm disabled:opacity-50"
                 required
               />
             </div>
@@ -98,19 +115,21 @@ export const ScheduleModal: React.FC<ScheduleModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600 transition-colors"
+                disabled={isSubmitting}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className={`px-5 py-2 text-sm font-bold text-white rounded-xl shadow transition-colors ${
+                disabled={isSubmitting}
+                className={`px-5 py-2 text-sm font-bold text-white rounded-xl shadow transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                   isRed
                     ? 'bg-red-600 hover:bg-red-700'
                     : 'bg-indigo-600 hover:bg-indigo-700'
                 }`}
               >
-                {submitLabel}
+                {isSubmitting ? 'Scheduling...' : submitLabel}
               </button>
             </div>
           </form>
