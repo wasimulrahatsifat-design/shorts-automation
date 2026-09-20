@@ -353,24 +353,28 @@ async function main() {
     );
 
     // STRICT PLATFORM ISOLATION:
+    const isSpecificVideoTarget = Boolean(targetVideoId && targetVideoId === video.id);
+
     // YouTube can ONLY be published if:
     // 1. YouTube is targeted (all or youtube).
-    // 2. YouTube is NOT already published and NOT currently uploading.
-    // 3. EITHER forcePublish is true (from direct user 1-click publish)
-    //    OR (video was approved/scheduled for YouTube AND scheduled time has arrived).
-    const shouldPublishYouTube = allowsYouTubeGlobal && !isYtAlreadyPublished && !isYtUploading && (
-      (forcePublish && (targetPlatform === 'youtube' || targetPlatform === 'all')) ||
-      (isYtScheduled && isYtTimeDue)
+    // 2. YouTube is NOT already published.
+    // 3. EITHER this run was dispatched specifically for this video (isSpecificVideoTarget or forcePublish)
+    //    OR (general cron mode): video is scheduled, due, and not actively uploading by another runner (!isYtUploading).
+    const shouldPublishYouTube = allowsYouTubeGlobal && !isYtAlreadyPublished && (
+      (isSpecificVideoTarget || forcePublish)
+        ? (targetPlatform === 'youtube' || targetPlatform === 'all')
+        : (!isYtUploading && isYtScheduled && isYtTimeDue)
     );
 
     // Meta can ONLY be published if:
     // 1. Meta is targeted (all or meta).
-    // 2. Meta is NOT already published and NOT currently uploading.
-    // 3. EITHER forcePublish is true (from direct user 1-click publish)
-    //    OR (video was approved/scheduled for Meta AND scheduled time has arrived).
-    const shouldPublishMeta = allowsMetaGlobal && !isMetaAlreadyPublished && !isMetaUploading && (
-      (forcePublish && (targetPlatform === 'meta' || targetPlatform === 'all')) ||
-      (isMetaScheduled && isMetaTimeDue)
+    // 2. Meta is NOT already published.
+    // 3. EITHER this run was dispatched specifically for this video (isSpecificVideoTarget or forcePublish)
+    //    OR (general cron mode): video is scheduled, due, and not actively uploading by another runner (!isMetaUploading).
+    const shouldPublishMeta = allowsMetaGlobal && !isMetaAlreadyPublished && (
+      (isSpecificVideoTarget || forcePublish)
+        ? (targetPlatform === 'meta' || targetPlatform === 'all' || targetPlatform === 'facebook-instagram')
+        : (!isMetaUploading && isMetaScheduled && isMetaTimeDue)
     );
 
     console.log(`Platform evaluation for [${video.id}]:`);

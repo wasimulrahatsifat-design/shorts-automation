@@ -22,6 +22,8 @@ interface VideoItem {
     description?: string;
     youtube_scheduled_time?: string;
     meta_scheduled_time?: string;
+    youtube_uploading_at?: string;
+    meta_uploading_at?: string;
   };
 }
 
@@ -369,8 +371,14 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
               const metaDone = metaStatus === 'Published';
               const ytScheduled = ytStatus === 'Scheduled';
               const metaScheduled = metaStatus === 'Scheduled';
-              const ytUploading = ytStatus === 'Uploading';
-              const metaUploading = metaStatus === 'Uploading';
+              const ytUploading = ytStatus === 'Uploading' && (
+                !video.data_json?.youtube_uploading_at ||
+                (Date.now() - new Date(video.data_json.youtube_uploading_at).getTime() < 3 * 60 * 1000)
+              );
+              const metaUploading = metaStatus === 'Uploading' && (
+                !video.data_json?.meta_uploading_at ||
+                (Date.now() - new Date(video.data_json.meta_uploading_at).getTime() < 3 * 60 * 1000)
+              );
               const ytScheduledTime = video.data_json?.youtube_scheduled_time || video.scheduled_time;
               const metaScheduledTime = video.data_json?.meta_scheduled_time || video.scheduled_time;
               const isBusy = !!actionLoading[video.id];

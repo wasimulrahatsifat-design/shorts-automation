@@ -39,28 +39,38 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         return NextResponse.json({ success: false, error: 'Video is already uploaded to YouTube.' }, { status: 400 });
       }
       const isYtUploading = currentDataJson.youtube_status === 'Uploading' && (
-        currentDataJson.youtube_uploading_at && (Date.now() - new Date(currentDataJson.youtube_uploading_at).getTime() < 3 * 60 * 1000)
+        currentDataJson.youtube_uploading_at && (Date.now() - new Date(currentDataJson.youtube_uploading_at).getTime() < 45 * 1000)
       );
-      if (isYtUploading) {
+      if (!publish_now && isYtUploading) {
         return NextResponse.json({ success: false, error: 'Video is currently uploading to YouTube. Please wait a minute.' }, { status: 400 });
       }
-      updatedDataJson.youtube_status = 'Scheduled';
+      updatedDataJson.youtube_status = publish_now ? 'Uploading' : 'Scheduled';
+      if (publish_now) {
+        updatedDataJson.youtube_uploading_at = new Date().toISOString();
+      }
       updatedDataJson.youtube_scheduled_time = finalScheduledTime;
     } else if (platform === 'meta') {
       if (currentDataJson.meta_status === 'Published') {
         return NextResponse.json({ success: false, error: 'Video is already published to Facebook and Instagram.' }, { status: 400 });
       }
       const isMetaUploading = currentDataJson.meta_status === 'Uploading' && (
-        currentDataJson.meta_uploading_at && (Date.now() - new Date(currentDataJson.meta_uploading_at).getTime() < 3 * 60 * 1000)
+        currentDataJson.meta_uploading_at && (Date.now() - new Date(currentDataJson.meta_uploading_at).getTime() < 45 * 1000)
       );
-      if (isMetaUploading) {
+      if (!publish_now && isMetaUploading) {
         return NextResponse.json({ success: false, error: 'Video is currently being published to Facebook and Instagram. Please wait a minute.' }, { status: 400 });
       }
-      updatedDataJson.meta_status = 'Scheduled';
+      updatedDataJson.meta_status = publish_now ? 'Uploading' : 'Scheduled';
+      if (publish_now) {
+        updatedDataJson.meta_uploading_at = new Date().toISOString();
+      }
       updatedDataJson.meta_scheduled_time = finalScheduledTime;
     } else {
-      updatedDataJson.youtube_status = 'Scheduled';
-      updatedDataJson.meta_status = 'Scheduled';
+      updatedDataJson.youtube_status = publish_now ? 'Uploading' : 'Scheduled';
+      updatedDataJson.meta_status = publish_now ? 'Uploading' : 'Scheduled';
+      if (publish_now) {
+        updatedDataJson.youtube_uploading_at = new Date().toISOString();
+        updatedDataJson.meta_uploading_at = new Date().toISOString();
+      }
       updatedDataJson.youtube_scheduled_time = finalScheduledTime;
       updatedDataJson.meta_scheduled_time = finalScheduledTime;
     }
