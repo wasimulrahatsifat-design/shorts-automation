@@ -104,6 +104,43 @@ function formatNumberWithUnit(val: number, yAxisLabel?: string): string {
   return Math.round(val).toLocaleString();
 }
 
+function getRankBadgeStyle(rank: number) {
+  if (rank === 1) {
+    return {
+      text: '1st',
+      color: '#facc15', // Gold
+      bg: 'rgba(250, 204, 21, 0.22)',
+      border: '1.5px solid #facc15',
+      glow: '0 0 12px rgba(250, 204, 21, 0.45)',
+    };
+  }
+  if (rank === 2) {
+    return {
+      text: '2nd',
+      color: '#e2e8f0', // Silver
+      bg: 'rgba(226, 232, 240, 0.2)',
+      border: '1.5px solid #cbd5e1',
+      glow: '0 0 10px rgba(226, 232, 240, 0.3)',
+    };
+  }
+  if (rank === 3) {
+    return {
+      text: '3rd',
+      color: '#fb923c', // Bronze
+      bg: 'rgba(251, 146, 60, 0.2)',
+      border: '1.5px solid #fb923c',
+      glow: '0 0 10px rgba(251, 146, 60, 0.3)',
+    };
+  }
+  return {
+    text: `${rank}th`,
+    color: '#94a3b8',
+    bg: 'rgba(148, 163, 184, 0.15)',
+    border: '1.5px solid rgba(148, 163, 184, 0.4)',
+    glow: 'none',
+  };
+}
+
 export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = ({ data_json, topic }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames, width, height } = useVideoConfig();
@@ -391,55 +428,101 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
             {displayedLabel}
           </div>
 
-          {/* Bottom Avatars */}
-          <div style={{
-            position: 'absolute',
-            bottom: 180,
-            width: '100%',
-            display: 'flex',
-            flexDirection: 'row',
-            justifyContent: 'center',
-            gap: 20,
-            padding: '0 100px',
-            flexWrap: 'wrap',
-            zIndex: 2
-          }}>
-            {paths.map((pathData, idx) => (
-              <div key={idx} style={{
+          {/* Bottom Avatars with Live Dynamic Swapping & 1st, 2nd, 3rd Badges */}
+          {(() => {
+            const liveItems = paths.map((pathData, originalIdx) => {
+              const p1 = pathData.points[currI];
+              const p2 = pathData.points[nextI];
+              const curVal = interpolate(frac, [0, 1], [p1.val, p2.val]);
+              return { pathData, originalIdx, curVal };
+            });
+
+            const rankedLiveItems = [...liveItems].sort((a, b) => b.curVal - a.curVal);
+
+            return (
+              <div style={{
+                position: 'absolute',
+                bottom: 165,
+                width: '100%',
                 display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
+                flexDirection: 'row',
                 justifyContent: 'center',
-                gap: 5,
-                opacity: interpolate(frame, [15, 30], [0, 1], { extrapolateRight: 'clamp' })
+                gap: 20,
+                padding: '0 60px',
+                flexWrap: 'wrap',
+                zIndex: 2
               }}>
-                <div style={{
-                  width: 90,
-                  height: 90,
-                  borderRadius: '50%',
-                  border: `4px solid ${pathData.color}`,
-                  overflow: 'hidden'
-                }}>
-                  {pathData.item.image_url ? (
-                    <Img src={pathData.item.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : null}
-                </div>
-                <div style={{
-                  fontSize: 24,
-                  fontWeight: 600,
-                  color: 'white',
-                  textAlign: 'center',
-                  lineHeight: 1.2,
-                  maxWidth: 140,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }}>
-                  {pathData.item.label}
-                </div>
+                {rankedLiveItems.map((rankedObj, rankIdx) => {
+                  const { pathData } = rankedObj;
+                  const rank = rankIdx + 1;
+                  const badge = getRankBadgeStyle(rank);
+
+                  return (
+                    <div 
+                      key={pathData.item.label} 
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        opacity: interpolate(frame, [15, 30], [0, 1], { extrapolateRight: 'clamp' })
+                      }}
+                    >
+                      {/* Small Rank Badge (1st, 2nd, 3rd...) above picture */}
+                      <div style={{
+                        fontSize: 14,
+                        fontWeight: 900,
+                        color: badge.color,
+                        backgroundColor: badge.bg,
+                        border: badge.border,
+                        borderRadius: 999,
+                        padding: '2px 10px',
+                        letterSpacing: 1,
+                        textTransform: 'uppercase',
+                        boxShadow: badge.glow,
+                        lineHeight: 1.2
+                      }}>
+                        {badge.text}
+                      </div>
+
+                      {/* Avatar Circle */}
+                      <div style={{
+                        width: 90,
+                        height: 90,
+                        borderRadius: '50%',
+                        border: `4px solid ${pathData.color}`,
+                        overflow: 'hidden',
+                        backgroundColor: '#1e293b',
+                        boxShadow: rank === 1 ? '0 0 16px rgba(250, 204, 21, 0.45)' : '0 4px 12px rgba(0,0,0,0.4)',
+                        flexShrink: 0
+                      }}>
+                        {pathData.item.image_url ? (
+                          <Img src={pathData.item.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : null}
+                      </div>
+
+                      {/* Label */}
+                      <div style={{
+                        fontSize: 22,
+                        fontWeight: 700,
+                        color: 'white',
+                        textAlign: 'center',
+                        lineHeight: 1.2,
+                        maxWidth: 140,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        textShadow: '0 2px 6px rgba(0,0,0,0.8)'
+                      }}>
+                        {pathData.item.label}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
-          </div>
+            );
+          })()}
 
           {/* Subtitles Area (Hook Script) */}
           {data_json.show_subtitles !== false && (
