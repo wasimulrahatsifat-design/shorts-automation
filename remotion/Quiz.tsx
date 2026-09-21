@@ -57,6 +57,43 @@ export const getQuestionTiming = (q: Question, fps: number) => {
   };
 };
 
+const ThinkingAnimation: React.FC<{ thinkingGifUrl?: string }> = ({ thinkingGifUrl }) => {
+  const frame = useCurrentFrame();
+
+  // If a custom external URL is specified that is not thinking.gif
+  if (thinkingGifUrl && thinkingGifUrl !== 'thinking.gif' && !thinkingGifUrl.endsWith('/thinking.gif')) {
+    return (
+      <img
+        src={resolveGifUrl(thinkingGifUrl)}
+        alt="Thinking"
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
+        }}
+      />
+    );
+  }
+
+  // Smooth, frame-synchronized looping of thinking animation frames
+  // Hold each frame for 8 video frames (~0.27s), complete 4-frame cycle is ~1.07s
+  const frameHold = 8;
+  const frameIndex = Math.floor(frame / frameHold) % 4;
+  const frameSrc = staticFile(`thinking_frames/frame_${frameIndex}.png`);
+
+  return (
+    <Img
+      src={frameSrc}
+      alt="Thinking"
+      style={{
+        width: '100%',
+        height: '100%',
+        objectFit: 'contain',
+      }}
+    />
+  );
+};
+
 const QuizRound: React.FC<{ 
   questionData: Question; 
   topic: string; 
@@ -176,15 +213,7 @@ const QuizRound: React.FC<{
               <Img src={image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
             ) : null
           ) : (
-            <img
-              src={resolveGifUrl(thinkingGifUrl)}
-              alt="Thinking"
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain',
-              }}
-            />
+            <ThinkingAnimation thinkingGifUrl={thinkingGifUrl} />
           )}
         </div>
         <div
