@@ -9,6 +9,7 @@ import {
 } from '../lib/image-library';
 import { POPULAR_VOICES, VoiceOption } from '../lib/voices';
 import { DEFAULT_MUSIC_TRACKS, MusicTrack } from '../lib/music-tracks';
+import { formatDataToHumanScript, parseHumanScriptToData } from '../lib/scriptFormatter';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -75,6 +76,8 @@ export default function Home() {
 
   // Step 2 State
   const [draftJson, setDraftJson] = useState('');
+  const [humanScriptText, setHumanScriptText] = useState('');
+  const [scriptViewMode, setScriptViewMode] = useState<'normal' | 'json'>('normal');
   const [magicInstruction, setMagicInstruction] = useState('');
   const [requiredImages, setRequiredImages] = useState<{keyword: string, file: string | null}[]>([]);
   const [imageLibrary, setImageLibrary] = useState<Record<string, string>>({});
@@ -616,6 +619,37 @@ export default function Home() {
     setTopic(suggestions[Math.floor(Math.random() * suggestions.length)]);
   };
 
+  const handleTopicChangeInStep2 = (val: string) => {
+    setTopic(val);
+    try {
+      const parsed = draftJson ? JSON.parse(draftJson) : {};
+      parsed.topic = val;
+      setDraftJson(JSON.stringify(parsed, null, 2));
+    } catch {}
+  };
+
+  const handleHumanScriptChange = (newText: string) => {
+    setHumanScriptText(newText);
+    try {
+      const existing = draftJson ? JSON.parse(draftJson) : {};
+      const updated = parseHumanScriptToData(newText, existing);
+      setDraftJson(JSON.stringify(updated, null, 2));
+    } catch (err) {
+      console.error('Failed to sync script text to json:', err);
+    }
+  };
+
+  const handleJsonChange = (newJson: string) => {
+    setDraftJson(newJson);
+    try {
+      const parsed = JSON.parse(newJson);
+      if (parsed.topic) setTopic(parsed.topic);
+      if (typeof parsed.end_title === 'string') setEndTitle(parsed.end_title);
+      if (typeof parsed.part_title === 'string') setPartTitle(parsed.part_title);
+      setHumanScriptText(formatDataToHumanScript(parsed));
+    } catch {}
+  };
+
   const handleGenerateDraft = async () => {
     setLoading(true);
     setMessage(null);
@@ -631,6 +665,9 @@ export default function Home() {
         const finalVoiceId = selectedVoiceId === 'custom' ? customVoiceId.trim() : selectedVoiceId;
         payload.voice_id = finalVoiceId;
         payload.end_title = (endTitle !== undefined ? endTitle : payload.end_title || '').trim();
+        if (payload.topic) {
+          setTopic(payload.topic);
+        }
         if (partTitle && partTitle.trim()) {
           payload.part_title = partTitle.trim();
         } else if (payload.part_title) {
@@ -639,6 +676,8 @@ export default function Home() {
         setEndTitle(payload.end_title);
         handleEndTitleChange(payload.end_title);
         setDraftJson(JSON.stringify(payload, null, 2));
+        setHumanScriptText(formatDataToHumanScript(payload));
+        setScriptViewMode('normal');
         setStep(2);
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to generate draft.' });
@@ -715,6 +754,13 @@ export default function Home() {
       const data = await response.json();
       if (response.ok && data.success) {
         setDraftJson(data.newScript);
+        try {
+          const parsed = JSON.parse(data.newScript);
+          if (parsed.topic) setTopic(parsed.topic);
+          if (typeof parsed.end_title === 'string') setEndTitle(parsed.end_title);
+          if (typeof parsed.part_title === 'string') setPartTitle(parsed.part_title);
+          setHumanScriptText(formatDataToHumanScript(parsed));
+        } catch {}
         setMagicInstruction('');
         setMessage({ type: 'success', text: 'Script edited magically!' });
       } else {
@@ -1213,6 +1259,26 @@ export default function Home() {
               </span>
             </div>
             
+            {/* Quick Video Title / Topic Editor in Step 2 */}
+            <div className="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex-1 w-full">
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1.5">
+                  <span>📌</span>
+                  <span>Video Title / Topic (Displayed on Video):</span>
+                </label>
+                <input
+                  type="text"
+                  value={topic}
+                  onChange={(e) => handleTopicChangeInStep2(e.target.value)}
+                  placeholder="e.g. World's Most Shocking Trivia / Tech Giants 2026"
+                  className="w-full px-3.5 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <span className="text-[11px] text-gray-400 dark:text-gray-500 max-w-[200px] leading-tight">
+                Main title displayed at the top of the video. You can edit this anytime.
+              </span>
+            </div>
+
             {/* Quick End Title Editor in Step 2 */}
             <div className="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div className="flex-1 w-full">
@@ -1271,23 +1337,63 @@ export default function Home() {
               </div>
             )}
 
-            <textarea
-              value={draftJson}
-              onChange={(e) => {
-                const val = e.target.value;
-                setDraftJson(val);
-                try {
-                  const parsed = JSON.parse(val);
-                  if (typeof parsed.end_title === 'string') {
-                    setEndTitle(parsed.end_title);
-                  }
-                  if (typeof parsed.part_title === 'string') {
-                    setPartTitle(parsed.part_title);
-                  }
-                } catch {}
-              }}
-              className="w-full h-[300px] font-mono text-sm px-4 py-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 resize-none focus:ring-2 focus:ring-blue-500"
-            />
+            {/* Script View Switcher & Editor */}
+            <div className="space-y-2">
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                  <span>📝</span>
+                  <span>Video Script & Content:</span>
+                  <span className="text-[11px] font-normal text-gray-500">
+                    {scriptViewMode === 'normal' ? '(Clean Readable Format - Edit freely!)' : '(Raw JSON Format)'}
+                  </span>
+                </label>
+                <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700/60 p-1 rounded-xl border border-gray-200 dark:border-gray-600 text-xs font-semibold w-fit">
+                  <button
+                    type="button"
+                    onClick={() => setScriptViewMode('normal')}
+                    className={`px-3 py-1 rounded-lg transition-all ${
+                      scriptViewMode === 'normal'
+                        ? 'bg-blue-600 text-white shadow-sm font-bold'
+                        : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                  >
+                    📝 Normal Script
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setScriptViewMode('json')}
+                    className={`px-3 py-1 rounded-lg transition-all ${
+                      scriptViewMode === 'json'
+                        ? 'bg-blue-600 text-white shadow-sm font-bold'
+                        : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                  >
+                    &#123; &#125; JSON View
+                  </button>
+                </div>
+              </div>
+
+              {scriptViewMode === 'normal' ? (
+                <div className="space-y-1">
+                  <textarea
+                    value={humanScriptText}
+                    onChange={(e) => handleHumanScriptChange(e.target.value)}
+                    className="w-full h-[320px] font-sans text-sm px-4 py-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 resize-none focus:ring-2 focus:ring-blue-500 leading-relaxed font-medium"
+                    placeholder="Video script in normal readable format..."
+                  />
+                  <div className="text-[11px] text-gray-400 flex flex-col sm:flex-row justify-between items-start sm:items-center px-1 gap-1">
+                    <span>💡 <strong>Tip:</strong> আপনি সরাসরি প্রশ্ন, অপশন, উত্তর, মান বা ভয়েসওভার পরিবর্তন করতে পারবেন। ভিডিও স্বয়ংক্রিয়ভাবে আপডেট হয়ে যাবে।</span>
+                    <span className="text-emerald-500 font-semibold whitespace-nowrap">✓ Auto-Sync Active</span>
+                  </div>
+                </div>
+              ) : (
+                <textarea
+                  value={draftJson}
+                  onChange={(e) => handleJsonChange(e.target.value)}
+                  className="w-full h-[320px] font-mono text-sm px-4 py-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 resize-none focus:ring-2 focus:ring-blue-500"
+                />
+              )}
+            </div>
 
             {/* Manual Image Uploads & Auto-Memory */}
             {requiredImages.length > 0 && (
