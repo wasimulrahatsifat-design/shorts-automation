@@ -1656,7 +1656,7 @@ function VideoCard({
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
-  const [isMobileModalOpen, setIsMobileModalOpen] = useState(false);
+  const [isFullscreenModalOpen, setIsFullscreenModalOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const modalVideoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -1683,15 +1683,15 @@ function VideoCard({
   }, [video.topic, video.data_json?.description, video.data_json?.script]);
 
   useEffect(() => {
-    if (!isMobileModalOpen) return;
+    if (!isFullscreenModalOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setIsMobileModalOpen(false);
+        setIsFullscreenModalOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isMobileModalOpen]);
+  }, [isFullscreenModalOpen]);
 
   const handleNativeFullscreen = () => {
     const el = modalVideoRef.current || videoRef.current;
@@ -2082,12 +2082,12 @@ function VideoCard({
             />
             <button
               type="button"
-              onClick={() => setIsMobileModalOpen(true)}
-              title="Watch in Mobile View Fullscreen"
+              onClick={() => setIsFullscreenModalOpen(true)}
+              title="Watch in Fullscreen"
               className="absolute top-2 right-2 bg-black/80 hover:bg-black text-white px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 backdrop-blur-md transition-all shadow-md hover:scale-105 active:scale-95 border border-white/20"
             >
-              <span>📱</span>
-              <span>Mobile View</span>
+              <span>⛶</span>
+              <span>Fullscreen</span>
             </button>
           </>
         ) : (
@@ -2102,23 +2102,23 @@ function VideoCard({
         )}
       </div>
 
-      {/* Fullscreen Mobile View Modal */}
-      {isMobileModalOpen && video.video_url && (
+      {/* Clean Fullscreen Video Modal */}
+      {isFullscreenModalOpen && video.video_url && (
         <div 
-          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200"
-          onClick={() => setIsMobileModalOpen(false)}
+          className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex flex-col items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200"
+          onClick={() => setIsFullscreenModalOpen(false)}
         >
           <div 
-            className="relative flex flex-col items-center justify-center max-h-[96vh] w-full max-w-sm"
+            className="relative flex flex-col items-center justify-center h-full w-full max-w-4xl"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Top Modal Bar */}
-            <div className="w-full flex items-center justify-between pb-3 text-white px-1">
+            <div className="w-full flex items-center justify-between pb-3 text-white px-2 max-w-xl">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700">
-                  📱 Mobile View (9:16)
+                  ⛶ Fullscreen
                 </span>
-                <span className="text-xs text-gray-300 font-medium truncate max-w-[150px]">
+                <span className="text-xs text-gray-300 font-medium truncate max-w-[180px] sm:max-w-xs">
                   {video.topic}
                 </span>
               </div>
@@ -2126,15 +2126,15 @@ function VideoCard({
                 <button
                   type="button"
                   onClick={handleNativeFullscreen}
-                  className="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition text-xs font-bold flex items-center gap-1 border border-white/10"
-                  title="Monitor Fullscreen"
+                  className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition text-xs font-bold flex items-center gap-1 border border-white/10"
+                  title="Enter Monitor Fullscreen"
                 >
                   <span>⛶</span>
                   <span>Full Display</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsMobileModalOpen(false)}
+                  onClick={() => setIsFullscreenModalOpen(false)}
                   className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center font-bold text-sm transition"
                   title="Close (Esc)"
                 >
@@ -2143,40 +2143,19 @@ function VideoCard({
               </div>
             </div>
 
-            {/* Smartphone Frame (9:16 vertical ratio) */}
-            <div className="relative w-full max-w-[340px] sm:max-w-[360px] aspect-[9/16] bg-black rounded-[42px] p-2.5 shadow-2xl ring-1 ring-white/20 border-4 border-slate-800 flex flex-col overflow-hidden">
-              {/* Top Dynamic Island Notch */}
-              <div className="absolute top-3.5 left-1/2 -translate-x-1/2 w-24 h-4 bg-black rounded-full z-20 flex items-center justify-center pointer-events-none ring-1 ring-white/10">
-                <div className="w-2 h-2 rounded-full bg-slate-900 border border-slate-700 mr-2"></div>
-                <div className="w-2.5 h-1 rounded-full bg-slate-800"></div>
-              </div>
-
-              {/* Status Bar */}
-              <div className="absolute top-3.5 left-6 right-6 flex justify-between items-center text-[10px] text-white/80 font-semibold z-20 pointer-events-none px-1">
-                <span>9:41</span>
-                <div className="flex items-center gap-1.5">
-                  <span>5G</span>
-                  <span>100%</span>
-                </div>
-              </div>
-
-              {/* Video Player */}
-              <div className="w-full h-full rounded-[32px] overflow-hidden relative bg-black flex items-center justify-center">
-                <video
-                  ref={modalVideoRef}
-                  src={video.video_url}
-                  controls
-                  autoPlay
-                  playsInline
-                  className="w-full h-full object-contain bg-black"
-                />
-              </div>
-
-              {/* Bottom Home Indicator */}
-              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-28 h-1 bg-white/40 rounded-full z-20 pointer-events-none"></div>
+            {/* Clean Fullscreen Video Player (NO smartphone frame, NO notch, NO fake status bar) */}
+            <div className="relative w-full flex-1 max-h-[86vh] flex items-center justify-center overflow-hidden">
+              <video
+                ref={modalVideoRef}
+                src={video.video_url}
+                controls
+                autoPlay
+                playsInline
+                className="max-h-[86vh] max-w-full aspect-[9/16] object-contain rounded-2xl shadow-2xl bg-black border border-slate-800"
+              />
             </div>
 
-            <p className="text-center text-[11px] text-gray-400 mt-2">
+            <p className="text-center text-xs text-gray-400 mt-2">
               Press <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-gray-300 font-mono text-[10px]">Esc</kbd> or click outside to close
             </p>
           </div>

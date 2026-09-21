@@ -430,6 +430,49 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
               );
             })}
 
+            {/* Y-Axis Tick Marks, Grid Lines, and Value Labels */}
+            {[0, 0.25, 0.5, 0.75, 1.0].map((step, idx) => {
+              const tickVal = step * maxVal;
+              const yPos = chartY + chartH - step * chartH;
+              return (
+                <g key={`y-tick-${idx}`}>
+                  {/* Horizontal Tick Mark ("দাগ কাটা") on Y Axis */}
+                  <line
+                    x1={chartX - 12}
+                    y1={yPos}
+                    x2={chartX}
+                    y2={yPos}
+                    stroke="rgba(255,255,255,0.75)"
+                    strokeWidth={2.5}
+                  />
+                  {/* Subtle horizontal dashed grid line across chart */}
+                  {step > 0 && (
+                    <line
+                      x1={chartX}
+                      y1={yPos}
+                      x2={chartX + chartW}
+                      y2={yPos}
+                      stroke="rgba(255,255,255,0.08)"
+                      strokeDasharray="4 4"
+                      strokeWidth={1.5}
+                    />
+                  )}
+                  {/* Small Value Label to the left of tick mark */}
+                  <text
+                    x={chartX - 18}
+                    y={yPos + 6}
+                    textAnchor="end"
+                    fill="rgba(255,255,255,0.8)"
+                    fontSize={18}
+                    fontWeight={600}
+                    fontFamily='"Montserrat", sans-serif'
+                  >
+                    {step === 0 ? '0' : formatNumberWithUnit(tickVal, y_axis_label)}
+                  </text>
+                </g>
+              );
+            })}
+
             {/* Data Lines mapped with ClipPath */}
             {paths.map((pathData, idx) => (
               <path
@@ -451,9 +494,9 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
             <div style={{
               position: 'absolute',
               top: chartY + chartH / 2,
-              left: 80,
+              left: 45,
               transform: 'translate(-50%, -50%) rotate(-90deg)',
-              fontSize: 26,
+              fontSize: 24,
               fontWeight: 600,
               color: 'rgba(255,255,255,0.65)',
               letterSpacing: 2,
