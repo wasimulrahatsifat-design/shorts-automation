@@ -8,8 +8,8 @@ export interface MusicTrack {
 export const DEFAULT_MUSIC_TRACKS: MusicTrack[] = [
   { 
     id: 'battle_bgm', 
-    name: '⚡ Battle Action (Fast & Energetic)', 
-    url: '/audio/battle_bgm.wav' 
+    name: '⚔️ Epic Battle (Orchestral Rock)', 
+    url: '/audio/battle_bgm.mp3' 
   },
   { 
     id: 'lofi_chill', 

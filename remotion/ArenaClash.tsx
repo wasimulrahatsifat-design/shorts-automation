@@ -234,7 +234,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
       {/* 1. Background Battle Music (Custom or Energetic Arcade BGM) */}
       {data_json.bg_music_enabled !== false && data_json.bg_music_url !== 'none' && data_json.bg_music_url !== null && (
         <Audio 
-          src={resolveAudioUrl(data_json.bg_music_url) || staticFile('audio/battle_bgm.wav')} 
+          src={resolveAudioUrl(data_json.bg_music_url) || staticFile('audio/battle_bgm.mp3')} 
           volume={data_json.bg_music_volume ?? 0.32} 
           loop 
         />
