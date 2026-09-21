@@ -1,5 +1,6 @@
 import React from 'react';
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig, Sequence, Audio, Img, Series, staticFile } from 'remotion';
+import { Gif } from '@remotion/gif';
 
 interface Question {
   question: string;
@@ -176,15 +177,18 @@ const QuizRound: React.FC<{
               <Img src={image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
             ) : null
           ) : (
-            <img
-              src={resolveGifUrl(thinkingGifUrl)}
-              alt="Thinking"
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain',
-              }}
-            />
+            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Gif
+                src={resolveGifUrl(thinkingGifUrl)}
+                fit="contain"
+                playbackRate={0.65}
+                loopBehavior="loop"
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '100%',
+                }}
+              />
+            </div>
           )}
         </div>
         <div
