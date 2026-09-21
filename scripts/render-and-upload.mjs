@@ -65,20 +65,38 @@ async function main() {
     process.exit(1);
   }
 
-  // 4. Upload to Supabase Storage
+  // 4. Upload to Supabase Storage with retry
   console.log('Uploading to Supabase Storage...');
   const fileBuffer = fs.readFileSync(outPath);
   const fileName = `${videoId}.mp4`;
   
-  const { error: uploadError } = await supabase.storage
-    .from('shorts')
-    .upload(fileName, fileBuffer, {
-      contentType: 'video/mp4',
-      upsert: true,
-    });
+  let uploadError = null;
+  const maxRetries = 5;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const { error } = await supabase.storage
+      .from('shorts')
+      .upload(fileName, fileBuffer, {
+        contentType: 'video/mp4',
+        upsert: true,
+      });
+
+    if (!error) {
+      uploadError = null;
+      console.log(`Upload succeeded on attempt ${attempt}`);
+      break;
+    }
+
+    uploadError = error;
+    console.warn(`Upload attempt ${attempt}/${maxRetries} failed:`, error.message || error);
+    if (attempt < maxRetries) {
+      const delayMs = Math.min(2000 * Math.pow(2, attempt - 1), 15000);
+      console.log(`Waiting ${delayMs}ms before retrying upload...`);
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
 
   if (uploadError) {
-    console.error('Failed to upload video:', uploadError);
+    console.error('Failed to upload video after all retries:', uploadError);
     process.exit(1);
   }
 

@@ -270,7 +270,7 @@ async function main() {
       .from('shorts_queue')
       .select('*')
       .not('video_url', 'is', null)
-      .in('status', ['Scheduled', 'Partially_Published', 'Needs_Approval']);
+      .in('status', ['Scheduled', 'Needs_Approval']);
 
     if (error) {
       console.error('Error fetching scheduled videos:', error);
