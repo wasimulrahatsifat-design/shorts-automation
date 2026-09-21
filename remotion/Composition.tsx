@@ -294,6 +294,89 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
             {topic || "Animated Line Chart"}
           </div>
 
+          {/* Clean Fixed Legend Overlay (Names & Colors) */}
+          <div style={{
+            position: 'absolute',
+            top: 175,
+            left: 50,
+            right: 50,
+            display: 'flex',
+            flexDirection: 'row',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: 14,
+            flexWrap: 'wrap',
+            zIndex: 15,
+            opacity: interpolate(frame, [10, 25], [0, 1], { extrapolateRight: 'clamp' }),
+          }}>
+            {paths.map((pathData, idx) => {
+              const p1 = pathData.points[currI];
+              const p2 = pathData.points[nextI];
+              const curVal = interpolate(frac, [0, 1], [p1.val, p2.val]);
+
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 10,
+                    backgroundColor: 'rgba(15, 23, 42, 0.82)',
+                    backdropFilter: 'blur(10px)',
+                    border: `2px solid ${pathData.color}99`,
+                    borderRadius: 999,
+                    padding: '6px 16px',
+                    boxShadow: `0 4px 14px rgba(0,0,0,0.45), 0 0 10px ${pathData.color}33`,
+                  }}
+                >
+                  {/* Legend Avatar or Color Dot */}
+                  <div style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: '50%',
+                    backgroundColor: pathData.color,
+                    overflow: 'hidden',
+                    flexShrink: 0,
+                    border: '2px solid rgba(255,255,255,0.85)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                    {pathData.item.image_url ? (
+                      <Img src={pathData.item.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: 'white' }} />
+                    )}
+                  </div>
+
+                  {/* Name */}
+                  <span style={{
+                    fontSize: 21,
+                    fontWeight: 700,
+                    color: '#f8fafc',
+                    letterSpacing: '0.2px',
+                    whiteSpace: 'nowrap',
+                    textShadow: '0 2px 4px rgba(0,0,0,0.5)',
+                  }}>
+                    {pathData.item.label}
+                  </span>
+
+                  {/* Live Value */}
+                  <span style={{
+                    fontSize: 22,
+                    fontWeight: 800,
+                    color: pathData.color,
+                    marginLeft: 2,
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {formatNumberWithUnit(curVal, y_axis_label)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
           {/* SVG Chart Layer */}
           <svg width={width} height={height} style={{ position: 'absolute', top: 0, left: 0 }}>
             {/* Dynamic ClipPath for True Racing Feel */}
@@ -353,61 +436,43 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
             </div>
           )}
 
-          {/* Moving Avatars and Values */}
+          {/* Moving Avatars at the head of each line (Circles ONLY - No overlapping text) */}
           {paths.map((pathData, idx) => {
             const p1 = pathData.points[currI];
             const p2 = pathData.points[nextI];
             
             const currentY = interpolate(frac, [0, 1], [p1.y, p2.y]);
-            const curVal = interpolate(frac, [0, 1], [p1.val, p2.val]);
-
-            const avatarSize = 90;
+            const avatarSize = 78;
 
             return (
-              <div key={idx} style={{
-                position: 'absolute',
-                left: curX - avatarSize / 2,
-                top: currentY - avatarSize / 2,
-                display: 'flex',
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 15,
-                opacity: interpolate(frame, [15, 30], [0, 1], { extrapolateRight: 'clamp' })
-              }}>
-                {/* Avatar Image */}
-                <div style={{
+              <div 
+                key={idx} 
+                style={{
+                  position: 'absolute',
+                  left: curX - avatarSize / 2,
+                  top: currentY - avatarSize / 2,
                   width: avatarSize,
                   height: avatarSize,
                   borderRadius: '50%',
-                  backgroundColor: '#333',
-                  border: `6px solid ${pathData.color}`,
-                  boxShadow: '0 8px 16px rgba(0,0,0,0.6)',
+                  backgroundColor: '#1e293b',
+                  border: `5px solid ${pathData.color}`,
+                  boxShadow: `0 6px 18px rgba(0,0,0,0.7), 0 0 16px ${pathData.color}99`,
                   overflow: 'hidden',
                   zIndex: 10,
-                  flexShrink: 0
-                }}>
-                  {pathData.item.image_url ? (
-                    <Img src={pathData.item.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : null}
-                </div>
-
-                {/* Label and Value grouped */}
-                <div style={{
-                  backgroundColor: 'rgba(0,0,0,0.65)',
-                  padding: '8px 18px',
-                  borderRadius: 18,
+                  opacity: interpolate(frame, [15, 30], [0, 1], { extrapolateRight: 'clamp' }),
+                  pointerEvents: 'none',
                   display: 'flex',
-                  flexDirection: 'column',
+                  alignItems: 'center',
                   justifyContent: 'center',
-                  boxShadow: '0 4px 10px rgba(0,0,0,0.5)',
-                  whiteSpace: 'nowrap',
-                  zIndex: 5
-                }}>
-                  <span style={{ fontSize: 22, fontWeight: 600, color: '#e2e8f0' }}>{pathData.item.label}</span>
-                  <span style={{ fontSize: 28, fontWeight: 700, color: pathData.color }}>
-                    {formatNumberWithUnit(curVal, y_axis_label)}
+                }}
+              >
+                {pathData.item.image_url ? (
+                  <Img src={pathData.item.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <span style={{ fontSize: 22, fontWeight: 800, color: pathData.color }}>
+                    {pathData.item.label.slice(0, 2).toUpperCase()}
                   </span>
-                </div>
+                )}
               </div>
             );
           })}
@@ -516,6 +581,19 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
                         textShadow: '0 2px 6px rgba(0,0,0,0.8)'
                       }}>
                         {pathData.item.label}
+                      </div>
+
+                      {/* Live Value */}
+                      <div style={{
+                        fontSize: 20,
+                        fontWeight: 800,
+                        color: pathData.color,
+                        textAlign: 'center',
+                        lineHeight: 1.2,
+                        marginTop: 2,
+                        textShadow: '0 2px 6px rgba(0,0,0,0.8)'
+                      }}>
+                        {formatNumberWithUnit(rankedObj.curVal, y_axis_label)}
                       </div>
                     </div>
                   );
