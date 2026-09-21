@@ -297,88 +297,122 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
             {topic || "Animated Line Chart"}
           </div>
 
-          {/* Clean Fixed Legend Overlay (Names & Colors) - nicely separated below title */}
-          <div style={{
-            position: 'absolute',
-            top: 200,
-            left: 50,
-            right: 50,
-            display: 'flex',
-            flexDirection: 'row',
-            justifyContent: 'center',
-            alignItems: 'center',
-            gap: 14,
-            flexWrap: 'wrap',
-            zIndex: 15,
-            opacity: interpolate(frame, [10, 25], [0, 1], { extrapolateRight: 'clamp' }),
-          }}>
-            {paths.map((pathData, idx) => {
-              const p1 = pathData.points[currI];
-              const p2 = pathData.points[nextI];
-              const curVal = interpolate(frac, [0, 1], [p1.val, p2.val]);
+          {/* Clean Fixed Legend Overlay (Names & Colors) - Rock-solid stable layout */}
+          {(() => {
+            const itemCount = paths.length;
+            // Determine fixed widths per item so badges NEVER resize, drift, wrap mid-animation or shift flex center
+            const pillWidth = itemCount <= 2 ? 420 : (itemCount === 3 ? 300 : (itemCount === 4 ? 420 : 300));
+            const gap = itemCount >= 5 ? 12 : 14;
+            const topPos = itemCount > 3 ? 180 : 195;
 
-              return (
-                <div
-                  key={idx}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 10,
-                    backgroundColor: 'rgba(15, 23, 42, 0.85)',
-                    backdropFilter: 'blur(10px)',
-                    border: `2px solid ${pathData.color}aa`,
-                    borderRadius: 999,
-                    padding: '6px 16px',
-                    boxShadow: `0 4px 14px rgba(0,0,0,0.5), 0 0 10px ${pathData.color}33`,
-                  }}
-                >
-                  {/* Legend Avatar or Color Dot */}
-                  <div style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: '50%',
-                    backgroundColor: pathData.color,
-                    overflow: 'hidden',
-                    flexShrink: 0,
-                    border: '2px solid rgba(255,255,255,0.85)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}>
-                    {pathData.item.image_url ? (
-                      <Img src={pathData.item.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    ) : (
-                      <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: 'white' }} />
-                    )}
-                  </div>
+            return (
+              <div style={{
+                position: 'absolute',
+                top: topPos,
+                left: 40,
+                right: 40,
+                display: 'flex',
+                flexDirection: 'row',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap,
+                flexWrap: 'wrap',
+                zIndex: 15,
+                opacity: interpolate(frame, [10, 25], [0, 1], { extrapolateRight: 'clamp' }),
+              }}>
+                {paths.map((pathData, idx) => {
+                  const p1 = pathData.points[currI];
+                  const p2 = pathData.points[nextI];
+                  const curVal = interpolate(frac, [0, 1], [p1.val, p2.val]);
 
-                  {/* Name */}
-                  <span style={{
-                    fontSize: 21,
-                    fontWeight: 700,
-                    color: '#f8fafc',
-                    letterSpacing: '0.2px',
-                    whiteSpace: 'nowrap',
-                    textShadow: '0 2px 4px rgba(0,0,0,0.5)',
-                  }}>
-                    {pathData.item.label}
-                  </span>
+                  return (
+                    <div
+                      key={idx}
+                      style={{
+                        width: pillWidth,
+                        minWidth: pillWidth,
+                        maxWidth: pillWidth,
+                        height: 44,
+                        display: 'flex',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        backgroundColor: 'rgba(15, 23, 42, 0.88)',
+                        backdropFilter: 'blur(10px)',
+                        border: `2px solid ${pathData.color}aa`,
+                        borderRadius: 999,
+                        padding: '0 14px',
+                        boxShadow: `0 4px 14px rgba(0,0,0,0.5), 0 0 10px ${pathData.color}33`,
+                        boxSizing: 'border-box',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {/* Left Section: Avatar + Label */}
+                      <div style={{
+                        display: 'flex',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 10,
+                        flex: 1,
+                        minWidth: 0,
+                        overflow: 'hidden',
+                      }}>
+                        {/* Legend Avatar or Color Dot */}
+                        <div style={{
+                          width: 26,
+                          height: 26,
+                          borderRadius: '50%',
+                          backgroundColor: pathData.color,
+                          overflow: 'hidden',
+                          flexShrink: 0,
+                          border: '2px solid rgba(255,255,255,0.85)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}>
+                          {pathData.item.image_url ? (
+                            <Img src={pathData.item.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ) : (
+                            <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: 'white' }} />
+                          )}
+                        </div>
 
-                  {/* Live Value */}
-                  <span style={{
-                    fontSize: 22,
-                    fontWeight: 800,
-                    color: pathData.color,
-                    marginLeft: 2,
-                    whiteSpace: 'nowrap',
-                  }}>
-                    {formatNumberWithUnit(curVal, y_axis_label)}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+                        {/* Name */}
+                        <span style={{
+                          fontSize: pillWidth > 350 ? 21 : 18,
+                          fontWeight: 700,
+                          color: '#f8fafc',
+                          letterSpacing: '0.2px',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          textShadow: '0 2px 4px rgba(0,0,0,0.5)',
+                        }}>
+                          {pathData.item.label}
+                        </span>
+                      </div>
+
+                      {/* Right Section: Live Value (tabular-nums prevents digit jitter) */}
+                      <span style={{
+                        fontSize: pillWidth > 350 ? 22 : 19,
+                        fontWeight: 800,
+                        color: pathData.color,
+                        fontVariantNumeric: 'tabular-nums',
+                        fontFeatureSettings: '"tnum"',
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0,
+                        marginLeft: 8,
+                        textAlign: 'right',
+                        textShadow: `0 0 10px ${pathData.color}44`,
+                      }}>
+                        {formatNumberWithUnit(curVal, y_axis_label)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {/* SVG Chart Layer */}
           <svg width={width} height={height} style={{ position: 'absolute', top: 0, left: 0 }}>
