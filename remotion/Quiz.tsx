@@ -323,16 +323,18 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
             <Audio src={tts_urls[questions.length]} volume={0.9} />
           )}
           <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center', padding: '0 50px', textAlign: 'center' }}>
-            <div style={{ 
-              fontSize: 74, 
-              fontWeight: 800, 
-              textShadow: '0px 10px 30px rgba(0,0,0,0.9)',
-              color: '#ffffff',
-              lineHeight: 1.3,
-              maxWidth: '90%'
-            }}>
-              {data_json.end_title || 'Thanks for watching!'}
-            </div>
+            {data_json.end_title ? (
+              <div style={{ 
+                fontSize: 74, 
+                fontWeight: 800, 
+                textShadow: '0px 10px 30px rgba(0,0,0,0.9)',
+                color: '#ffffff',
+                lineHeight: 1.3,
+                maxWidth: '90%'
+              }}>
+                {data_json.end_title}
+              </div>
+            ) : null}
           </AbsoluteFill>
         </Series.Sequence>
       </Series>

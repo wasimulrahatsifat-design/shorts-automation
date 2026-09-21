@@ -95,10 +95,12 @@ export async function POST(request: Request) {
           tts_urls.push(url);
         }
         
-        // Add custom end_title outro TTS
-        const outroText = (row.data_json?.end_title || '').trim() || "Subscribe for more!";
-        const outroUrl = await generateTTSForText(outroText);
-        tts_urls.push(outroUrl);
+        // Add custom end_title outro TTS only if provided
+        const outroText = (row.data_json?.end_title || '').trim();
+        if (outroText) {
+          const outroUrl = await generateTTSForText(outroText);
+          tts_urls.push(outroUrl);
+        }
       } else if (videoFormat === 'Would You Rather' && newItems && newItems.length > 0 && newItems[0].option_a) {
         const generateTTSForText = async (text: string) => {
           const elResponse = await fetchElevenLabs(text);
@@ -115,10 +117,12 @@ export async function POST(request: Request) {
           tts_urls.push(url);
         }
         
-        // Add custom end_title outro TTS
-        const outroText = (row.data_json?.end_title || '').trim() || "Write down in the comment section. ... Thanks.";
-        const outroUrl = await generateTTSForText(outroText);
-        tts_urls.push(outroUrl);
+        // Add custom end_title outro TTS only if provided
+        const outroText = (row.data_json?.end_title || '').trim();
+        if (outroText) {
+          const outroUrl = await generateTTSForText(outroText);
+          tts_urls.push(outroUrl);
+        }
       } else {
         let fullScript = newScript;
         if (row.data_json?.end_title && typeof row.data_json.end_title === 'string' && row.data_json.end_title.trim() && !newScript.includes(row.data_json.end_title.trim())) {

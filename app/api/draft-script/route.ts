@@ -104,12 +104,10 @@ export async function POST(request: Request) {
       throw new Error('Invalid data format returned from Gemini: missing script.');
     }
 
-    if (body.endTitle && typeof body.endTitle === 'string' && body.endTitle.trim()) {
+    if (typeof body.endTitle === 'string') {
       dataPayload.end_title = body.endTitle.trim();
     } else if (!dataPayload.end_title) {
-      dataPayload.end_title = videoFormat === 'Would You Rather' 
-        ? 'Write down in the comment section.' 
-        : 'Subscribe for more!';
+      dataPayload.end_title = '';
     }
 
     if (body.partTitle && typeof body.partTitle === 'string' && body.partTitle.trim()) {

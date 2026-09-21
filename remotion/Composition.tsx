@@ -198,9 +198,9 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
 
   // Chart Layout Dimensions
   const chartX = 150;
-  const chartY = 350;
+  const chartY = 370;
   const chartW = width - 300;
-  const chartH = height - 900;
+  const chartH = height - 980;
 
   // Progress animation: finish drawing lines before the winner reveal
   const animDuration = Math.max(1, chartDuration - 30);
@@ -277,27 +277,29 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
 
       <Sequence durationInFrames={chartDuration}>
         <AbsoluteFill style={{ opacity: chartOpacity }}>
-          {/* Header Topic */}
+          {/* Header Topic with proper top padding */}
           <div style={{ 
             position: 'absolute',
-            top: 80,
+            top: 60,
             width: '100%',
             opacity: titleOpacity, 
             transform: `scale(${titleScale})`, 
-            fontSize: 54, 
+            fontSize: 46, 
             fontWeight: 700, 
+            lineHeight: 1.25,
             textAlign: 'center',
-            textShadow: '3px 3px 12px rgba(0,0,0,0.6)',
+            textShadow: '3px 3px 12px rgba(0,0,0,0.7)',
             color: '#f8f9fa',
-            padding: '0 40px'
+            padding: '0 45px',
+            boxSizing: 'border-box'
           }}>
             {topic || "Animated Line Chart"}
           </div>
 
-          {/* Clean Fixed Legend Overlay (Names & Colors) */}
+          {/* Clean Fixed Legend Overlay (Names & Colors) - nicely separated below title */}
           <div style={{
             position: 'absolute',
-            top: 175,
+            top: 200,
             left: 50,
             right: 50,
             display: 'flex',
@@ -322,12 +324,12 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
                     flexDirection: 'row',
                     alignItems: 'center',
                     gap: 10,
-                    backgroundColor: 'rgba(15, 23, 42, 0.82)',
+                    backgroundColor: 'rgba(15, 23, 42, 0.85)',
                     backdropFilter: 'blur(10px)',
-                    border: `2px solid ${pathData.color}99`,
+                    border: `2px solid ${pathData.color}aa`,
                     borderRadius: 999,
                     padding: '6px 16px',
-                    boxShadow: `0 4px 14px rgba(0,0,0,0.45), 0 0 10px ${pathData.color}33`,
+                    boxShadow: `0 4px 14px rgba(0,0,0,0.5), 0 0 10px ${pathData.color}33`,
                   }}
                 >
                   {/* Legend Avatar or Color Dot */}
@@ -384,9 +386,49 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
               <rect x={0} y={0} width={curX + 15} height={height} />
             </clipPath>
 
-            {/* Grid Lines */}
-            <line x1={chartX} y1={chartY + chartH} x2={chartX + chartW} y2={chartY + chartH} stroke="rgba(255,255,255,0.3)" strokeWidth={4} />
-            <line x1={chartX} y1={chartY} x2={chartX} y2={chartY + chartH} stroke="rgba(255,255,255,0.3)" strokeWidth={4} />
+            {/* Grid Axes Lines */}
+            <line x1={chartX} y1={chartY + chartH} x2={chartX + chartW} y2={chartY + chartH} stroke="rgba(255,255,255,0.4)" strokeWidth={4} />
+            <line x1={chartX} y1={chartY} x2={chartX} y2={chartY + chartH} stroke="rgba(255,255,255,0.4)" strokeWidth={4} />
+
+            {/* X-Axis Tick Marks and Timeline Labels */}
+            {labels.map((lbl, i) => {
+              const xPos = chartX + (i / Math.max(1, labelsCount - 1)) * chartW;
+              return (
+                <g key={`x-tick-${i}`}>
+                  {/* Vertical Tick Mark ("দাগ কাটা") */}
+                  <line
+                    x1={xPos}
+                    y1={chartY + chartH}
+                    x2={xPos}
+                    y2={chartY + chartH + 12}
+                    stroke="rgba(255,255,255,0.75)"
+                    strokeWidth={2.5}
+                  />
+                  {/* Subtle vertical dashed grid line up through chart */}
+                  <line
+                    x1={xPos}
+                    y1={chartY}
+                    x2={xPos}
+                    y2={chartY + chartH}
+                    stroke="rgba(255,255,255,0.08)"
+                    strokeDasharray="4 4"
+                    strokeWidth={1.5}
+                  />
+                  {/* Small Timeline Label Text below tick mark */}
+                  <text
+                    x={xPos}
+                    y={chartY + chartH + 34}
+                    textAnchor="middle"
+                    fill="rgba(255,255,255,0.8)"
+                    fontSize={labelsCount > 7 ? 16 : 20}
+                    fontWeight={600}
+                    fontFamily='"Montserrat", sans-serif'
+                  >
+                    {lbl}
+                  </text>
+                </g>
+              );
+            })}
 
             {/* Data Lines mapped with ClipPath */}
             {paths.map((pathData, idx) => (
@@ -404,14 +446,14 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
             ))}
           </svg>
 
-          {/* Axis Labels */}
+          {/* Y Axis Label */}
           {y_axis_label && (
             <div style={{
               position: 'absolute',
               top: chartY + chartH / 2,
               left: 80,
               transform: 'translate(-50%, -50%) rotate(-90deg)',
-              fontSize: 28,
+              fontSize: 26,
               fontWeight: 600,
               color: 'rgba(255,255,255,0.65)',
               letterSpacing: 2,
@@ -420,15 +462,17 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
               {y_axis_label}
             </div>
           )}
+
+          {/* Optional X Axis Category Label if distinct from timeline labels */}
           {x_axis_label && (
             <div style={{
               position: 'absolute',
-              top: chartY + chartH + 20,
+              top: chartY + chartH + 52,
               left: chartX + chartW / 2,
               transform: 'translate(-50%, 0)',
-              fontSize: 28,
+              fontSize: 22,
               fontWeight: 600,
-              color: 'rgba(255,255,255,0.65)',
+              color: 'rgba(255,255,255,0.5)',
               letterSpacing: 2,
               textTransform: 'uppercase'
             }}>
@@ -477,61 +521,98 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
             );
           })}
 
-          {/* Dynamic Timeline Text (Smooth Increment) positioned between graph bottom and avatars */}
+          {/* Dynamic Timeline Text (Slightly smaller size & pure White color) */}
           <div style={{
             position: 'absolute',
-            bottom: 390,
+            bottom: 395,
             width: '100%',
             textAlign: 'center',
-            fontSize: 84,
-            fontWeight: 700,
-            color: 'rgba(255,255,255,0.35)',
+            fontSize: 66,
+            fontWeight: 800,
+            color: '#ffffff',
             textTransform: 'uppercase',
             letterSpacing: '8px',
+            textShadow: '0 4px 18px rgba(0,0,0,0.75)',
             zIndex: 1
           }}>
             {displayedLabel}
           </div>
 
-          {/* Bottom Avatars with Live Dynamic Swapping & 1st, 2nd, 3rd Badges */}
+          {/* Bottom Avatars with Smooth Swipe Animation */}
           {(() => {
-            const liveItems = paths.map((pathData, originalIdx) => {
-              const p1 = pathData.points[currI];
-              const p2 = pathData.points[nextI];
-              const curVal = interpolate(frac, [0, 1], [p1.val, p2.val]);
-              return { pathData, originalIdx, curVal };
-            });
+            const cardWidth = Math.min(145, Math.floor((width - 120 - (paths.length - 1) * 20) / paths.length));
+            const gap = 20;
+            const totalWidth = paths.length * cardWidth + (paths.length - 1) * gap;
+            const startX = (width - totalWidth) / 2;
 
-            const rankedLiveItems = [...liveItems].sort((a, b) => b.curVal - a.curVal);
+            // Helper to get rank of an item at a specific frame
+            const getRankAt = (f: number, origIdx: number) => {
+              const p = interpolate(f, [15, animDuration], [0, labelsCount - 1], {
+                extrapolateLeft: 'clamp',
+                extrapolateRight: 'clamp'
+              });
+              const ci = Math.min(Math.floor(p), labelsCount - 1);
+              const ni = Math.min(ci + 1, labelsCount - 1);
+              const fc = p - ci;
+              const vals = paths.map((itemPath, i) => {
+                const v1 = itemPath.points[ci].val;
+                const v2 = itemPath.points[ni].val;
+                return { i, val: interpolate(fc, [0, 1], [v1, v2]) };
+              });
+              vals.sort((a, b) => b.val - a.val);
+              return vals.findIndex(v => v.i === origIdx);
+            };
+
+            // Window-based smoothing for fluid horizontal swipe transition
+            const SMOOTH_WINDOW = 14;
 
             return (
               <div style={{
                 position: 'absolute',
-                bottom: 165,
+                bottom: 140,
                 width: '100%',
-                display: 'flex',
-                flexDirection: 'row',
-                justifyContent: 'center',
-                gap: 20,
-                padding: '0 60px',
-                flexWrap: 'wrap',
-                zIndex: 2
+                height: 220,
+                pointerEvents: 'none',
+                zIndex: 5
               }}>
-                {rankedLiveItems.map((rankedObj, rankIdx) => {
-                  const { pathData } = rankedObj;
-                  const rank = rankIdx + 1;
-                  const badge = getRankBadgeStyle(rank);
+                {paths.map((pathData, origIdx) => {
+                  const p1 = pathData.points[currI];
+                  const p2 = pathData.points[nextI];
+                  const curVal = interpolate(frac, [0, 1], [p1.val, p2.val]);
+
+                  // Compute smoothed rank position over the trailing window
+                  let sumRank = 0;
+                  for (let w = 0; w < SMOOTH_WINDOW; w++) {
+                    sumRank += getRankAt(frame - w, origIdx);
+                  }
+                  const smoothedRank = sumRank / SMOOTH_WINDOW;
+
+                  // Target discrete rank for badge
+                  const currentDiscreteRank = getRankAt(frame, origIdx) + 1;
+                  const badge = getRankBadgeStyle(currentDiscreteRank);
+
+                  // Calculate smooth horizontal slot X
+                  const currentX = startX + smoothedRank * (cardWidth + gap);
+
+                  // Slight vertical elevation when moving up in rank to avoid visual collision
+                  const isTransitioning = Math.abs(smoothedRank - (currentDiscreteRank - 1)) > 0.05;
+                  const yOffset = isTransitioning && (smoothedRank < (currentDiscreteRank - 1)) ? -8 : 0;
 
                   return (
                     <div 
                       key={pathData.item.label} 
                       style={{
+                        position: 'absolute',
+                        left: currentX,
+                        top: yOffset,
+                        width: cardWidth,
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: 6,
-                        opacity: interpolate(frame, [15, 30], [0, 1], { extrapolateRight: 'clamp' })
+                        opacity: interpolate(frame, [15, 30], [0, 1], { extrapolateRight: 'clamp' }),
+                        zIndex: isTransitioning ? 10 : (paths.length - currentDiscreteRank + 1),
                       }}
                     >
                       {/* Small Rank Badge (1st, 2nd, 3rd...) above picture */}
@@ -553,13 +634,13 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
 
                       {/* Avatar Circle */}
                       <div style={{
-                        width: 90,
-                        height: 90,
+                        width: 86,
+                        height: 86,
                         borderRadius: '50%',
                         border: `4px solid ${pathData.color}`,
                         overflow: 'hidden',
                         backgroundColor: '#1e293b',
-                        boxShadow: rank === 1 ? '0 0 16px rgba(250, 204, 21, 0.45)' : '0 4px 12px rgba(0,0,0,0.4)',
+                        boxShadow: currentDiscreteRank === 1 ? '0 0 16px rgba(250, 204, 21, 0.45)' : '0 4px 12px rgba(0,0,0,0.4)',
                         flexShrink: 0
                       }}>
                         {pathData.item.image_url ? (
@@ -569,12 +650,12 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
 
                       {/* Label */}
                       <div style={{
-                        fontSize: 22,
+                        fontSize: 21,
                         fontWeight: 700,
                         color: 'white',
                         textAlign: 'center',
                         lineHeight: 1.2,
-                        maxWidth: 140,
+                        maxWidth: cardWidth - 8,
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
@@ -585,7 +666,7 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
 
                       {/* Live Value */}
                       <div style={{
-                        fontSize: 20,
+                        fontSize: 19,
                         fontWeight: 800,
                         color: pathData.color,
                         textAlign: 'center',
@@ -593,7 +674,7 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
                         marginTop: 2,
                         textShadow: '0 2px 6px rgba(0,0,0,0.8)'
                       }}>
-                        {formatNumberWithUnit(rankedObj.curVal, y_axis_label)}
+                        {formatNumberWithUnit(curVal, y_axis_label)}
                       </div>
                     </div>
                   );

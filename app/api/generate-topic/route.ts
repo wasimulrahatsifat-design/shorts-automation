@@ -153,10 +153,12 @@ export async function POST(request: Request) {
           tts_urls.push(url);
         }
         
-        // Add custom end_title outro TTS
-        const outroText = (dataPayload.end_title || '').trim() || "Subscribe for more!";
-        const outroUrl = await generateTTSForText(outroText);
-        tts_urls.push(outroUrl);
+        // Add custom end_title outro TTS only if provided
+        const outroText = (dataPayload.end_title || '').trim();
+        if (outroText) {
+          const outroUrl = await generateTTSForText(outroText);
+          tts_urls.push(outroUrl);
+        }
       } else if (videoFormat === 'Would You Rather' && dataPayload.scenarios) {
         const generateTTSForText = async (text: string) => {
           const elResponse = await fetchElevenLabs(text);
@@ -173,10 +175,12 @@ export async function POST(request: Request) {
           tts_urls.push(url);
         }
         
-        // Add custom end_title outro TTS
-        const outroText = (dataPayload.end_title || '').trim() || "Write down in the comment section. ... Thanks.";
-        const outroUrl = await generateTTSForText(outroText);
-        tts_urls.push(outroUrl);
+        // Add custom end_title outro TTS only if provided
+        const outroText = (dataPayload.end_title || '').trim();
+        if (outroText) {
+          const outroUrl = await generateTTSForText(outroText);
+          tts_urls.push(outroUrl);
+        }
       } else {
         let fullScript = script;
         if (dataPayload.end_title && typeof dataPayload.end_title === 'string' && dataPayload.end_title.trim() && !script.includes(dataPayload.end_title.trim())) {

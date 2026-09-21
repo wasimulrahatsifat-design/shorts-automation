@@ -52,10 +52,12 @@ export async function POST(request: Request) {
           tts_urls.push(url);
         }
         
-        // Add custom end_title outro TTS
-        const outroText = (data_json.end_title || '').trim() || "Subscribe for more!";
-        const outroUrl = await generateTTSForText(outroText);
-        tts_urls.push(outroUrl);
+        // Add custom end_title outro TTS only if end_title is provided
+        const outroText = (data_json.end_title || '').trim();
+        if (outroText) {
+          const outroUrl = await generateTTSForText(outroText);
+          tts_urls.push(outroUrl);
+        }
         
       } else if (data_json.format === 'Would You Rather' && data_json.scenarios) {
         const generateTTSForText = async (text: string) => {
@@ -73,10 +75,12 @@ export async function POST(request: Request) {
           tts_urls.push(url);
         }
         
-        // Add custom end_title outro TTS
-        const outroText = (data_json.end_title || '').trim() || "Write down in the comment section. ... Thanks.";
-        const outroUrl = await generateTTSForText(outroText);
-        tts_urls.push(outroUrl);
+        // Add custom end_title outro TTS only if end_title is provided
+        const outroText = (data_json.end_title || '').trim();
+        if (outroText) {
+          const outroUrl = await generateTTSForText(outroText);
+          tts_urls.push(outroUrl);
+        }
       } else if (data_json.format === 'AestheticVideo') {
         // Aesthetic videos don't require TTS audio
         tts_url = null;

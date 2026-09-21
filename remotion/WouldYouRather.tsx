@@ -318,28 +318,19 @@ export const WouldYouRather: React.FC<{ data_json: WouldYouRatherJson; topic: st
             padding: '0 60px',
             fontFamily: '"Montserrat", sans-serif'
           }}>
-            <h1 style={{ 
-              color: '#ffffff', 
-              fontSize: 66, 
-              fontWeight: 800, 
-              textAlign: 'center', 
-              lineHeight: 1.3,
-              textShadow: '0 10px 30px rgba(0,0,0,0.9)',
-              maxWidth: '90%'
-            }}>
-              {data_json.end_title || 'Write down in the comment section.'}
-            </h1>
-            {!data_json.end_title && (
-              <p style={{ 
-                color: '#22c55e', 
-                fontSize: 54, 
+            {data_json.end_title ? (
+              <h1 style={{ 
+                color: '#ffffff', 
+                fontSize: 66, 
                 fontWeight: 800, 
-                marginTop: 28,
-                textShadow: '0 6px 20px rgba(34,197,94,0.45)'
+                textAlign: 'center', 
+                lineHeight: 1.3,
+                textShadow: '0 10px 30px rgba(0,0,0,0.9)',
+                maxWidth: '90%'
               }}>
-                Thanks.
-              </p>
-            )}
+                {data_json.end_title}
+              </h1>
+            ) : null}
           </AbsoluteFill>
         </Series.Sequence>
       </Series>

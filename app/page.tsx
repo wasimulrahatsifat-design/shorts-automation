@@ -54,7 +54,8 @@ export default function Home() {
   const [topic, setTopic] = useState('');
   const [partTitle, setPartTitle] = useState('');
   const [videoFormat, setVideoFormat] = useState('Data Comparison');
-  const [endTitle, setEndTitle] = useState('Subscribe for more!');
+  const [endTitle, setEndTitle] = useState('');
+  const [formatEndTitles, setFormatEndTitles] = useState<Record<string, string>>({});
   const [duration, setDuration] = useState(15);
   const [showSubtitles, setShowSubtitles] = useState(true);
   const [filterFormat, setFilterFormat] = useState('All');
@@ -88,6 +89,43 @@ export default function Home() {
   const [isDraggingCrop, setIsDraggingCrop] = useState(false);
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Load saved end_title per format from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('shorts_last_end_titles');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setFormatEndTitles(parsed);
+        if (typeof parsed['Data Comparison'] === 'string') {
+          setEndTitle(parsed['Data Comparison']);
+        }
+      }
+    } catch (e) {}
+  }, []);
+
+  const handleFormatChange = (newFormat: string) => {
+    // Save current endTitle for current videoFormat
+    const updated = { ...formatEndTitles, [videoFormat]: endTitle };
+    setFormatEndTitles(updated);
+    try {
+      localStorage.setItem('shorts_last_end_titles', JSON.stringify(updated));
+    } catch (e) {}
+
+    setVideoFormat(newFormat);
+    // Show the last end_title given for this format
+    const savedForNew = updated[newFormat] !== undefined ? updated[newFormat] : '';
+    setEndTitle(savedForNew);
+  };
+
+  const handleEndTitleChange = (val: string) => {
+    setEndTitle(val);
+    const updated = { ...formatEndTitles, [videoFormat]: val };
+    setFormatEndTitles(updated);
+    try {
+      localStorage.setItem('shorts_last_end_titles', JSON.stringify(updated));
+    } catch (e) {}
+  };
 
   // Sync past uploaded images from Supabase on mount
   useEffect(() => {
@@ -592,13 +630,14 @@ export default function Home() {
         const payload = data.data;
         const finalVoiceId = selectedVoiceId === 'custom' ? customVoiceId.trim() : selectedVoiceId;
         payload.voice_id = finalVoiceId;
-        payload.end_title = (endTitle && endTitle.trim()) || payload.end_title || 'Subscribe for more!';
+        payload.end_title = (endTitle !== undefined ? endTitle : payload.end_title || '').trim();
         if (partTitle && partTitle.trim()) {
           payload.part_title = partTitle.trim();
         } else if (payload.part_title) {
           setPartTitle(payload.part_title);
         }
         setEndTitle(payload.end_title);
+        handleEndTitleChange(payload.end_title);
         setDraftJson(JSON.stringify(payload, null, 2));
         setStep(2);
       } else {
@@ -625,7 +664,7 @@ export default function Home() {
       const finalVoiceId = selectedVoiceId === 'custom' ? (customVoiceId.trim() || 'pNInz6obpgDQGcFmaJgB') : selectedVoiceId;
       const finalBgMusicUrl = bgMusicEnabled ? (activeMusicTrack?.url || null) : null;
       const finalBgMusicVolume = bgMusicEnabled ? bgMusicVolume : undefined;
-      const finalEndTitle = (parsedJson.end_title || endTitle || '').trim();
+      const finalEndTitle = (parsedJson.end_title !== undefined ? parsedJson.end_title : endTitle || '').trim();
       const finalPartTitle = (typeof parsedJson.part_title === 'string' ? parsedJson.part_title : partTitle).trim();
 
       const response = await fetch('/api/queue-video', {
@@ -780,7 +819,7 @@ export default function Home() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Video Format</label>
                 <select
                   value={videoFormat}
-                  onChange={(e) => setVideoFormat(e.target.value)}
+                  onChange={(e) => handleFormatChange(e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
                 >
                   <option value="Data Comparison">Data Comparison</option>
@@ -852,18 +891,18 @@ export default function Home() {
                   <span>End Title (Ending Screen Text & Voice)</span>
                 </label>
                 <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
-                  AI will speak & display this text at the end
+                  AI will speak & display this text at the end (leave blank for none)
                 </span>
               </div>
               <input 
                 type="text" 
                 value={endTitle}
-                onChange={(e) => setEndTitle(e.target.value)}
-                placeholder="Enter ending text (e.g., Subscribe for more! or Comment your thoughts)..."
+                onChange={(e) => handleEndTitleChange(e.target.value)}
+                placeholder="Enter ending text (or leave blank if no outro is needed)..."
                 className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 shadow-sm"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
-                Custom outro: Whatever you type here will be spoken by AI voiceover and displayed on-screen at the end of the video.
+                Custom outro: Whatever you type here will be spoken by AI voiceover and displayed on-screen at the end. If left blank, nothing will be spoken or displayed.
               </p>
             </div>
 
@@ -1018,13 +1057,13 @@ export default function Home() {
               </div>
 
               {bgMusicEnabled ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                <div className="flex flex-col lg:flex-row gap-4 pt-1 items-stretch lg:items-center">
                   {/* Music Track Dropdown & Actions */}
-                  <div className="space-y-1.5">
+                  <div className="flex-1 space-y-1.5">
                     <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
                       Select Track
                     </label>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
                       <select
                         value={selectedTrackId}
                         onChange={(e) => {
@@ -1035,7 +1074,7 @@ export default function Home() {
                             setIsPlayingMusicPreview(false);
                           }
                         }}
-                        className="flex-1 px-3.5 py-2.5 text-xs font-semibold border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 shadow-sm focus:ring-2 focus:ring-blue-500 truncate"
+                        className="flex-1 min-w-[150px] px-3.5 py-2.5 text-xs font-semibold border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 shadow-sm focus:ring-2 focus:ring-blue-500 truncate"
                       >
                         <optgroup label="Default Tracks">
                           {DEFAULT_MUSIC_TRACKS.map((t) => (
@@ -1055,55 +1094,57 @@ export default function Home() {
                         )}
                       </select>
 
-                      {/* Preview Button */}
-                      <button
-                        type="button"
-                        onClick={toggleMusicPreview}
-                        className={`px-3 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm whitespace-nowrap ${
-                          isPlayingMusicPreview
-                            ? 'bg-red-500 text-white animate-pulse'
-                            : 'bg-blue-100 hover:bg-blue-200 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
-                        }`}
-                        title="Preview audio track"
-                      >
-                        <span>{isPlayingMusicPreview ? '⏹ Stop' : '▶ Play'}</span>
-                      </button>
-
-                      {/* If custom track is selected, allow deleting it */}
-                      {activeMusicTrack?.isCustom && (
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* Preview Button */}
                         <button
                           type="button"
-                          onClick={() => handleDeleteCustomTrack(activeMusicTrack.id)}
-                          className="px-2.5 py-2.5 rounded-xl text-xs font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900 transition"
-                          title="Remove this uploaded track"
+                          onClick={toggleMusicPreview}
+                          className={`px-3 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm whitespace-nowrap ${
+                            isPlayingMusicPreview
+                              ? 'bg-red-500 text-white animate-pulse'
+                              : 'bg-blue-100 hover:bg-blue-200 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                          }`}
+                          title="Preview audio track"
                         >
-                          ✕
+                          <span>{isPlayingMusicPreview ? '⏹ Stop' : '▶ Play'}</span>
                         </button>
-                      )}
 
-                      {/* Upload New Track Button */}
-                      <label
-                        className={`px-3 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer border shadow-sm whitespace-nowrap ${
-                          bgMusicUploading
-                            ? 'bg-gray-200 text-gray-500 cursor-not-allowed border-gray-300'
-                            : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-600'
-                        }`}
-                        title="Upload new audio file (.mp3, .wav)"
-                      >
-                        <span>{bgMusicUploading ? '⏳' : '+ Upload'}</span>
-                        <input
-                          type="file"
-                          accept="audio/*"
-                          className="hidden"
-                          onChange={handleBgMusicUpload}
-                          disabled={bgMusicUploading}
-                        />
-                      </label>
+                        {/* If custom track is selected, allow deleting it */}
+                        {activeMusicTrack?.isCustom && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCustomTrack(activeMusicTrack.id)}
+                            className="px-2.5 py-2.5 rounded-xl text-xs font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900 transition"
+                            title="Remove this uploaded track"
+                          >
+                            ✕
+                          </button>
+                        )}
+
+                        {/* Upload New Track Button */}
+                        <label
+                          className={`px-3 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer border shadow-sm whitespace-nowrap ${
+                            bgMusicUploading
+                              ? 'bg-gray-200 text-gray-500 cursor-not-allowed border-gray-300'
+                              : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-600'
+                          }`}
+                          title="Upload new audio file (.mp3, .wav)"
+                        >
+                          <span>{bgMusicUploading ? '⏳' : '+ Upload'}</span>
+                          <input
+                            type="file"
+                            accept="audio/*"
+                            className="hidden"
+                            onChange={handleBgMusicUpload}
+                            disabled={bgMusicUploading}
+                          />
+                        </label>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Volume Slider */}
-                  <div className="space-y-1.5 bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 flex flex-col justify-center">
+                  {/* Volume Slider Card */}
+                  <div className="w-full lg:w-72 shrink-0 space-y-1.5 bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-700 flex flex-col justify-center shadow-sm">
                     <div className="flex justify-between items-center text-xs font-bold text-gray-700 dark:text-gray-300">
                       <span>Music Volume</span>
                       <span className="text-blue-600 dark:text-blue-400 font-mono">{Math.round(bgMusicVolume * 100)}%</span>
@@ -1112,7 +1153,7 @@ export default function Home() {
                       type="range"
                       min="0"
                       max="1"
-                      step="0.05"
+                      step="0.01"
                       value={bgMusicVolume}
                       onChange={(e) => {
                         const v = parseFloat(e.target.value);
