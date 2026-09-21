@@ -137,7 +137,7 @@ const QuizRound: React.FC<{
       <div
         style={{
           opacity: titleOpacity,
-          transform: `scale(${titleScale})`,
+          transform: `scale(${titleScale}) translateY(-60px)`,
           fontSize: 52,
           fontWeight: 900,
           textAlign: 'center',
@@ -156,7 +156,7 @@ const QuizRound: React.FC<{
         <div
           style={{
             opacity: titleOpacity,
-            transform: `scale(${titleScale})`,
+            transform: `scale(${titleScale}) translateY(-60px)`,
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
