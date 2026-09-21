@@ -152,28 +152,25 @@ const WyrRound: React.FC<{ scenarioData: Scenario; topic: string; isLastRound?: 
           boxSizing: 'border-box'
         }}>
           {isTimerDone && !isLastRound ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              transform: `scale(${resultScale})` 
+            }}>
               <span style={{ 
-                fontSize: 96, 
+                fontSize: 135, 
                 fontWeight: 900, 
                 color: isAHigher ? VIBRANT_GREEN : VIBRANT_RED, 
-                textShadow: '0 4px 20px rgba(0,0,0,0.9)' 
+                textShadow: '0 6px 28px rgba(0,0,0,0.95)',
+                letterSpacing: '-2px'
               }}>
                 {percent_a}%
-              </span>
-              <span style={{ 
-                fontSize: 32, 
-                fontWeight: 700, 
-                color: '#f1f5f9', 
-                textAlign: 'center', 
-                lineHeight: 1.25 
-              }}>
-                {option_a}
               </span>
             </div>
           ) : (
             <h2 style={{ 
-              fontSize: 46, 
+              fontSize: 48, 
               fontWeight: 800, 
               color: '#ffffff', 
               textAlign: 'center', 
@@ -207,7 +204,49 @@ const WyrRound: React.FC<{ scenarioData: Scenario; topic: string; isLastRound?: 
         overflow: 'hidden',
         zIndex: 5
       }}>
-        {/* Equal-sized Image Box (width: 100%, height: 510) */}
+        {/* Text & Result Area (on top for Red card) */}
+        <div style={{
+          flex: 1,
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '16px 20px',
+          boxSizing: 'border-box'
+        }}>
+          {isTimerDone && !isLastRound ? (
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              transform: `scale(${resultScale})` 
+            }}>
+              <span style={{ 
+                fontSize: 135, 
+                fontWeight: 900, 
+                color: !isAHigher ? VIBRANT_GREEN : VIBRANT_RED, 
+                textShadow: '0 6px 28px rgba(0,0,0,0.95)',
+                letterSpacing: '-2px'
+              }}>
+                {percent_b}%
+              </span>
+            </div>
+          ) : (
+            <h2 style={{ 
+              fontSize: 48, 
+              fontWeight: 800, 
+              color: '#ffffff', 
+              textAlign: 'center', 
+              lineHeight: 1.25, 
+              margin: 0,
+              textShadow: '0 4px 14px rgba(0,0,0,0.8)'
+            }}>
+              {option_b}
+            </h2>
+          )}
+        </div>
+
+        {/* Equal-sized Image Box (on bottom for Red card, width: 100%, height: 510) */}
         <div style={{
           width: '100%',
           height: 510,
@@ -230,51 +269,6 @@ const WyrRound: React.FC<{ scenarioData: Scenario; topic: string; isLastRound?: 
             />
           )}
           {flashB && <div style={{ position: 'absolute', inset: 0, backgroundColor: 'white', opacity: 0.5, zIndex: 10 }} />}
-        </div>
-
-        {/* Text & Result Area */}
-        <div style={{
-          flex: 1,
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '16px 20px',
-          boxSizing: 'border-box'
-        }}>
-          {isTimerDone && !isLastRound ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-              <span style={{ 
-                fontSize: 96, 
-                fontWeight: 900, 
-                color: !isAHigher ? VIBRANT_GREEN : VIBRANT_RED, 
-                textShadow: '0 4px 20px rgba(0,0,0,0.9)' 
-              }}>
-                {percent_b}%
-              </span>
-              <span style={{ 
-                fontSize: 32, 
-                fontWeight: 700, 
-                color: '#f1f5f9', 
-                textAlign: 'center', 
-                lineHeight: 1.25 
-              }}>
-                {option_b}
-              </span>
-            </div>
-          ) : (
-            <h2 style={{ 
-              fontSize: 46, 
-              fontWeight: 800, 
-              color: '#ffffff', 
-              textAlign: 'center', 
-              lineHeight: 1.25, 
-              margin: 0,
-              textShadow: '0 4px 14px rgba(0,0,0,0.8)'
-            }}>
-              {option_b}
-            </h2>
-          )}
         </div>
       </div>
 
