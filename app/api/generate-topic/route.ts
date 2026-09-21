@@ -201,22 +201,23 @@ export async function POST(request: Request) {
     }
 
     let finalDuration = 15;
+    const hasOutro = Boolean(dataPayload.end_title && dataPayload.end_title.trim());
     if (videoFormat === 'Would You Rather' && dataPayload.scenarios) {
       let totalSeconds = 0;
       for (const s of dataPayload.scenarios) {
         const textLength = s.option_a.length + s.option_b.length + 20;
-        const readingSeconds = (textLength / 15);
+        const readingSeconds = Math.max(1.8, textLength / 21);
         totalSeconds += readingSeconds + 5; // timer 3s + reveal 2s
       }
-      finalDuration = Math.round(totalSeconds + 3); // + outro
+      finalDuration = Math.round(totalSeconds + (hasOutro ? 2.8 : 0));
     } else if (videoFormat === 'Quiz' && dataPayload.questions) {
       let totalSeconds = 0;
       for (const q of dataPayload.questions) {
         const textLength = q.question.length + q.options.join('').length + 10;
-        const readingSeconds = (textLength / 15) + 1;
-        totalSeconds += readingSeconds + 7;
+        const readingSeconds = Math.max(1.8, textLength / 18);
+        totalSeconds += readingSeconds + 5;
       }
-      finalDuration = Math.round(totalSeconds + 3);
+      finalDuration = Math.round(totalSeconds + (hasOutro ? 2.8 : 0));
     }
 
     // Insert into Supabase

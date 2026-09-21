@@ -1,7 +1,7 @@
 import React from 'react';
 import { Composition, Audio } from 'remotion';
 import { DataComparison } from './Composition';
-import { WouldYouRather } from './WouldYouRather';
+import { WouldYouRather, getWyrTiming } from './WouldYouRather';
 import { Quiz, getQuestionTiming } from './Quiz';
 import { ArenaClash } from './ArenaClash';
 import { generateArenaSimulation } from '../lib/arena-physics';
@@ -55,14 +55,10 @@ export const RemotionRoot: React.FC = () => {
           if (props.data_json?.scenarios && Array.isArray(props.data_json.scenarios)) {
             let totalFrames = 0;
             for (const s of props.data_json.scenarios) {
-              // Assume we need a helper or just rough estimate if getWyrTiming isn't exported directly here
-              // (Wait, I didn't import getWyrTiming, so I'll just calculate it roughly or import it)
-              const textLength = s.option_a.length + s.option_b.length + 20;
-              const readingSeconds = (textLength / 15) + 1;
-              const readingFrames = Math.round(readingSeconds * 30);
-              totalFrames += readingFrames + (5 * 30); // timer 3s + reveal 2s
+              totalFrames += getWyrTiming(s, 30).totalFrames;
             }
-            return { durationInFrames: totalFrames + Math.round(3.5 * 30) }; // + outro
+            const hasOutro = Boolean(props.data_json?.end_title && props.data_json.end_title.trim());
+            return { durationInFrames: totalFrames + (hasOutro ? Math.round(2.8 * 30) : 0) };
           }
           return { durationInFrames: 600 };
         }}
@@ -97,8 +93,8 @@ export const RemotionRoot: React.FC = () => {
             for (const q of props.data_json.questions) {
               totalFrames += getQuestionTiming(q, 30).totalFrames;
             }
-            // Add a little padding at the end
-            return { durationInFrames: totalFrames + 30 };
+            const hasOutro = Boolean(props.data_json?.end_title && props.data_json.end_title.trim());
+            return { durationInFrames: totalFrames + (hasOutro ? Math.round(2.8 * 30) : 0) };
           }
           return {
             durationInFrames: props.data_json?.duration_seconds ? props.data_json.duration_seconds * 30 : 450

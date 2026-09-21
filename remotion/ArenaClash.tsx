@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { AbsoluteFill, useCurrentFrame, useVideoConfig, Img, Audio, Sequence, staticFile } from 'remotion';
+import { TypewriterText } from './TypewriterText';
 import {
   generateArenaSimulation,
   ARENA_CENTER,
@@ -623,7 +624,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
             {frameWinner.name} WINS!
           </div>
 
-          {data_json.end_title && (
+          {data_json.end_title && data_json.end_title.trim() && (
             <div
               style={{
                 marginTop: 20,
@@ -638,7 +639,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                 maxWidth: '85%',
               }}
             >
-              {data_json.end_title}
+              <TypewriterText text={data_json.end_title.trim()} delayFrames={10} />
             </div>
           )}
         </div>

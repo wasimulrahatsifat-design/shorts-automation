@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig, interpolateColors, Sequence, Audio, Img, staticFile } from 'remotion';
+import { TypewriterText } from './TypewriterText';
 
 interface DataItem {
   label: string;
@@ -816,7 +817,7 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
             {formatNumberWithUnit(winner.finalValue, y_axis_label)}
           </div>
 
-          {data_json.end_title && (
+          {data_json.end_title && data_json.end_title.trim() && (
             <div style={{
               marginTop: 25,
               fontSize: 40,
@@ -830,7 +831,7 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
               textShadow: '0 4px 15px rgba(0,0,0,0.8)',
               maxWidth: '85%'
             }}>
-              {data_json.end_title}
+              <TypewriterText text={data_json.end_title.trim()} delayFrames={10} />
             </div>
           )}
         </AbsoluteFill>

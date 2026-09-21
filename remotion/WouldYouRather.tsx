@@ -1,5 +1,6 @@
 import React from 'react';
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig, Sequence, Audio, Img, Series, staticFile } from 'remotion';
+import { TypewriterText } from './TypewriterText';
 
 interface Scenario {
   option_a: string;
@@ -34,8 +35,8 @@ const resolveAudioUrl = (url?: string) => {
 
 export const getWyrTiming = (s: Scenario, fps: number) => {
   const textLength = s.option_a.length + s.option_b.length + 20; // "Would you rather option a or option b"
-  // ~15 chars per sec is a good average for natural reading + 1s padding for punctuation
-  const readingSeconds = (textLength / 15);
+  // ~21 chars per sec matches ElevenLabs speaking cadence so the timer starts immediately without dead pauses
+  const readingSeconds = Math.max(1.8, textLength / 21);
   const readingFrames = Math.round(readingSeconds * fps);
   const timerFrames = 3 * fps;
   const revealFrames = 2 * fps;
@@ -81,7 +82,7 @@ const WyrRound: React.FC<{ scenarioData: Scenario; topic: string; isLastRound?: 
   const VIBRANT_RED = '#ef4444';
 
   return (
-    <AbsoluteFill style={{ backgroundColor: '#111', fontFamily: '"Montserrat", sans-serif' }}>
+    <AbsoluteFill style={{ backgroundColor: '#09090b', fontFamily: '"Montserrat", sans-serif' }}>
       
       {/* Timer Sound */}
       <Sequence from={timerStartFrame} durationInFrames={timerFrames}>
@@ -95,180 +96,233 @@ const WyrRound: React.FC<{ scenarioData: Scenario; topic: string; isLastRound?: 
         </Sequence>
       )}
 
-      {/* Top Panel (Scenario A) */}
+      {/* Top Blue Card (Scenario A) */}
       <div style={{
         position: 'absolute',
-        top: 0, left: 0, right: 0, height: '50%',
-        backgroundColor: '#0a0908',
-        transform: `translateY(${(1 - panelAProgress) * -100}%)`,
+        top: 50,
+        left: 50,
+        right: 50,
+        height: 860,
+        background: 'linear-gradient(160deg, #1d4ed8 0%, #1e3a8a 60%, #0f172a 100%)',
+        borderRadius: 32,
+        border: '4px solid #3b82f6',
+        boxShadow: '0 16px 40px rgba(29, 78, 216, 0.45)',
+        transform: `translateY(${(1 - panelAProgress) * -120}%)`,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'flex-end',
-        paddingBottom: '80px',
-        overflow: 'hidden'
+        padding: 24,
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+        zIndex: 5
       }}>
-        {image_url_a && (
-          <Img 
-            src={image_url_a} 
-            style={{ 
-              position: 'absolute', 
-              width: '100%', 
-              height: '100%', 
-              objectFit: 'cover', 
-              opacity: isTimerDone && !isLastRound && !isAHigher ? 0.3 : 0.85 
-            }} 
-          />
-        )}
-        {flashA && <div style={{ position: 'absolute', inset: 0, backgroundColor: 'white', opacity: 0.5, zIndex: 5 }} />}
-        
-        {/* Black gradient to make text readable */}
-        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '60%', background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)', zIndex: 1 }} />
-        
-        {/* Option A Text: Disappears when percentage / result is shown */}
-        {!isTimerDone && (
-          <h2 style={{ 
-            fontSize: 58, 
-            fontWeight: 800, 
-            color: 'white', 
-            textShadow: '2px 2px 12px rgba(0,0,0,0.9)', 
-            zIndex: 2, 
-            textAlign: 'center', 
-            padding: '0 70px',
-            lineHeight: 1.25
-          }}>
-            {option_a}
-          </h2>
-        )}
+        {/* Equal-sized Image Box (width: 100%, height: 510) */}
+        <div style={{
+          width: '100%',
+          height: 510,
+          borderRadius: 22,
+          overflow: 'hidden',
+          position: 'relative',
+          backgroundColor: '#0a0a0a',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+          flexShrink: 0
+        }}>
+          {image_url_a && (
+            <Img 
+              src={image_url_a} 
+              style={{ 
+                width: '100%', 
+                height: '100%', 
+                objectFit: 'cover', 
+                opacity: isTimerDone && !isLastRound && !isAHigher ? 0.35 : 1 
+              }} 
+            />
+          )}
+          {flashA && <div style={{ position: 'absolute', inset: 0, backgroundColor: 'white', opacity: 0.5, zIndex: 10 }} />}
+        </div>
+
+        {/* Text & Result Area */}
+        <div style={{
+          flex: 1,
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '16px 20px',
+          boxSizing: 'border-box'
+        }}>
+          {isTimerDone && !isLastRound ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+              <span style={{ 
+                fontSize: 96, 
+                fontWeight: 900, 
+                color: isAHigher ? VIBRANT_GREEN : VIBRANT_RED, 
+                textShadow: '0 4px 20px rgba(0,0,0,0.9)' 
+              }}>
+                {percent_a}%
+              </span>
+              <span style={{ 
+                fontSize: 32, 
+                fontWeight: 700, 
+                color: '#f1f5f9', 
+                textAlign: 'center', 
+                lineHeight: 1.25 
+              }}>
+                {option_a}
+              </span>
+            </div>
+          ) : (
+            <h2 style={{ 
+              fontSize: 46, 
+              fontWeight: 800, 
+              color: '#ffffff', 
+              textAlign: 'center', 
+              lineHeight: 1.25, 
+              margin: 0,
+              textShadow: '0 4px 14px rgba(0,0,0,0.8)'
+            }}>
+              {option_a}
+            </h2>
+          )}
+        </div>
       </div>
 
-      {/* Bottom Panel (Scenario B) */}
+      {/* Bottom Red Card (Scenario B) */}
       <div style={{
         position: 'absolute',
-        bottom: 0, left: 0, right: 0, height: '50%',
-        backgroundColor: '#0a0908',
-        transform: `translateY(${(1 - panelBProgress) * 100}%)`,
+        top: 1010,
+        left: 50,
+        right: 50,
+        height: 860,
+        background: 'linear-gradient(160deg, #dc2626 0%, #991b1b 60%, #450a0a 100%)',
+        borderRadius: 32,
+        border: '4px solid #ef4444',
+        boxShadow: '0 16px 40px rgba(220, 38, 38, 0.45)',
+        transform: `translateY(${(1 - panelBProgress) * 120}%)`,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'flex-start',
-        paddingTop: '80px',
-        overflow: 'hidden'
+        padding: 24,
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+        zIndex: 5
       }}>
-        {image_url_b && (
-          <Img 
-            src={image_url_b} 
-            style={{ 
-              position: 'absolute', 
-              width: '100%', 
-              height: '100%', 
-              objectFit: 'cover', 
-              opacity: isTimerDone && !isLastRound && isAHigher ? 0.3 : 0.85 
-            }} 
-          />
-        )}
-        {flashB && <div style={{ position: 'absolute', inset: 0, backgroundColor: 'white', opacity: 0.5, zIndex: 5 }} />}
-        
-        {/* Black gradient to make text readable */}
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '60%', background: 'linear-gradient(to bottom, rgba(0,0,0,0.9), transparent)', zIndex: 1 }} />
-        
-        {/* Option B Text: Disappears when percentage / result is shown */}
-        {!isTimerDone && (
-          <h2 style={{ 
-            fontSize: 58, 
-            fontWeight: 800, 
-            color: 'white', 
-            textShadow: '2px 2px 12px rgba(0,0,0,0.9)', 
-            zIndex: 2, 
-            textAlign: 'center', 
-            padding: '0 70px',
-            lineHeight: 1.25
-          }}>
-            {option_b}
-          </h2>
-        )}
+        {/* Equal-sized Image Box (width: 100%, height: 510) */}
+        <div style={{
+          width: '100%',
+          height: 510,
+          borderRadius: 22,
+          overflow: 'hidden',
+          position: 'relative',
+          backgroundColor: '#0a0a0a',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+          flexShrink: 0
+        }}>
+          {image_url_b && (
+            <Img 
+              src={image_url_b} 
+              style={{ 
+                width: '100%', 
+                height: '100%', 
+                objectFit: 'cover', 
+                opacity: isTimerDone && !isLastRound && isAHigher ? 0.35 : 1 
+              }} 
+            />
+          )}
+          {flashB && <div style={{ position: 'absolute', inset: 0, backgroundColor: 'white', opacity: 0.5, zIndex: 10 }} />}
+        </div>
+
+        {/* Text & Result Area */}
+        <div style={{
+          flex: 1,
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '16px 20px',
+          boxSizing: 'border-box'
+        }}>
+          {isTimerDone && !isLastRound ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+              <span style={{ 
+                fontSize: 96, 
+                fontWeight: 900, 
+                color: !isAHigher ? VIBRANT_GREEN : VIBRANT_RED, 
+                textShadow: '0 4px 20px rgba(0,0,0,0.9)' 
+              }}>
+                {percent_b}%
+              </span>
+              <span style={{ 
+                fontSize: 32, 
+                fontWeight: 700, 
+                color: '#f1f5f9', 
+                textAlign: 'center', 
+                lineHeight: 1.25 
+              }}>
+                {option_b}
+              </span>
+            </div>
+          ) : (
+            <h2 style={{ 
+              fontSize: 46, 
+              fontWeight: 800, 
+              color: '#ffffff', 
+              textAlign: 'center', 
+              lineHeight: 1.25, 
+              margin: 0,
+              textShadow: '0 4px 14px rgba(0,0,0,0.8)'
+            }}>
+              {option_b}
+            </h2>
+          )}
+        </div>
       </div>
 
-      {/* Center UI */}
-      {isTimerDone ? (
-        // For the last round, DO NOT show percentage! Show callout or clean view
-        isLastRound ? (
-          <div style={{
-            position: 'absolute',
-            top: '50%', left: '50%',
-            transform: `translate(-50%, -50%) scale(${resultScale})`,
-            zIndex: 15,
-            backgroundColor: 'rgba(0,0,0,0.75)',
-            padding: '24px 44px',
-            borderRadius: 30,
-            border: '2px solid rgba(255,255,255,0.2)',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.7)',
-            textAlign: 'center',
-            whiteSpace: 'nowrap'
-          }}>
-            <span style={{ fontSize: 44, fontWeight: 800, color: '#f8fafc', letterSpacing: '1px' }}>
-              Comment Your Choice!
-            </span>
-          </div>
-        ) : (
-          <div style={{
-            position: 'absolute',
-            top: '50%', left: '50%',
-            transform: `translate(-50%, -50%) scale(${resultScale})`,
-            width: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 15,
-            gap: 50
-          }}>
-            {/* Top Percentage with True Vibrant Green */}
-            <div style={{
-              fontSize: 145, 
-              fontWeight: 900, 
-              color: isAHigher ? VIBRANT_GREEN : VIBRANT_RED,
-              textShadow: '0px 10px 30px rgba(0,0,0,1)',
-              transform: 'translateY(-60px)'
-            }}>
-              {percent_a}%
-            </div>
-            
-            {/* Bottom Percentage with True Vibrant Green */}
-            <div style={{
-              fontSize: 145, 
-              fontWeight: 900, 
-              color: !isAHigher ? VIBRANT_GREEN : VIBRANT_RED,
-              textShadow: '0px 10px 30px rgba(0,0,0,1)',
-              transform: 'translateY(60px)'
-            }}>
-              {percent_b}%
-            </div>
-          </div>
-        )
+      {/* Center UI / VS Badge */}
+      {isTimerDone && isLastRound ? (
+        <div style={{
+          position: 'absolute',
+          top: 960,
+          left: 540,
+          transform: `translate(-50%, -50%) scale(${resultScale})`,
+          zIndex: 30,
+          backgroundColor: 'rgba(0,0,0,0.85)',
+          padding: '24px 44px',
+          borderRadius: 30,
+          border: '3px solid rgba(255,255,255,0.3)',
+          boxShadow: '0 10px 40px rgba(0,0,0,0.9)',
+          textAlign: 'center',
+          whiteSpace: 'nowrap'
+        }}>
+          <span style={{ fontSize: 44, fontWeight: 800, color: '#f8fafc', letterSpacing: '1px' }}>
+            Comment Your Choice!
+          </span>
+        </div>
       ) : (
         <div style={{
           position: 'absolute',
-          top: '50%', left: '50%',
+          top: 960,
+          left: 540,
           transform: `translate(-50%, -50%) scale(${vsScale})`,
-          width: 150, height: 150,
-          backgroundColor: '#f1faee',
+          width: 140,
+          height: 140,
+          backgroundColor: '#f8fafc',
           borderRadius: '50%',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-          zIndex: 10
+          boxShadow: '0 12px 36px rgba(0,0,0,0.6)',
+          zIndex: 25
         }}>
-          {frame >= timerStartFrame ? (
-            <svg style={{ width: 150, height: 150, position: 'absolute', transform: 'rotate(-90deg)' }}>
-              <circle cx="75" cy="75" r="65" stroke="#ccc" strokeWidth="10" fill="none" />
-              <circle cx="75" cy="75" r="65" stroke="#e63946" strokeWidth="10" fill="none" 
-                strokeDasharray="408" strokeDashoffset={408 - (408 * timerProgress)} 
+          {frame >= timerStartFrame && !isTimerDone ? (
+            <svg style={{ width: 140, height: 140, position: 'absolute', transform: 'rotate(-90deg)' }}>
+              <circle cx="70" cy="70" r="60" stroke="#cbd5e1" strokeWidth="10" fill="none" />
+              <circle cx="70" cy="70" r="60" stroke="#e11d48" strokeWidth="10" fill="none" 
+                strokeDasharray="377" strokeDashoffset={377 - (377 * timerProgress)} 
                 strokeLinecap="round" />
             </svg>
           ) : null}
-          <span style={{ fontSize: 60, fontWeight: 900, color: '#1d3557' }}>VS</span>
+          <span style={{ fontSize: 52, fontWeight: 900, color: '#0f172a' }}>VS</span>
         </div>
       )}
     </AbsoluteFill>
@@ -283,8 +337,10 @@ export const WouldYouRather: React.FC<{ data_json: WouldYouRatherJson; topic: st
     return <AbsoluteFill style={{ backgroundColor: '#111' }}><h1 style={{ color: 'white' }}>Invalid Data</h1></AbsoluteFill>;
   }
 
+  const hasOutro = Boolean(data_json.end_title && data_json.end_title.trim());
+
   return (
-    <AbsoluteFill style={{ backgroundColor: '#111' }}>
+    <AbsoluteFill style={{ backgroundColor: '#09090b' }}>
       {/* Background Music Support */}
       {bg_music_url && (data_json as any).bg_music_enabled !== false && (
         <Audio src={resolveAudioUrl(bg_music_url)} volume={bg_music_volume ?? 0.15} loop />
@@ -304,21 +360,21 @@ export const WouldYouRather: React.FC<{ data_json: WouldYouRatherJson; topic: st
           );
         })}
 
-        {/* Outro Sequence */}
-        <Series.Sequence durationInFrames={Math.round(3.5 * fps)}>
-          {tts_urls && tts_urls.length > scenarios.length && (
-            <Audio src={tts_urls[scenarios.length]} volume={0.9} />
-          )}
-          <AbsoluteFill style={{ 
-            backgroundColor: '#0a0a0a', 
-            display: 'flex', 
-            flexDirection: 'column', 
-            justifyContent: 'center', 
-            alignItems: 'center', 
-            padding: '0 60px',
-            fontFamily: '"Montserrat", sans-serif'
-          }}>
-            {data_json.end_title ? (
+        {/* Outro Sequence: Only rendered when end_title is provided */}
+        {hasOutro && (
+          <Series.Sequence durationInFrames={Math.round(2.8 * fps)}>
+            {tts_urls && tts_urls.length > scenarios.length && (
+              <Audio src={tts_urls[scenarios.length]} volume={0.9} />
+            )}
+            <AbsoluteFill style={{ 
+              backgroundColor: '#09090b', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              justifyContent: 'center', 
+              alignItems: 'center', 
+              padding: '0 60px',
+              fontFamily: '"Montserrat", sans-serif'
+            }}>
               <h1 style={{ 
                 color: '#ffffff', 
                 fontSize: 66, 
@@ -328,11 +384,15 @@ export const WouldYouRather: React.FC<{ data_json: WouldYouRatherJson; topic: st
                 textShadow: '0 10px 30px rgba(0,0,0,0.9)',
                 maxWidth: '90%'
               }}>
-                {data_json.end_title}
+                <TypewriterText 
+                  text={data_json.end_title!.trim()} 
+                  durationInFrames={Math.round(2.8 * fps)} 
+                  delayFrames={4} 
+                />
               </h1>
-            ) : null}
-          </AbsoluteFill>
-        </Series.Sequence>
+            </AbsoluteFill>
+          </Series.Sequence>
+        )}
       </Series>
     </AbsoluteFill>
   );

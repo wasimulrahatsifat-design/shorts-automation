@@ -108,21 +108,23 @@ export async function POST(request: Request) {
     }
 
     let finalDuration = duration;
+    const hasOutro = Boolean(data_json.end_title && data_json.end_title.trim());
     if (data_json.format === 'Would You Rather' && data_json.scenarios) {
       let totalSeconds = 0;
       for (const s of data_json.scenarios) {
         const textLength = s.option_a.length + s.option_b.length + 20;
-        const readingSeconds = (textLength / 15) + 1;
+        const readingSeconds = Math.max(1.8, textLength / 21);
         totalSeconds += readingSeconds + 5; // timer 3s + reveal 2s
       }
-      finalDuration = Math.round(totalSeconds + 3.5); // + outro
+      finalDuration = Math.round(totalSeconds + (hasOutro ? 2.8 : 0));
     } else if (data_json.format === 'Quiz' && data_json.questions) {
       let totalSeconds = 0;
       for (const q of data_json.questions) {
         const textLength = q.question.length + q.options.join('').length + 10;
-        const readingSeconds = (textLength / 15) + 1;
-        totalSeconds += readingSeconds + 7;
+        const readingSeconds = Math.max(1.8, textLength / 18);
+        totalSeconds += readingSeconds + 5;
       }
+      finalDuration = Math.round(totalSeconds + (hasOutro ? 2.8 : 0));
     } else if (data_json.format === 'Arena Clash' && data_json.duration_seconds) {
       finalDuration = data_json.duration_seconds;
     }

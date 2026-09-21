@@ -1,5 +1,6 @@
 import React from 'react';
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig, Sequence, Audio, Img, Series, staticFile } from 'remotion';
+import { TypewriterText } from './TypewriterText';
 
 interface Question {
   question: string;
@@ -366,13 +367,13 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
           );
         })}
         
-        {/* Outro Sequence */}
-        <Series.Sequence durationInFrames={3 * fps}>
-          {tts_urls && tts_urls[questions.length] && (
-            <Audio src={tts_urls[questions.length]} volume={0.9} />
-          )}
-          <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center', padding: '0 50px', textAlign: 'center' }}>
-            {data_json.end_title ? (
+        {/* Outro Sequence: Only rendered when end_title is provided */}
+        {data_json.end_title && data_json.end_title.trim() ? (
+          <Series.Sequence durationInFrames={Math.round(2.8 * fps)}>
+            {tts_urls && tts_urls[questions.length] && (
+              <Audio src={tts_urls[questions.length]} volume={0.9} />
+            )}
+            <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center', padding: '0 50px', textAlign: 'center' }}>
               <div style={{ 
                 fontSize: 74, 
                 fontWeight: 800, 
@@ -381,11 +382,15 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
                 lineHeight: 1.3,
                 maxWidth: '90%'
               }}>
-                {data_json.end_title}
+                <TypewriterText 
+                  text={data_json.end_title.trim()} 
+                  durationInFrames={Math.round(2.8 * fps)} 
+                  delayFrames={4} 
+                />
               </div>
-            ) : null}
-          </AbsoluteFill>
-        </Series.Sequence>
+            </AbsoluteFill>
+          </Series.Sequence>
+        ) : null}
       </Series>
 
       {/* Subtitles Area (Optional) */}
