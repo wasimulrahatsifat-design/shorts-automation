@@ -44,12 +44,14 @@ export async function POST(request: Request) {
 
       const ytStatus = dataJson.youtube_status;
       const ytTime = dataJson.youtube_scheduled_time || currentV.scheduled_time;
-      const isYtDue = ytStatus === 'Scheduled' && ytTime && new Date(ytTime).getTime() <= (now.getTime() + 60000);
+      const isYtUploadingTimeout = ytStatus === 'Uploading' && dataJson.youtube_uploading_at && (now.getTime() - new Date(dataJson.youtube_uploading_at).getTime() >= 5 * 60 * 1000);
+      const isYtDue = (ytStatus === 'Scheduled' || isYtUploadingTimeout) && ytTime && new Date(ytTime).getTime() <= (now.getTime() + 60000);
       const isYtRecentlyDispatched = dataJson.youtube_dispatched_at && (now.getTime() - new Date(dataJson.youtube_dispatched_at).getTime() < 3 * 60 * 1000);
 
       const metaStatus = dataJson.meta_status;
       const metaTime = dataJson.meta_scheduled_time || currentV.scheduled_time;
-      const isMetaDue = metaStatus === 'Scheduled' && metaTime && new Date(metaTime).getTime() <= (now.getTime() + 60000);
+      const isMetaUploadingTimeout = metaStatus === 'Uploading' && dataJson.meta_uploading_at && (now.getTime() - new Date(dataJson.meta_uploading_at).getTime() >= 5 * 60 * 1000);
+      const isMetaDue = (metaStatus === 'Scheduled' || isMetaUploadingTimeout) && metaTime && new Date(metaTime).getTime() <= (now.getTime() + 60000);
       const isMetaRecentlyDispatched = dataJson.meta_dispatched_at && (now.getTime() - new Date(dataJson.meta_dispatched_at).getTime() < 3 * 60 * 1000);
 
       if (isYtDue && !isYtRecentlyDispatched) {
@@ -74,7 +76,7 @@ export async function POST(request: Request) {
             inputs: {
               video_id: currentV.id,
               target: 'youtube',
-              force: 'false',
+              force: 'true',
             },
           });
           triggeredCount++;
@@ -106,7 +108,7 @@ export async function POST(request: Request) {
             inputs: {
               video_id: currentV.id,
               target: 'meta',
-              force: 'false',
+              force: 'true',
             },
           });
           triggeredCount++;

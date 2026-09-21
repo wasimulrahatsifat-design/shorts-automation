@@ -1,5 +1,7 @@
 name: Auto-Publish
 on:
+  schedule:
+    - cron: '*/10 * * * *' # Run every 10 minutes to publish due scheduled posts
   workflow_dispatch: # Allow manual trigger and webhook dispatch with target parameters
     inputs:
       video_id:

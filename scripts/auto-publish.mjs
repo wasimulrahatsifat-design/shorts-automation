@@ -107,12 +107,15 @@ async function uploadToFacebook(video, localFilePath) {
  */
 async function uploadToInstagram(video, localFilePath) {
   const igUserId = process.env.IG_USER_ID;
-  const accessToken = process.env.IG_ACCESS_TOKEN || process.env.FB_PAGE_ACCESS_TOKEN;
+  const rawToken = process.env.IG_ACCESS_TOKEN || process.env.FB_PAGE_ACCESS_TOKEN;
+  const pageId = process.env.FB_PAGE_ID;
 
-  if (!igUserId || !accessToken) {
+  if (!igUserId || !rawToken) {
     console.log('Skipping Instagram: IG_USER_ID or IG_ACCESS_TOKEN/FB_PAGE_ACCESS_TOKEN not configured.');
     return null;
   }
+
+  const accessToken = await resolvePageAccessToken(rawToken, pageId);
 
   if (!video.video_url) {
     console.log('Skipping Instagram: Video does not have a public video_url for container creation.');
@@ -353,50 +356,48 @@ async function main() {
 
     // Check YouTube schedule
     const ytScheduledTime = video.data_json?.youtube_scheduled_time || video.scheduled_time;
-    const isYtScheduled = currentYtStatus === 'Scheduled';
+    const isYtScheduled = currentYtStatus === 'Scheduled' || (video.status === 'Scheduled' && currentYtStatus !== 'Published');
     const isYtTimeDue = ytScheduledTime && new Date(ytScheduledTime).getTime() <= (now.getTime() + 60000); // 1 min buffer
     const isYtAlreadyPublished = currentYtStatus === 'Published' || Boolean(video.data_json?.youtube_id);
-    const isYtUploading = currentYtStatus === 'Uploading' && (
-      video.data_json?.youtube_uploading_at && (now.getTime() - new Date(video.data_json.youtube_uploading_at).getTime() < 5 * 60 * 1000)
-    );
+    const isYtStuckUploading = currentYtStatus === 'Uploading' && video.data_json?.youtube_uploading_at && (now.getTime() - new Date(video.data_json.youtube_uploading_at).getTime() >= 5 * 60 * 1000);
+    const isYtActiveUploading = currentYtStatus === 'Uploading' && !isYtStuckUploading;
 
     // Check Meta schedule
     const metaScheduledTime = video.data_json?.meta_scheduled_time || video.scheduled_time;
-    const isMetaScheduled = currentMetaStatus === 'Scheduled';
+    const isMetaScheduled = currentMetaStatus === 'Scheduled' || (video.status === 'Scheduled' && currentMetaStatus !== 'Published');
     const isMetaTimeDue = metaScheduledTime && new Date(metaScheduledTime).getTime() <= (now.getTime() + 60000);
     // Meta is considered already published if status is Published OR both Facebook & Instagram IDs exist
     const isMetaAlreadyPublished = currentMetaStatus === 'Published' || (Boolean(video.data_json?.facebook_id) && Boolean(video.data_json?.instagram_id));
-    const isMetaUploading = currentMetaStatus === 'Uploading' && (
-      video.data_json?.meta_uploading_at && (now.getTime() - new Date(video.data_json.meta_uploading_at).getTime() < 5 * 60 * 1000)
-    );
+    const isMetaStuckUploading = currentMetaStatus === 'Uploading' && video.data_json?.meta_uploading_at && (now.getTime() - new Date(video.data_json.meta_uploading_at).getTime() >= 5 * 60 * 1000);
+    const isMetaActiveUploading = currentMetaStatus === 'Uploading' && !isMetaStuckUploading;
 
     // STRICT PLATFORM ISOLATION & CONCURRENCY GUARDS:
     const isSpecificVideoTarget = Boolean(targetVideoId && targetVideoId === video.id);
+    const isTargetingYouTube = targetPlatform === 'youtube' || targetPlatform === 'all';
+    const isTargetingMeta = targetPlatform === 'meta' || targetPlatform === 'all' || targetPlatform === 'facebook-instagram';
 
     // YouTube can ONLY be published if:
     // 1. YouTube credentials are provided.
     // 2. YouTube is NOT already published.
-    // 3. Not actively uploading by another runner (!isYtUploading).
-    // 4. EITHER targeted directly OR scheduled and due.
+    // 3. EITHER forcePublish OR specifically targeted OR scheduled and due.
     const shouldPublishYouTube = allowsYouTubeGlobal && !isYtAlreadyPublished && (
       forcePublish
-        ? (targetPlatform === 'youtube' || targetPlatform === 'all')
+        ? isTargetingYouTube
         : (isSpecificVideoTarget
-            ? (!isYtUploading && (targetPlatform === 'youtube' || targetPlatform === 'all'))
-            : (!isYtUploading && isYtScheduled && isYtTimeDue))
+            ? isTargetingYouTube
+            : (isTargetingYouTube && isYtScheduled && isYtTimeDue && !isYtActiveUploading))
     );
 
     // Meta can ONLY be published if:
     // 1. Meta credentials are provided.
     // 2. Meta is NOT already fully published.
-    // 3. Not actively uploading by another runner (!isMetaUploading).
-    // 4. EITHER targeted directly OR scheduled and due.
+    // 3. EITHER forcePublish OR specifically targeted OR scheduled and due.
     const shouldPublishMeta = allowsMetaGlobal && !isMetaAlreadyPublished && (
       forcePublish
-        ? (targetPlatform === 'meta' || targetPlatform === 'all' || targetPlatform === 'facebook-instagram')
+        ? isTargetingMeta
         : (isSpecificVideoTarget
-            ? (!isMetaUploading && (targetPlatform === 'meta' || targetPlatform === 'all' || targetPlatform === 'facebook-instagram'))
-            : (!isMetaUploading && isMetaScheduled && isMetaTimeDue))
+            ? isTargetingMeta
+            : (isTargetingMeta && isMetaScheduled && isMetaTimeDue && !isMetaActiveUploading))
     );
 
     console.log(`Platform evaluation for [${video.id}]:`);
