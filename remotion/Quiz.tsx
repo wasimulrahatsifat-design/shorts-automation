@@ -21,10 +21,20 @@ export interface QuizJson {
   bg_music_url?: string;
   bg_music_volume?: number;
   bg_music_enabled?: boolean;
+  thinking_gif?: string;
 }
 
 const resolveAudioUrl = (url?: string) => {
   if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url;
+  }
+  const clean = url.startsWith('/') ? url.slice(1) : url;
+  return staticFile(clean);
+};
+
+const resolveGifUrl = (url?: string) => {
+  if (!url) return staticFile('thinking.gif');
   if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
     return url;
   }
@@ -37,7 +47,7 @@ export const getQuestionTiming = (q: Question, fps: number) => {
   // ~15 chars per sec is a good average for natural reading + 1s padding for punctuation
   const readingSeconds = (textLength / 15) + 1;
   const readingFrames = Math.round(readingSeconds * fps);
-  const timerFrames = 5 * fps;
+  const timerFrames = 3 * fps; // 3 seconds countdown timer instead of 5
   const revealFrames = 2 * fps;
   return {
     readingFrames,
@@ -47,7 +57,12 @@ export const getQuestionTiming = (q: Question, fps: number) => {
   };
 };
 
-const QuizRound: React.FC<{ questionData: Question, topic: string, partTitle?: string }> = ({ questionData, topic, partTitle }) => {
+const QuizRound: React.FC<{ 
+  questionData: Question; 
+  topic: string; 
+  partTitle?: string;
+  thinkingGifUrl?: string;
+}> = ({ questionData, topic, partTitle, thinkingGifUrl }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -161,15 +176,15 @@ const QuizRound: React.FC<{ questionData: Question, topic: string, partTitle?: s
               <Img src={image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
             ) : null
           ) : (
-            <div
+            <img
+              src={resolveGifUrl(thinkingGifUrl)}
+              alt="Thinking"
               style={{
-                fontSize: 150,
-                transform: `rotate(${Math.sin(frame / 8) * 15}deg) scale(${1 + Math.sin(frame / 6) * 0.1})`,
-                filter: 'drop-shadow(0px 10px 20px rgba(0,0,0,0.3))',
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
               }}
-            >
-              🤔
-            </div>
+            />
           )}
         </div>
         <div
@@ -312,7 +327,12 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
             <Series.Sequence key={idx} durationInFrames={totalFrames}>
               {/* Play individual audio for this specific question */}
               {tts_urls && tts_urls[idx] && <Audio src={tts_urls[idx]} volume={0.9} />}
-              <QuizRound questionData={q} topic={topic} partTitle={data_json.part_title} />
+              <QuizRound 
+                questionData={q} 
+                topic={topic} 
+                partTitle={data_json.part_title} 
+                thinkingGifUrl={data_json.thinking_gif} 
+              />
             </Series.Sequence>
           );
         })}
