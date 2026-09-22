@@ -198,10 +198,11 @@ async function uploadToInstagram(video, localFilePath) {
 /**
  * Uploads a video file to YouTube Shorts via YouTube Data API v3
  */
-async function uploadToYouTube(video, localFilePath, youtube) {
+async function uploadToYouTube(video, localFilePath, youtube, youtubeAuthError) {
   if (!youtube) {
-    console.log('Skipping YouTube: YouTube client not authenticated.');
-    return null;
+    const reason = youtubeAuthError ? `YouTube authentication failed: ${youtubeAuthError}` : 'YouTube client not authenticated.';
+    console.error(`Skipping YouTube: ${reason}`);
+    throw new Error(reason);
   }
 
   console.log('Uploading to YouTube...');
@@ -215,7 +216,7 @@ async function uploadToYouTube(video, localFilePath, youtube) {
         categoryId: '24', // Entertainment
       },
       status: {
-        privacyStatus: 'private', // Set to 'public' when ready
+        privacyStatus: video.data_json?.youtube_privacy || 'public', // Default to public so it appears on the channel
         selfDeclaredMadeForKids: false,
       },
     },
@@ -289,6 +290,7 @@ async function main() {
 
   // Initialize YouTube OAuth2 Client if credentials exist and YouTube could be targeted
   let youtube = null;
+  let youtubeAuthError = null;
   const allowsYouTubeGlobal = targetPlatform === 'all' || targetPlatform === 'youtube';
   const allowsMetaGlobal = targetPlatform === 'all' || targetPlatform === 'meta' || targetPlatform === 'facebook-instagram';
 
@@ -313,11 +315,13 @@ async function main() {
         youtube = google.youtube({ version: 'v3', auth: oauth2Client });
         console.log('Successfully authenticated with YouTube API.');
       } catch (authError) {
-        console.warn('YouTube authentication failed:', authError.message || authError);
+        youtubeAuthError = authError.message || String(authError);
+        console.error('YouTube authentication failed:', youtubeAuthError);
         console.warn('Continuing without YouTube integration.');
       }
     } else {
-      console.log('YouTube credentials not provided. Skipping YouTube.');
+      youtubeAuthError = 'Missing YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, or YOUTUBE_REFRESH_TOKEN in GitHub repository secrets.';
+      console.log('YouTube credentials not configured in GitHub Secrets.');
     }
   }
 
@@ -458,13 +462,14 @@ async function main() {
       if (shouldPublishYouTube) {
         const freshRow = await getFreshVideoData(video.id);
         const freshData = freshRow?.data_json || video.data_json || {};
+        let lastYtError = null;
         if (freshData.youtube_id || freshData.youtube_status === 'Published') {
           console.log(`[CONCURRENCY GUARD] YouTube already published for video [${video.id}] (ID: ${freshData.youtube_id}). Skipping duplicate upload.`);
           uploadResults.youtube = true;
           uploadedIds.youtube_id = freshData.youtube_id;
         } else {
           try {
-            const ytId = await uploadToYouTube(video, localFilePath, youtube);
+            const ytId = await uploadToYouTube(video, localFilePath, youtube, youtubeAuthError);
             if (ytId) {
               uploadResults.youtube = true;
               uploadedIds.youtube_id = ytId;
@@ -479,13 +484,15 @@ async function main() {
                     youtube_id: ytId,
                     youtube_status: 'Published',
                     youtube_uploaded_at: new Date().toISOString(),
+                    youtube_error: null,
                   },
                 })
                 .eq('id', video.id);
               console.log(`[IMMEDIATE DB PERSISTENCE] YouTube ID ${ytId} saved to database.`);
             }
           } catch (ytError) {
-            console.error('YouTube upload encountered an error:', ytError.message || ytError);
+            lastYtError = ytError.message || String(ytError);
+            console.error('YouTube upload encountered an error:', lastYtError);
           }
         }
       }
@@ -566,9 +573,11 @@ async function main() {
       if (shouldPublishYouTube) {
         if (uploadResults.youtube || updatedDataJson.youtube_id) {
           updatedDataJson.youtube_status = 'Published';
+          delete updatedDataJson.youtube_error;
           if (uploadedIds.youtube_id) updatedDataJson.youtube_id = uploadedIds.youtube_id;
         } else {
           updatedDataJson.youtube_status = 'Failed';
+          updatedDataJson.youtube_error = lastYtError || youtubeAuthError || 'YouTube upload failed or client not authenticated';
         }
       }
 
@@ -622,6 +631,20 @@ async function main() {
         } catch (cleanupErr) {
           console.warn('Failed to remove temp video file:', cleanupErr);
         }
+      }
+    }
+  // If a specific target platform was requested and failed, exit with code 1 so GitHub Actions accurately reports failure
+  if (targetVideoId || targetPlatform === 'youtube' || targetPlatform === 'meta') {
+    for (const v of videos) {
+      const fresh = await getFreshVideoData(v.id);
+      const d = fresh?.data_json || {};
+      if (targetPlatform === 'youtube' && d.youtube_status === 'Failed') {
+        console.error(`\nAuto-publish failure: YouTube upload failed for video [${v.id}]: ${d.youtube_error || 'Unknown error'}`);
+        process.exit(1);
+      }
+      if (targetPlatform === 'meta' && d.meta_status === 'Failed') {
+        console.error(`\nAuto-publish failure: Meta publish failed for video [${v.id}]`);
+        process.exit(1);
       }
     }
   }

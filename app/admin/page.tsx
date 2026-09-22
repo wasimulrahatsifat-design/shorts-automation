@@ -24,6 +24,8 @@ interface VideoItem {
     meta_scheduled_time?: string;
     youtube_uploading_at?: string;
     meta_uploading_at?: string;
+    youtube_error?: string;
+    meta_error?: string;
   };
 }
 
@@ -380,6 +382,8 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
               const metaStatus = video.data_json?.meta_status;
               const ytDone = ytStatus === 'Published';
               const metaDone = metaStatus === 'Published';
+              const ytFailed = ytStatus === 'Failed';
+              const metaFailed = metaStatus === 'Failed';
               const ytScheduled = ytStatus === 'Scheduled';
               const metaScheduled = metaStatus === 'Scheduled';
               const ytUploading = ytStatus === 'Uploading' && (
@@ -416,6 +420,12 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
                         <h3 className="text-base font-bold text-gray-900 dark:text-white line-clamp-2 leading-tight">
                           {video.topic}
                         </h3>
+                        {video.data_json?.youtube_error && ytFailed && (
+                          <div className="mt-2 text-xs text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 p-2.5 rounded-xl border border-rose-200 dark:border-rose-900/60 flex items-start gap-1.5">
+                            <span className="font-bold flex-shrink-0">⚠️ Error:</span>
+                            <span className="break-all">{video.data_json.youtube_error}</span>
+                          </div>
+                        )}
                         {video.data_json?.description && (
                           <div className="mt-2 text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/60 p-2.5 rounded-xl border border-gray-100 dark:border-gray-800">
                             <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider block mb-1">
@@ -439,6 +449,8 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
                             ? 'bg-green-50 dark:bg-green-950/60 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800'
                             : ytUploading
                             ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 animate-pulse'
+                            : ytFailed
+                            ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800'
                             : ytScheduled
                             ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
                             : 'bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800'
@@ -449,6 +461,8 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
                               ? '✓ Uploaded' 
                               : ytUploading
                               ? '🚀 Uploading...'
+                              : ytFailed
+                              ? '❌ Upload Failed'
                               : ytScheduled && ytScheduledTime
                               ? `📅 Scheduled (${new Date(ytScheduledTime).toLocaleDateString([], { month: 'short', day: 'numeric' })} ${new Date(ytScheduledTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
                               : '⏳ Pending Approval'}
@@ -461,6 +475,8 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
                             ? 'bg-green-50 dark:bg-green-950/60 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800'
                             : metaUploading
                             ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 animate-pulse'
+                            : metaFailed
+                            ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800'
                             : metaScheduled
                             ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800'
                             : 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
@@ -471,6 +487,8 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
                               ? '✓ Published' 
                               : metaUploading
                               ? '🚀 Publishing...'
+                              : metaFailed
+                              ? '❌ Publish Failed'
                               : metaScheduled && metaScheduledTime
                               ? `📅 Scheduled (${new Date(metaScheduledTime).toLocaleDateString([], { month: 'short', day: 'numeric' })} ${new Date(metaScheduledTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
                               : '⏳ Pending Approval'}
@@ -507,7 +525,7 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
                           ) : (
                             <>
                               <span>🔴</span>
-                              <span>Upload to YouTube (Private)</span>
+                              <span>{ytFailed ? '🔄 Retry Upload (Public)' : 'Upload to YouTube (Public)'}</span>
                             </>
                           )}
                         </button>
