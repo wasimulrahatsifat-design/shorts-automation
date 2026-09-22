@@ -216,7 +216,7 @@ async function uploadToYouTube(video, localFilePath, youtube, youtubeAuthError) 
         categoryId: '24', // Entertainment
       },
       status: {
-        privacyStatus: video.data_json?.youtube_privacy || 'public', // Default to public so it appears on the channel
+        privacyStatus: video.data_json?.youtube_privacy || 'private', // Uploaded as private as preferred by user
         selfDeclaredMadeForKids: false,
       },
     },

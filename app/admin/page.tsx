@@ -525,7 +525,7 @@ export function AdminDashboardContent({ initialPlatform }: { initialPlatform?: '
                           ) : (
                             <>
                               <span>🔴</span>
-                              <span>{ytFailed ? '🔄 Retry Upload (Public)' : 'Upload to YouTube (Public)'}</span>
+                              <span>{ytFailed ? '🔄 Retry Upload (Private)' : 'Upload to YouTube (Private)'}</span>
                             </>
                           )}
                         </button>
