@@ -633,6 +633,8 @@ async function main() {
         }
       }
     }
+  }
+
   // If a specific target platform was requested and failed, exit with code 1 so GitHub Actions accurately reports failure
   if (targetVideoId || targetPlatform === 'youtube' || targetPlatform === 'meta') {
     for (const v of videos) {
