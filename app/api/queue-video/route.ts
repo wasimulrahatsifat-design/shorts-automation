@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { Octokit } from 'octokit';
 import { fetchElevenLabsTTS } from '@/lib/elevenlabs';
 import { uploadToStorageWithFailover, executeWithSupabaseFailover } from '@/lib/supabase';
+import { generateArenaSimulation } from '@/lib/arena-physics';
 
 const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN,
@@ -116,6 +117,9 @@ export async function POST(request: Request) {
         totalSeconds += readingSeconds + 5;
       }
       finalDuration = Math.round(totalSeconds + (hasOutro ? 2.8 : 0));
+    } else if (data_json.format === 'Arena Clash' && data_json.contestants) {
+      const sim = generateArenaSimulation(data_json.contestants, 3600, data_json.seed || 42);
+      finalDuration = sim.totalSeconds;
     } else if (data_json.format === 'Arena Clash' && data_json.duration_seconds) {
       finalDuration = data_json.duration_seconds;
     }

@@ -110,7 +110,21 @@ Your scripts ALWAYS hook viewers in the first 2 seconds, keep them glued until t
       - "topic": The generated topic as a string.
       - "format": "Arena Clash".
       - "script": A short, intense 10-15 second voiceover hook script for a YouTube Short narrating the battle.
-      - "contestants": An array of exactly 4 objects representing the fighters. Each object MUST have "id" (string), "name" (string), "color" (hex string like "#FF3366"), "image_keyword" (A VERY SPECIFIC search keyword for Wikipedia to find an image for this contestant), and "starting_health" (number, typically 100).
+      - "contestants": An array of 4 distinct, awesome fighters. Each object MUST have:
+        * "id" (string)
+        * "name" (string)
+        * "color" (distinct hex string like "#ef4444", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6")
+        * "image_keyword" (A VERY SPECIFIC search keyword for Wikipedia to find an image for this contestant)
+        * "starting_health" (number, typically 100)
+        * "damage" (number, between 20 and 32)
+        * "speed" (number, between 6.0 and 7.5)
+        * "special_ability": An object with:
+            "name" (string, creative thematic ability name like "Thunder Strike", "Frost Nova", "Dragon Flame", "Iron Aegis"),
+            "icon" (string, a single emoji like "⚡", "🔥", "🛡️", "❄️", "🩸", "☄️"),
+            "type" (string, exactly one of: "damage", "shield", "heal", "freeze", "speed"),
+            "cooldown_seconds" (number, 4 to 8),
+            "power_value" (number, if damage: 25-45, if shield: 30-50, if heal: 20-35, if freeze: 1.8-2.5, if speed: 2-3),
+            "description" (short string explaining the effect)
       - "events": An array of battle events. Each object MUST have "frame" (number, between 50 and 350), "attacker" (string id), "defender" (string id), "damage" (number), and "item_used" (string, e.g., "Sword", "Lightning").
       - "winner_id": The id string of the last standing contestant.
       Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;

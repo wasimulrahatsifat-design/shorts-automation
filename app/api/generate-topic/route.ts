@@ -3,6 +3,7 @@ import { Octokit } from 'octokit';
 import { generateGeminiJson } from '@/lib/gemini';
 import { fetchElevenLabsTTS } from '@/lib/elevenlabs';
 import { uploadToStorageWithFailover, executeWithSupabaseFailover } from '@/lib/supabase';
+import { generateArenaSimulation } from '@/lib/arena-physics';
 
 const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN,
@@ -239,6 +240,9 @@ Your scripts ALWAYS hook viewers in the first 2 seconds, keep them glued until t
         totalSeconds += readingSeconds + 5;
       }
       finalDuration = Math.round(totalSeconds + (hasOutro ? 2.8 : 0));
+    } else if (videoFormat === 'Arena Clash' && dataPayload.contestants) {
+      const sim = generateArenaSimulation(dataPayload.contestants, 3600, dataPayload.seed || 42);
+      finalDuration = sim.totalSeconds;
     }
 
     // Insert into Supabase with failover

@@ -1,5 +1,14 @@
 // Deterministic 2D Physics Simulator for Arena Clash Royale
 
+export interface SpecialAbility {
+  name: string;             // e.g., "Thunder Strike", "Inferno Blast"
+  icon: string;             // Emoji e.g. "⚡", "🔥", "🛡️", "❄️", "💚"
+  type: 'damage' | 'shield' | 'heal' | 'freeze' | 'speed';
+  cooldown_seconds: number; // e.g. 5, 8
+  power_value: number;      // Damage amount, heal amount, shield durability, or freeze duration
+  description?: string;
+}
+
 export interface FighterInput {
   id: string;
   name: string;
@@ -9,6 +18,7 @@ export interface FighterInput {
   damage?: number;
   speed?: number;
   special_power?: string;
+  special_ability?: SpecialAbility;
 }
 
 export interface SimFighter {
@@ -25,6 +35,14 @@ export interface SimFighter {
   maxHealth: number;
   damage: number;
   specialPower: string;
+  specialAbility: SpecialAbility;
+  abilityCooldownTimer: number;
+  abilityCooldownMax: number;
+  abilityAuraTimer: number;
+  abilityAuraColor: string;
+  abilityAuraIcon: string;
+  frozenTimer: number;
+  bonusShield: number;
   isDead: boolean;
   hitFlash: number;
   invulnerableTimer: number;
@@ -82,7 +100,8 @@ export interface SimParticle {
 
 export interface SoundEvent {
   frame: number;
-  sound: 'hit' | 'bounce' | 'item' | 'gun' | 'explosion' | 'winner';
+  sound: 'hit' | 'bounce' | 'item' | 'gun' | 'explosion' | 'winner' | 'ability';
+  abilityType?: string;
   volume?: number;
 }
 
@@ -94,6 +113,7 @@ export interface SimFrameState {
   particles: SimParticle[];
   winner: SimFighter | null;
   aliveCount: number;
+  isOvertime?: boolean;
 }
 
 export interface SimulationResult {
@@ -112,18 +132,40 @@ function createSeededRng(seed = 123456789) {
   };
 }
 
-// Larger circular arena (diameter 880px out of 1080px) and box size 120px
+// Proportional dynamic fighter sizing based on fighter count
+export function getFighterSize(count: number): number {
+  if (count <= 2) return 130;
+  if (count <= 4) return 110;
+  if (count <= 6) return 92;
+  if (count <= 8) return 78;
+  return Math.max(62, Math.round(300 / Math.sqrt(count)));
+}
+
+// Circular arena dimensions
 export const ARENA_RADIUS = 430;
 export const ARENA_CENTER = { x: 540, y: 690 };
-export const BOX_SIZE = 120;
+export const BOX_SIZE = 120; // Default fallback for backwards compatibility
+
+// Default ability presets if none provided
+const DEFAULT_ABILITIES: Record<string, SpecialAbility> = {
+  iron_shield: { name: 'Iron Bastion', icon: '🛡️', type: 'shield', cooldown_seconds: 6, power_value: 40 },
+  berserker: { name: 'Berserk Strike', icon: '💥', type: 'damage', cooldown_seconds: 5, power_value: 35 },
+  vampiric: { name: 'Life Drain', icon: '🩸', type: 'heal', cooldown_seconds: 6, power_value: 25 },
+  thorns: { name: 'Spike Burst', icon: '🌵', type: 'damage', cooldown_seconds: 5, power_value: 30 },
+  speedster: { name: 'Flash Dash', icon: '⚡', type: 'speed', cooldown_seconds: 4, power_value: 2 },
+  phoenix: { name: 'Holy Heal', icon: '💚', type: 'heal', cooldown_seconds: 7, power_value: 35 },
+  freeze: { name: 'Frost Freeze', icon: '❄️', type: 'freeze', cooldown_seconds: 7, power_value: 2.2 },
+  none: { name: 'Power Strike', icon: '⚡', type: 'damage', cooldown_seconds: 6, power_value: 30 },
+};
 
 export function generateArenaSimulation(
   contestants: FighterInput[],
-  maxFrames = 1650, // max 55s
+  maxFrames = 3600, // Safe upper limit (2 minutes), battle stops when winner emerges!
   seed = 42
 ): SimulationResult {
   const rng = createSeededRng(seed);
   const count = Math.max(2, contestants.length);
+  const dynamicSize = getFighterSize(count);
 
   // Initialize Fighters
   const fighters: SimFighter[] = contestants.map((c, idx) => {
@@ -139,6 +181,20 @@ export function generateArenaSimulation(
     const vx = Math.cos(moveAngle) * baseSpd;
     const vy = Math.sin(moveAngle) * baseSpd;
 
+    // Resolve Special Ability
+    const ability: SpecialAbility = c.special_ability ||
+      DEFAULT_ABILITIES[c.special_power || 'none'] || {
+        name: 'Thunder Strike',
+        icon: '⚡',
+        type: 'damage',
+        cooldown_seconds: 5,
+        power_value: 30,
+      };
+
+    const cooldownFrames = Math.max(60, Math.round(ability.cooldown_seconds * 30));
+    // Stagger initial ability triggers slightly so they don't all fire simultaneously at frame 0
+    const initialCooldown = Math.round(cooldownFrames * (0.4 + rng() * 0.5));
+
     return {
       id: c.id || `fighter_${idx + 1}`,
       name: c.name || `Fighter ${idx + 1}`,
@@ -148,11 +204,19 @@ export function generateArenaSimulation(
       y,
       vx,
       vy,
-      size: BOX_SIZE,
+      size: dynamicSize,
       health: c.starting_health || 100,
       maxHealth: c.starting_health || 100,
       damage: c.damage || 25,
       specialPower: c.special_power || 'none',
+      specialAbility: ability,
+      abilityCooldownTimer: initialCooldown,
+      abilityCooldownMax: cooldownFrames,
+      abilityAuraTimer: 0,
+      abilityAuraColor: '#ffffff',
+      abilityAuraIcon: ability.icon,
+      frozenTimer: 0,
+      bonusShield: 0,
       isDead: false,
       hitFlash: 0,
       invulnerableTimer: 0,
@@ -178,6 +242,7 @@ export function generateArenaSimulation(
   let nextItemSpawnCooldown = 60; // First item spawns 2 seconds in
   let lastBounceFrame = -10;
   let lastHitFrame = -10;
+  let announcedOvertime = false;
 
   const itemTypes: { type: SimItem['type']; icon: string; name: string; color: string }[] = [
     { type: 'health', icon: '💚', name: '+30 HP Medkit', color: '#22c55e' },
@@ -190,27 +255,44 @@ export function generateArenaSimulation(
   for (let frame = 0; frame < maxFrames; frame++) {
     const aliveFighters = fighters.filter((f) => !f.isDead);
 
-    // Check winner
+    // Sudden death / overtime after 35s (frame 1050) if match is still ongoing
+    const isOvertime = frame >= 1050 && aliveFighters.length > 1;
+    if (isOvertime && !announcedOvertime) {
+      announcedOvertime = true;
+      floatingTexts.push({
+        id: `overtime_${frame}`,
+        x: ARENA_CENTER.x,
+        y: ARENA_CENTER.y - 120,
+        text: '⚡ OVERTIME: 2X DAMAGE! ⚡',
+        color: '#ef4444',
+        alpha: 1,
+        vy: -1,
+        scale: 1.6,
+      });
+      soundEvents.push({ frame, sound: 'ability', abilityType: 'damage', volume: 1.0 });
+    }
+
+    // Check winner: Battle runs until last fighter standing!
     if (aliveFighters.length === 1 && !winner && fighters.length > 1) {
       winner = { ...aliveFighters[0] };
       winnerAnnouncedFrame = frame;
       soundEvents.push({ frame, sound: 'winner', volume: 1.0 });
     } else if (aliveFighters.length === 0 && !winner && fighters.length > 1) {
-      // Mutual elimination fallback: resurrect highest HP or first fighter
+      // Mutual elimination fallback: resurrect fighter with highest maxHealth
       const survivor = fighters[0];
       survivor.isDead = false;
-      survivor.health = 10;
+      survivor.health = 15;
       winner = { ...survivor };
       winnerAnnouncedFrame = frame;
       soundEvents.push({ frame, sound: 'winner', volume: 1.0 });
     }
 
-    // Stop simulation 120 frames (4s) after winner is declared
+    // Stop simulation exactly 120 frames (4 seconds) after winner is declared
     if (winner && winnerAnnouncedFrame > 0 && frame >= winnerAnnouncedFrame + 120) {
       break;
     }
 
-    // Item Spawner: Only 8 seconds (240 frames) AFTER an item is picked up (or initial spawn)
+    // Item Spawner: 8 seconds (240 frames) AFTER an item is picked up (or initial spawn)
     if (items.length === 0 && !winner) {
       if (nextItemSpawnCooldown > 0) {
         nextItemSpawnCooldown--;
@@ -232,10 +314,193 @@ export function generateArenaSimulation(
       }
     }
 
-    // Move Fighters & Circular Wall Bounce (Pure 2D Physics - No auto steering or artificial attacks)
+    // Process Special Abilities for each alive fighter
+    if (!winner) {
+      aliveFighters.forEach((f) => {
+        if (f.frozenTimer > 0) {
+          f.frozenTimer--;
+          return; // Frozen fighters cannot execute abilities
+        }
+
+        if (f.abilityAuraTimer > 0) f.abilityAuraTimer--;
+
+        if (f.abilityCooldownTimer > 0) {
+          f.abilityCooldownTimer--;
+        } else {
+          // Trigger special ability!
+          const ab = f.specialAbility;
+          const otherFighters = aliveFighters.filter((opp) => opp.id !== f.id);
+          if (otherFighters.length === 0) return;
+
+          // Find nearest target
+          let nearestOpp = otherFighters[0];
+          let minDist = Infinity;
+          for (const opp of otherFighters) {
+            const d = Math.hypot(opp.x - f.x, opp.y - f.y);
+            if (d < minDist) {
+              minDist = d;
+              nearestOpp = opp;
+            }
+          }
+
+          // Ability Visual Announcement Banner
+          floatingTexts.push({
+            id: `ab_banner_${frame}_${f.id}`,
+            x: f.x,
+            y: f.y - (f.size / 2 + 30),
+            text: `${ab.icon} ${ab.name.toUpperCase()}!`,
+            color: f.color,
+            alpha: 1,
+            vy: -2.8,
+            scale: 1.35,
+          });
+
+          f.abilityAuraTimer = 35;
+          f.abilityAuraIcon = ab.icon;
+
+          if (ab.type === 'damage') {
+            f.abilityAuraColor = '#f43f5e';
+            const baseDmg = ab.power_value || 30;
+            const finalDmg = isOvertime ? baseDmg * 2 : baseDmg;
+
+            // Damage nearest opponent
+            nearestOpp.hitFlash = 14;
+            nearestOpp.health = Math.max(0, nearestOpp.health - finalDmg);
+            soundEvents.push({ frame, sound: 'ability', abilityType: 'damage', volume: 1.0 });
+
+            floatingTexts.push({
+              id: `ab_dmg_${frame}_${nearestOpp.id}`,
+              x: nearestOpp.x,
+              y: nearestOpp.y - 40,
+              text: `-${finalDmg} ${ab.icon}`,
+              color: '#ef4444',
+              alpha: 1,
+              vy: -2.5,
+              scale: 1.25,
+            });
+
+            // Shockwave particles from caster to target
+            for (let k = 0; k < 12; k++) {
+              particles.push({
+                x: nearestOpp.x + (rng() - 0.5) * 40,
+                y: nearestOpp.y + (rng() - 0.5) * 40,
+                vx: (rng() - 0.5) * 8,
+                vy: (rng() - 0.5) * 8,
+                color: f.color,
+                radius: rng() * 5 + 3,
+                alpha: 1,
+              });
+            }
+
+            if (nearestOpp.health <= 0 && !nearestOpp.isDead) {
+              nearestOpp.isDead = true;
+              soundEvents.push({ frame, sound: 'explosion', volume: 1.0 });
+            }
+          } else if (ab.type === 'shield') {
+            f.abilityAuraColor = '#a855f7';
+            f.hasShield = true;
+            f.bonusShield = ab.power_value || 40;
+            soundEvents.push({ frame, sound: 'ability', abilityType: 'shield', volume: 0.9 });
+
+            floatingTexts.push({
+              id: `ab_shd_${frame}_${f.id}`,
+              x: f.x,
+              y: f.y - 40,
+              text: `🛡️ SHIELD +${f.bonusShield}`,
+              color: '#a855f7',
+              alpha: 1,
+              vy: -2.2,
+              scale: 1.2,
+            });
+          } else if (ab.type === 'heal') {
+            f.abilityAuraColor = '#22c55e';
+            const healAmt = Math.min(f.maxHealth - f.health, ab.power_value || 30);
+            f.health += healAmt;
+            soundEvents.push({ frame, sound: 'ability', abilityType: 'heal', volume: 0.9 });
+
+            floatingTexts.push({
+              id: `ab_heal_${frame}_${f.id}`,
+              x: f.x,
+              y: f.y - 40,
+              text: `+${healAmt} HP 💚`,
+              color: '#22c55e',
+              alpha: 1,
+              vy: -2.2,
+              scale: 1.25,
+            });
+
+            for (let k = 0; k < 8; k++) {
+              particles.push({
+                x: f.x + (rng() - 0.5) * 40,
+                y: f.y + (rng() - 0.5) * 40,
+                vx: (rng() - 0.5) * 4,
+                vy: -rng() * 4 - 1,
+                color: '#22c55e',
+                radius: rng() * 4 + 2,
+                alpha: 1,
+              });
+            }
+          } else if (ab.type === 'freeze') {
+            f.abilityAuraColor = '#38bdf8';
+            nearestOpp.frozenTimer = Math.round((ab.power_value || 2) * 30);
+            soundEvents.push({ frame, sound: 'ability', abilityType: 'freeze', volume: 1.0 });
+
+            floatingTexts.push({
+              id: `ab_frz_${frame}_${nearestOpp.id}`,
+              x: nearestOpp.x,
+              y: nearestOpp.y - 40,
+              text: `❄️ FROZEN! (${ab.power_value}s)`,
+              color: '#38bdf8',
+              alpha: 1,
+              vy: -2,
+              scale: 1.25,
+            });
+
+            for (let k = 0; k < 10; k++) {
+              particles.push({
+                x: nearestOpp.x + (rng() - 0.5) * 45,
+                y: nearestOpp.y + (rng() - 0.5) * 45,
+                vx: (rng() - 0.5) * 3,
+                vy: (rng() - 0.5) * 3,
+                color: '#38bdf8',
+                radius: rng() * 4 + 3,
+                alpha: 1,
+              });
+            }
+          } else if (ab.type === 'speed') {
+            f.abilityAuraColor = '#eab308';
+            f.speedBoostTimer = Math.round((ab.power_value || 2.5) * 30);
+            soundEvents.push({ frame, sound: 'ability', abilityType: 'speed', volume: 0.9 });
+
+            floatingTexts.push({
+              id: `ab_spd_${frame}_${f.id}`,
+              x: f.x,
+              y: f.y - 40,
+              text: `⚡ DASH!`,
+              color: '#eab308',
+              alpha: 1,
+              vy: -2.5,
+              scale: 1.25,
+            });
+          }
+
+          // Reset cooldown (halved in overtime for intense action)
+          f.abilityCooldownTimer = isOvertime
+            ? Math.round(f.abilityCooldownMax * 0.6)
+            : f.abilityCooldownMax;
+        }
+      });
+    }
+
+    // Move Fighters & Circular Wall Bounce
     aliveFighters.forEach((f) => {
       if (f.invulnerableTimer > 0) f.invulnerableTimer--;
       if (f.hitFlash > 0) f.hitFlash--;
+
+      if (f.frozenTimer > 0) {
+        // Frozen: speed is 0, cannot move
+        return;
+      }
 
       if (f.daggerActivated && f.daggerTimer > 0) {
         f.daggerTimer--;
@@ -247,7 +512,7 @@ export function generateArenaSimulation(
 
       if (f.speedBoostTimer > 0) f.speedBoostTimer--;
 
-      const spdMult = f.speedBoostTimer > 0 ? 1.4 : 1.0;
+      const spdMult = f.speedBoostTimer > 0 ? 1.5 : 1.0;
       f.x += f.vx * spdMult;
       f.y += f.vy * spdMult;
 
@@ -286,7 +551,7 @@ export function generateArenaSimulation(
         }
       }
 
-      // Gun firing: Aim directly at the nearest living opponent!
+      // Gun firing: Aim directly at nearest living opponent
       if (f.gunBullets > 0 && rng() < 0.08) {
         let nearestTarget: SimFighter | null = null;
         let nearestDist = Infinity;
@@ -312,11 +577,10 @@ export function generateArenaSimulation(
             vy: Math.sin(angleToOpp) * bulletSpeed,
             ownerId: f.id,
             color: '#38bdf8',
-            damage: 10,
+            damage: 12,
             life: 80,
           });
 
-          // Muzzle flash particles
           for (let k = 0; k < 4; k++) {
             particles.push({
               x: f.x + Math.cos(angleToOpp) * (f.size / 2 + 10),
@@ -332,7 +596,7 @@ export function generateArenaSimulation(
       }
     });
 
-    // Item Pickup (triggers 8s / 240 frames cooldown for NEXT item)
+    // Item Pickup
     for (let i = items.length - 1; i >= 0; i--) {
       const it = items[i];
       for (const f of aliveFighters) {
@@ -346,10 +610,10 @@ export function generateArenaSimulation(
           } else if (it.type === 'dagger') {
             f.hasDagger = true;
             f.daggerActivated = false;
-            f.daggerTimer = 90; // 3 seconds
+            f.daggerTimer = 90;
             floatingTexts.push({ id: `ft_${frame}_${i}`, x: f.x, y: f.y - 50, text: '🗡️ 2X DMG', color: '#f59e0b', alpha: 1, vy: -2.5, scale: 1.2 });
           } else if (it.type === 'gun') {
-            f.gunBullets = 5; // 5 bullets as requested!
+            f.gunBullets = 5;
             floatingTexts.push({ id: `ft_${frame}_${i}`, x: f.x, y: f.y - 50, text: '🔫 5 SHOTS', color: '#38bdf8', alpha: 1, vy: -2.5, scale: 1.2 });
           } else if (it.type === 'shield') {
             f.hasShield = true;
@@ -360,7 +624,6 @@ export function generateArenaSimulation(
           }
 
           items.splice(i, 1);
-          // Set 8-second cooldown (240 frames) before next item spawns!
           nextItemSpawnCooldown = 240;
           break;
         }
@@ -398,7 +661,7 @@ export function generateArenaSimulation(
       }
     }
 
-    // Box to Box Clash
+    // Fighter to Fighter Clash (Proportional distance: (A.size + B.size) / 2)
     for (let i = 0; i < aliveFighters.length; i++) {
       for (let j = i + 1; j < aliveFighters.length; j++) {
         const A = aliveFighters[i];
@@ -440,50 +703,110 @@ export function generateArenaSimulation(
             }
 
             let dmgA = A.damage;
+            if (isOvertime) dmgA *= 2;
             if (A.hasDagger) { dmgA *= 2; A.daggerActivated = true; }
             if (A.specialPower === 'berserker' && A.health / A.maxHealth <= 0.2) dmgA *= 2;
-            if (B.hasShield) { dmgA = 0; B.hasShield = false; }
-            else if (B.specialPower === 'iron_shield' && B.health / B.maxHealth <= 0.5) dmgA = Math.round(dmgA * 0.5);
+
+            // Check B shield
+            if (B.bonusShield > 0) {
+              const absorbed = Math.min(B.bonusShield, dmgA);
+              B.bonusShield -= absorbed;
+              dmgA -= absorbed;
+              floatingTexts.push({ id: `shdA_${frame}`, x: B.x, y: B.y - 30, text: `SHIELD -${absorbed}`, color: '#a855f7', alpha: 1, vy: -2, scale: 1 });
+            } else if (B.hasShield) {
+              dmgA = 0;
+              B.hasShield = false;
+            } else if (B.specialPower === 'iron_shield' && B.health / B.maxHealth <= 0.5) {
+              dmgA = Math.round(dmgA * 0.5);
+            }
 
             let dmgB = B.damage;
+            if (isOvertime) dmgB *= 2;
             if (B.hasDagger) { dmgB *= 2; B.daggerActivated = true; }
             if (B.specialPower === 'berserker' && B.health / B.maxHealth <= 0.2) dmgB *= 2;
-            if (A.hasShield) { dmgB = 0; A.hasShield = false; }
-            else if (A.specialPower === 'iron_shield' && A.health / A.maxHealth <= 0.5) dmgB = Math.round(dmgB * 0.5);
 
-            dmgA = Math.round(dmgA);
-            dmgB = Math.round(dmgB);
+            // Check A shield
+            if (A.bonusShield > 0) {
+              const absorbed = Math.min(A.bonusShield, dmgB);
+              A.bonusShield -= absorbed;
+              dmgB -= absorbed;
+              floatingTexts.push({ id: `shdB_${frame}`, x: A.x, y: A.y - 30, text: `SHIELD -${absorbed}`, color: '#a855f7', alpha: 1, vy: -2, scale: 1 });
+            } else if (A.hasShield) {
+              dmgB = 0;
+              A.hasShield = false;
+            } else if (A.specialPower === 'iron_shield' && A.health / A.maxHealth <= 0.5) {
+              dmgB = Math.round(dmgB * 0.5);
+            }
 
-            B.health = Math.max(0, B.health - dmgA);
-            A.health = Math.max(0, A.health - dmgB);
+            // Apply Damage
+            if (dmgA > 0) {
+              B.health = Math.max(0, B.health - dmgA);
+              floatingTexts.push({ id: `hit_${frame}_${B.id}`, x: B.x, y: B.y - 35, text: `-${dmgA}`, color: '#f87171', alpha: 1, vy: -2, scale: 1.15 });
 
-            if (A.specialPower === 'vampiric' && dmgA > 0) A.health = Math.min(A.maxHealth, A.health + Math.round(dmgA * 0.2));
-            if (B.specialPower === 'vampiric' && dmgB > 0) B.health = Math.min(B.maxHealth, B.health + Math.round(dmgB * 0.2));
-
-            if (dmgA > 0) floatingTexts.push({ id: `dmgA_${frame}`, x: B.x, y: B.y - 45, text: `-${dmgA}`, color: '#ef4444', alpha: 1, vy: -2.5, scale: 1.3 });
-            if (dmgB > 0) floatingTexts.push({ id: `dmgB_${frame}`, x: A.x, y: A.y - 45, text: `-${dmgB}`, color: '#ef4444', alpha: 1, vy: -2.5, scale: 1.3 });
-
-            // Prevent mutual wipeout when only 2 fighters are alive
-            if (aliveFighters.length === 2 && A.health <= 0 && B.health <= 0) {
-              if (dmgA >= dmgB) {
-                A.health = 5;
-              } else {
-                B.health = 5;
+              if (A.specialPower === 'vampiric') {
+                const leech = Math.round(dmgA * 0.2);
+                A.health = Math.min(A.maxHealth, A.health + leech);
+                floatingTexts.push({ id: `vamp_${frame}_${A.id}`, x: A.x, y: A.y - 45, text: `+${leech} 🩸`, color: '#ef4444', alpha: 1, vy: -2.5, scale: 1 });
+              }
+              if (B.specialPower === 'thorns') {
+                const recoil = Math.round(dmgA * 0.3);
+                A.health = Math.max(0, A.health - recoil);
+                floatingTexts.push({ id: `thorn_${frame}_${A.id}`, x: A.x, y: A.y - 35, text: `-${recoil} 🌵`, color: '#eab308', alpha: 1, vy: -2, scale: 1 });
               }
             }
 
-            [A, B].forEach((f) => {
-              if (f.health <= 0) {
-                if (f.specialPower === 'phoenix' && !f.phoenixUsed) {
-                  f.phoenixUsed = true;
-                  f.health = 20;
-                  floatingTexts.push({ id: `phx_${frame}`, x: f.x, y: f.y - 55, text: '🦅 REBORN!', color: '#f59e0b', alpha: 1, vy: -3, scale: 1.3 });
-                } else if (!f.isDead) {
-                  f.isDead = true;
-                  soundEvents.push({ frame, sound: 'explosion', volume: 0.9 });
-                }
+            if (dmgB > 0) {
+              A.health = Math.max(0, A.health - dmgB);
+              floatingTexts.push({ id: `hit_${frame}_${A.id}`, x: A.x, y: A.y - 35, text: `-${dmgB}`, color: '#f87171', alpha: 1, vy: -2, scale: 1.15 });
+
+              if (B.specialPower === 'vampiric') {
+                const leech = Math.round(dmgB * 0.2);
+                B.health = Math.min(B.maxHealth, B.health + leech);
+                floatingTexts.push({ id: `vamp_${frame}_${B.id}`, x: B.x, y: B.y - 45, text: `+${leech} 🩸`, color: '#ef4444', alpha: 1, vy: -2.5, scale: 1 });
               }
-            });
+              if (A.specialPower === 'thorns') {
+                const recoil = Math.round(dmgB * 0.3);
+                B.health = Math.max(0, B.health - recoil);
+                floatingTexts.push({ id: `thorn_${frame}_${B.id}`, x: B.x, y: B.y - 35, text: `-${recoil} 🌵`, color: '#eab308', alpha: 1, vy: -2, scale: 1 });
+              }
+            }
+
+            // Phoenix Rebirth
+            if (A.health <= 0 && A.specialPower === 'phoenix' && !A.phoenixUsed) {
+              A.phoenixUsed = true;
+              A.health = 20;
+              floatingTexts.push({ id: `phx_${frame}_${A.id}`, x: A.x, y: A.y - 50, text: '🦅 REBIRTH!', color: '#f59e0b', alpha: 1, vy: -3, scale: 1.3 });
+            }
+            if (B.health <= 0 && B.specialPower === 'phoenix' && !B.phoenixUsed) {
+              B.phoenixUsed = true;
+              B.health = 20;
+              floatingTexts.push({ id: `phx_${frame}_${B.id}`, x: B.x, y: B.y - 50, text: '🦅 REBIRTH!', color: '#f59e0b', alpha: 1, vy: -3, scale: 1.3 });
+            }
+
+            // Check eliminations
+            if (A.health <= 0 && !A.isDead) {
+              A.isDead = true;
+              soundEvents.push({ frame, sound: 'explosion', volume: 1.0 });
+            }
+            if (B.health <= 0 && !B.isDead) {
+              B.isDead = true;
+              soundEvents.push({ frame, sound: 'explosion', volume: 1.0 });
+            }
+
+            // Sparks
+            const midX = (A.x + B.x) / 2;
+            const midY = (A.y + B.y) / 2;
+            for (let k = 0; k < 8; k++) {
+              particles.push({
+                x: midX,
+                y: midY,
+                vx: (rng() - 0.5) * 6,
+                vy: (rng() - 0.5) * 6,
+                color: '#facc15',
+                radius: rng() * 4 + 2,
+                alpha: 1,
+              });
+            }
           }
         }
       }
@@ -512,13 +835,14 @@ export function generateArenaSimulation(
       particles: particles.map((p) => ({ ...p })),
       winner: winner ? { ...winner } : null,
       aliveCount: aliveFighters.length,
+      isOvertime,
     });
   }
 
   const finalSeconds = Math.max(15, Math.ceil(frames.length / 30));
   const targetFrameCount = finalSeconds * 30;
 
-  // Pad the final victory frame so every rendered frame has valid data up to targetFrameCount
+  // Pad final victory frames so all frames up to targetFrameCount are valid
   while (frames.length < targetFrameCount && frames.length > 0) {
     const lastFrame = frames[frames.length - 1];
     frames.push({

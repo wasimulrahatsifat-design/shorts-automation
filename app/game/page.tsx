@@ -25,6 +25,17 @@ import {
 export { SPECIAL_POWERS, COLOR_SWATCHES };
 export type { ContestantConfig };
 
+const PRESET_ABILITIES = [
+  { name: 'Repulsor Blast', icon: '💥', type: 'damage' as const, cooldown_seconds: 5, power_value: 35, description: 'Fires energy blast' },
+  { name: 'Smoke Shield', icon: '🛡️', type: 'shield' as const, cooldown_seconds: 6, power_value: 40, description: 'Absorbs 40 damage' },
+  { name: 'Web Freeze', icon: '❄️', type: 'freeze' as const, cooldown_seconds: 7, power_value: 2.2, description: 'Freezes target in web' },
+  { name: 'Solar Surge', icon: '⚡', type: 'speed' as const, cooldown_seconds: 4, power_value: 2.5, description: 'Hyper sonic rush' },
+  { name: 'Kamehameha', icon: '☄️', type: 'damage' as const, cooldown_seconds: 6, power_value: 45, description: 'Massive energy beam' },
+  { name: 'Shadow Clone', icon: '⚡', type: 'speed' as const, cooldown_seconds: 5, power_value: 2.5, description: 'Deceptive speed dash' },
+  { name: 'Gear Blast', icon: '💥', type: 'damage' as const, cooldown_seconds: 5, power_value: 38, description: 'Stretchy punch impact' },
+  { name: 'Bankai Slash', icon: '🗡️', type: 'damage' as const, cooldown_seconds: 5, power_value: 42, description: 'Cuts through defenses' },
+];
+
 const PRESET_TOPICS = [
   { topic: 'Marvel vs DC', names: ['Iron Man', 'Batman', 'Spider-Man', 'Superman'] },
   { topic: 'Anime Titans', names: ['Goku', 'Naruto', 'Luffy', 'Ichigo'] },
@@ -95,6 +106,7 @@ export default function GamePage() {
             damage: 25,
             speed: 6.5,
             special_power: SPECIAL_POWERS[(i % (SPECIAL_POWERS.length - 1)) + 1].id,
+            special_ability: PRESET_ABILITIES[i % PRESET_ABILITIES.length],
           });
         }
       }
@@ -125,7 +137,7 @@ export default function GamePage() {
     return audioCtxRef.current;
   };
 
-  const playSound = (type: 'bounce' | 'hit' | 'heal' | 'item' | 'gun' | 'explosion' | 'victory') => {
+  const playSound = (type: 'bounce' | 'hit' | 'heal' | 'item' | 'gun' | 'explosion' | 'victory' | 'ability') => {
     if (!soundEnabled) return;
     try {
       const ctx = getAudioContext();
@@ -225,6 +237,20 @@ export default function GamePage() {
           osc.start(ctx.currentTime + i * 0.1);
           osc.stop(ctx.currentTime + i * 0.1 + 0.35);
         });
+      } else if (type === 'ability') {
+        [587.33, 880, 1174.66].forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.04);
+          osc.frequency.exponentialRampToValueAtTime(freq * 1.5, ctx.currentTime + idx * 0.04 + 0.15);
+          gain.gain.setValueAtTime(0.35 * soundVolume, ctx.currentTime + idx * 0.04);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.04 + 0.2);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(ctx.currentTime + idx * 0.04);
+          osc.stop(ctx.currentTime + idx * 0.04 + 0.2);
+        });
       }
     } catch (e) {}
   };
@@ -254,8 +280,9 @@ export default function GamePage() {
         damage: c.damage,
         speed: c.speed,
         special_power: c.special_power,
+        special_ability: c.special_ability,
       })),
-      1800,
+      3600,
       battleSeedRef.current
     );
 
@@ -641,20 +668,20 @@ export default function GamePage() {
       ctx.restore();
 
       const textX = thumbSize + 24;
-      ctx.font = '900 22px "Montserrat", sans-serif';
+      ctx.font = count <= 4 ? '900 28px "Montserrat", sans-serif' : '900 24px "Montserrat", sans-serif';
       ctx.fillStyle = f.isDead ? '#64748b' : '#ffffff';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
 
-      const powerDef = SPECIAL_POWERS.find((p) => p.id === f.specialPower);
-      const powerIcon = powerDef ? powerDef.icon : '';
+      const abIcon = f.specialAbility ? f.specialAbility.icon : '';
       let itemTag = '';
-      if (f.hasShield) itemTag += ' 🛡️';
+      if (f.bonusShield > 0 || f.hasShield) itemTag += ' 🛡️';
       if (f.hasDagger) itemTag += ' 🗡️';
       if (f.gunBullets > 0) itemTag += ` 🔫x${f.gunBullets}`;
       if (f.speedBoostTimer > 0) itemTag += ' ⚡';
+      if (f.frozenTimer > 0) itemTag += ' ❄️';
 
-      ctx.fillText(`${f.name} ${powerIcon}${itemTag}`, textX, 12);
+      ctx.fillText(`${f.name} ${abIcon}${itemTag}`, textX, 10);
 
       ctx.font = '800 18px "Montserrat", sans-serif';
       ctx.fillStyle = f.isDead ? '#ef4444' : '#38bdf8';
@@ -933,8 +960,9 @@ export default function GamePage() {
           damage: c.damage,
           speed: c.speed,
           special_power: c.special_power,
+          special_ability: c.special_ability,
         })),
-        1800,
+        3600,
         currentSeed
       );
 
@@ -952,6 +980,7 @@ export default function GamePage() {
           damage: c.damage,
           speed: c.speed,
           special_power: c.special_power,
+          special_ability: c.special_ability,
         })),
         duration_seconds: dynamicDurationSeconds,
         seed: currentSeed,
@@ -1204,6 +1233,92 @@ export default function GamePage() {
                           onChange={(e) => updateContestant(idx, { damage: Math.max(1, Number(e.target.value) || 1) })}
                           className="w-12 bg-transparent text-rose-400 font-bold text-right focus:outline-none"
                         />
+                      </div>
+                    </div>
+
+                    {/* Special Ability Editor */}
+                    <div className="bg-slate-950/70 p-2 rounded-xl border border-slate-800/80 space-y-1.5 mt-1">
+                      <div className="flex items-center justify-between text-[11px] font-bold">
+                        <span className="text-cyan-400 flex items-center gap-1">
+                          <span>✨</span> SPECIAL ABILITY
+                        </span>
+                        <div className="flex items-center gap-1">
+                          {['⚡', '💥', '🛡️', '❄️', '💚', '🩸', '☄️', '🌪️', '💣', '🗡️'].map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              onClick={() => {
+                                const cur = fighter.special_ability || { name: 'Power Strike', icon: '⚡', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                                updateContestant(idx, { special_ability: { ...cur, icon: emoji } });
+                              }}
+                              className={`text-[12px] px-1 py-0.5 rounded hover:scale-125 transition ${
+                                fighter.special_ability?.icon === emoji ? 'bg-cyan-500/30 ring-1 ring-cyan-400' : 'opacity-70'
+                              }`}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-1.5 text-[11px]">
+                        <input
+                          type="text"
+                          placeholder="Ability Name"
+                          value={fighter.special_ability?.name || ''}
+                          onChange={(e) => {
+                            const cur = fighter.special_ability || { name: '', icon: '⚡', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                            updateContestant(idx, { special_ability: { ...cur, name: e.target.value } });
+                          }}
+                          className="px-2 py-1 bg-slate-900 border border-slate-800 rounded-lg text-white font-bold placeholder-slate-600 focus:outline-none focus:border-cyan-500"
+                        />
+
+                        <select
+                          value={fighter.special_ability?.type || 'damage'}
+                          onChange={(e) => {
+                            const cur = fighter.special_ability || { name: 'Power Strike', icon: '⚡', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                            updateContestant(idx, { special_ability: { ...cur, type: e.target.value as any } });
+                          }}
+                          className="px-1.5 py-1 bg-slate-900 border border-slate-800 rounded-lg text-cyan-300 font-bold focus:outline-none"
+                        >
+                          <option value="damage">💥 Damage</option>
+                          <option value="shield">🛡️ Shield</option>
+                          <option value="heal">💚 Heal</option>
+                          <option value="freeze">❄️ Freeze</option>
+                          <option value="speed">⚡ Speed</option>
+                        </select>
+
+                        <div className="flex items-center gap-1 bg-slate-900 px-2 py-1 rounded-lg border border-slate-800">
+                          <span className="text-slate-500">CD:</span>
+                          <input
+                            type="number"
+                            min="2"
+                            max="20"
+                            step="1"
+                            value={fighter.special_ability?.cooldown_seconds || 5}
+                            onChange={(e) => {
+                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '⚡', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                              updateContestant(idx, { special_ability: { ...cur, cooldown_seconds: Math.max(2, Number(e.target.value) || 2) } });
+                            }}
+                            className="w-8 bg-transparent text-amber-300 font-bold text-right focus:outline-none"
+                          />
+                          <span className="text-slate-500">s</span>
+                        </div>
+
+                        <div className="flex items-center gap-1 bg-slate-900 px-2 py-1 rounded-lg border border-slate-800">
+                          <span className="text-slate-500">PWR:</span>
+                          <input
+                            type="number"
+                            min="1"
+                            max="100"
+                            value={fighter.special_ability?.power_value || 30}
+                            onChange={(e) => {
+                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '⚡', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                              updateContestant(idx, { special_ability: { ...cur, power_value: Math.max(1, Number(e.target.value) || 1) } });
+                            }}
+                            className="w-10 bg-transparent text-pink-400 font-bold text-right focus:outline-none"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>

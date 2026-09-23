@@ -26,6 +26,15 @@ export const COLOR_SWATCHES = [
   { name: 'Cyan', hex: '#06b6d4', textDark: false },
 ];
 
+export interface SpecialAbility {
+  name: string;
+  icon: string;
+  type: 'damage' | 'shield' | 'heal' | 'freeze' | 'speed';
+  cooldown_seconds: number;
+  power_value: number;
+  description?: string;
+}
+
 export interface ContestantConfig {
   id: string;
   name: string;
@@ -35,6 +44,7 @@ export interface ContestantConfig {
   damage: number;
   speed: number;
   special_power: string;
+  special_ability?: SpecialAbility;
 }
 
 export type ArenaItemType = 'health' | 'dagger' | 'gun' | 'shield' | 'speed';
