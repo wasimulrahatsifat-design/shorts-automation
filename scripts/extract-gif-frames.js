@@ -31,12 +31,24 @@ async function extractGifFrames() {
     }
     await Promise.all(promises);
     
-    // Write metadata file with total frame count
+    // Calculate optimal frame hold for 30fps video
+    const avgDelay = Array.isArray(meta.delay) && meta.delay.length > 0
+      ? meta.delay.reduce((a, b) => a + b, 0) / meta.delay.length
+      : 60;
+    // In 30fps video, 1 frame = 33.33ms
+    const frameHold = Math.max(1, Math.round(avgDelay / 33.33));
+
+    // Write metadata file with total frame count and frameHold
     fs.writeFileSync(
       path.join(framesDir, 'metadata.json'), 
-      JSON.stringify({ frameCount: pageCount, width: meta.width, height: meta.pageHeight || meta.height }, null, 2)
+      JSON.stringify({ 
+        frameCount: pageCount, 
+        frameHold,
+        width: meta.width, 
+        height: meta.pageHeight || meta.height 
+      }, null, 2)
     );
-    console.log(`[extract-gif-frames] Successfully extracted ${pageCount} frames to public/thinking_frames/`);
+    console.log(`[extract-gif-frames] Successfully extracted ${pageCount} frames (frameHold=${frameHold}) to public/thinking_frames/`);
   } catch (err) {
     console.error('[extract-gif-frames] Error extracting frames:', err.message);
   }

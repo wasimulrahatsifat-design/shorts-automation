@@ -1,5 +1,6 @@
 {
-  "frameCount": 4,
-  "width": 500,
-  "height": 270
+  "frameCount": 100,
+  "frameHold": 2,
+  "width": 460,
+  "height": 259
 }

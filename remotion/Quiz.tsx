@@ -1,6 +1,7 @@
 import React from 'react';
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig, Sequence, Audio, Img, Series, staticFile } from 'remotion';
 import { TypewriterText } from './TypewriterText';
+import thinkingMetadata from '../public/thinking_frames/metadata.json';
 
 interface Question {
   question: string;
@@ -80,9 +81,9 @@ const ThinkingAnimation: React.FC<{ thinkingGifUrl?: string }> = ({ thinkingGifU
   }
 
   // Smooth, frame-synchronized looping of thinking animation frames
-  // Hold each frame for 8 video frames (~0.27s), complete 4-frame cycle is ~1.07s
-  const frameHold = 8;
-  const frameIndex = Math.floor(frame / frameHold) % 4;
+  const totalFrames = (thinkingMetadata as any)?.frameCount || 1;
+  const frameHold = (thinkingMetadata as any)?.frameHold || 2;
+  const frameIndex = Math.floor(frame / frameHold) % totalFrames;
   const frameSrc = staticFile(`thinking_frames/frame_${frameIndex}.png`);
 
   return (
