@@ -32,18 +32,18 @@ async function main() {
   if (props.data_json?.bg_music_url) {
     const bgmUrl = props.data_json.bg_music_url;
     if (bgmUrl.includes('krtdupjglmlhumcbsxke.supabase.co')) {
-      console.warn(`[Asset Guard] Detected restricted Supabase URL in bg_music_url: ${bgmUrl}. Replacing with default 'bg_music_chill.mp3'.`);
-      props.data_json.bg_music_url = 'bg_music_chill.mp3';
+      console.warn(`[Asset Guard] Detected restricted Supabase URL in bg_music_url: ${bgmUrl}. Replacing with default '/audio/lofi_chill.mp3'.`);
+      props.data_json.bg_music_url = '/audio/lofi_chill.mp3';
     } else if (bgmUrl.startsWith('http')) {
       try {
         const check = await fetch(bgmUrl, { method: 'HEAD' });
         if (!check.ok) {
-          console.warn(`[Asset Guard] bg_music_url returned status ${check.status}. Replacing with default 'bg_music_chill.mp3'.`);
-          props.data_json.bg_music_url = 'bg_music_chill.mp3';
+          console.warn(`[Asset Guard] bg_music_url returned status ${check.status}. Replacing with default '/audio/lofi_chill.mp3'.`);
+          props.data_json.bg_music_url = '/audio/lofi_chill.mp3';
         }
       } catch (e) {
-        console.warn(`[Asset Guard] Failed to reach bg_music_url (${e.message}). Replacing with default 'bg_music_chill.mp3'.`);
-        props.data_json.bg_music_url = 'bg_music_chill.mp3';
+        console.warn(`[Asset Guard] Failed to reach bg_music_url (${e.message}). Replacing with default '/audio/lofi_chill.mp3'.`);
+        props.data_json.bg_music_url = '/audio/lofi_chill.mp3';
       }
     }
   }
