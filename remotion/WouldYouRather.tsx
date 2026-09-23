@@ -26,6 +26,9 @@ export interface WouldYouRatherJson {
 
 const resolveAudioUrl = (url?: string) => {
   if (!url) return '';
+  if (url.includes('krtdupjglmlhumcbsxke.supabase.co')) {
+    return staticFile('bg_music_chill.mp3');
+  }
   if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
     return url;
   }

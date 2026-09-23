@@ -22,11 +22,47 @@ async function main() {
 
   const { video: row, client: videoClient } = found;
 
-  // 2. Prepare props for Remotion
+  // 2. Prepare and sanitize props for Remotion
   const props = {
     topic: row.topic,
-    data_json: row.data_json
+    data_json: { ...row.data_json }
   };
+
+  // Asset Guard: Validate media URLs to protect against 402/inaccessible files crashing Remotion
+  if (props.data_json?.bg_music_url) {
+    const bgmUrl = props.data_json.bg_music_url;
+    if (bgmUrl.includes('krtdupjglmlhumcbsxke.supabase.co')) {
+      console.warn(`[Asset Guard] Detected restricted Supabase URL in bg_music_url: ${bgmUrl}. Replacing with default 'bg_music_chill.mp3'.`);
+      props.data_json.bg_music_url = 'bg_music_chill.mp3';
+    } else if (bgmUrl.startsWith('http')) {
+      try {
+        const check = await fetch(bgmUrl, { method: 'HEAD' });
+        if (!check.ok) {
+          console.warn(`[Asset Guard] bg_music_url returned status ${check.status}. Replacing with default 'bg_music_chill.mp3'.`);
+          props.data_json.bg_music_url = 'bg_music_chill.mp3';
+        }
+      } catch (e) {
+        console.warn(`[Asset Guard] Failed to reach bg_music_url (${e.message}). Replacing with default 'bg_music_chill.mp3'.`);
+        props.data_json.bg_music_url = 'bg_music_chill.mp3';
+      }
+    }
+  }
+
+  if (Array.isArray(props.data_json?.tts_urls)) {
+    props.data_json.tts_urls = props.data_json.tts_urls.filter(url => {
+      if (url && typeof url === 'string' && url.includes('krtdupjglmlhumcbsxke.supabase.co')) {
+        console.warn(`[Asset Guard] Filtering out restricted Supabase tts_url: ${url}`);
+        return false;
+      }
+      return Boolean(url);
+    });
+  }
+
+  if (props.data_json?.tts_url && typeof props.data_json.tts_url === 'string' && props.data_json.tts_url.includes('krtdupjglmlhumcbsxke.supabase.co')) {
+    console.warn(`[Asset Guard] Clearing restricted Supabase tts_url: ${props.data_json.tts_url}`);
+    props.data_json.tts_url = null;
+  }
+
   const propsPath = path.join(process.cwd(), 'props.json');
   fs.writeFileSync(propsPath, JSON.stringify(props));
 

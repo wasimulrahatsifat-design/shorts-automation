@@ -27,6 +27,9 @@ export interface QuizJson {
 
 const resolveAudioUrl = (url?: string) => {
   if (!url) return '';
+  if (url.includes('krtdupjglmlhumcbsxke.supabase.co')) {
+    return staticFile('bg_music_funny.mp3');
+  }
   if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
     return url;
   }

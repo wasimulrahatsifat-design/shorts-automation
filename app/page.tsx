@@ -549,12 +549,10 @@ export default function Home() {
 
   const fetchVideos = async () => {
     try {
-      const { data, error } = await supabase
-        .from('shorts_queue')
-        .select('id, topic, status, video_url, created_at, data_json')
-        .order('created_at', { ascending: false });
-      if (!error && data) {
-        const mapped: VideoItem[] = data.map((item: any) => ({
+      const res = await fetch('/api/videos');
+      const json = await res.json();
+      if (res.ok && json.data) {
+        const mapped: VideoItem[] = json.data.map((item: any) => ({
           id: item.id,
           topic: item.topic,
           status: item.status,
