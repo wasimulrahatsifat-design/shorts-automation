@@ -1,9 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { findVideoAcrossProjects, supabase } from '@/lib/supabase';
 
 export async function DELETE(
   request: Request,
@@ -12,8 +8,11 @@ export async function DELETE(
   try {
     const { id } = await params;
 
+    const found = await findVideoAcrossProjects(id);
+    const client = found ? found.client : supabase;
+
     // 1. Fetch lightweight file reference (best effort)
-    const { data: video } = await supabase
+    const { data: video } = await client
       .from('shorts_queue')
       .select('video_url, data_json->tts_url')
       .eq('id', id)
@@ -33,7 +32,7 @@ export async function DELETE(
 
     // 2. Delete files from Storage (best effort)
     try {
-      await supabase.storage
+      await client.storage
         .from('shorts')
         .remove(filesToDelete);
     } catch (storageError) {
@@ -41,7 +40,7 @@ export async function DELETE(
     }
 
     // 3. Delete row from Database
-    const { error: dbError } = await supabase
+    const { error: dbError } = await client
       .from('shorts_queue')
       .delete()
       .eq('id', id);

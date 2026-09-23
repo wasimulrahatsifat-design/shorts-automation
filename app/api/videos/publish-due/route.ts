@@ -1,10 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { Octokit } from 'octokit';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { queryAllProjectsVideos, findVideoAcrossProjects } from '@/lib/supabase';
 
 const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN,
@@ -19,14 +15,16 @@ export async function POST(request: Request) {
     }
 
     const now = new Date();
-    // Fetch all videos that might have due schedules
-    const { data: videos, error } = await supabase
-      .from('shorts_queue')
-      .select('*')
-      .not('video_url', 'is', null)
-      .in('status', ['Scheduled', 'Needs_Approval']);
+    // Fetch all videos that might have due schedules across all configured projects
+    const videos = await queryAllProjectsVideos((client) =>
+      client
+        .from('shorts_queue')
+        .select('*')
+        .not('video_url', 'is', null)
+        .in('status', ['Scheduled', 'Needs_Approval'])
+    );
 
-    if (error || !videos) {
+    if (!videos || videos.length === 0) {
       return NextResponse.json({ success: true, triggered: 0 });
     }
 
@@ -34,12 +32,9 @@ export async function POST(request: Request) {
 
     for (const v of videos) {
       // Re-fetch fresh state for this video to avoid race conditions between concurrent requests
-      const { data: freshV } = await supabase
-        .from('shorts_queue')
-        .select('*')
-        .eq('id', v.id)
-        .single();
-      const currentV = freshV || v;
+      const found = await findVideoAcrossProjects(v.id);
+      const currentV = found?.video || v;
+      const videoClient = found?.client;
       const dataJson = currentV.data_json || {};
 
       const ytStatus = dataJson.youtube_status;
@@ -63,10 +58,12 @@ export async function POST(request: Request) {
             youtube_uploading_at: now.toISOString(),
             youtube_dispatched_at: now.toISOString(),
           };
-          await supabase
-            .from('shorts_queue')
-            .update({ data_json: updated })
-            .eq('id', currentV.id);
+          if (videoClient) {
+            await videoClient
+              .from('shorts_queue')
+              .update({ data_json: updated })
+              .eq('id', currentV.id);
+          }
 
           await octokit.rest.actions.createWorkflowDispatch({
             owner,
@@ -95,10 +92,12 @@ export async function POST(request: Request) {
             meta_uploading_at: now.toISOString(),
             meta_dispatched_at: now.toISOString(),
           };
-          await supabase
-            .from('shorts_queue')
-            .update({ data_json: updated })
-            .eq('id', currentV.id);
+          if (videoClient) {
+            await videoClient
+              .from('shorts_queue')
+              .update({ data_json: updated })
+              .eq('id', currentV.id);
+          }
 
           await octokit.rest.actions.createWorkflowDispatch({
             owner,

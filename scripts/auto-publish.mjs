@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseConfigs, getClientForConfig, findVideoAcrossProjects, getActiveSupabase } from './supabase-helper.mjs';
 import { google } from 'googleapis';
 import fs from 'fs';
 import path from 'path';
@@ -230,15 +230,8 @@ async function uploadToYouTube(video, localFilePath, youtube, youtubeAuthError) 
 }
 
 async function main() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.error('Missing required Supabase environment variables.');
-    process.exit(1);
-  }
-
-  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+  const activeObj = getActiveSupabase();
+  const defaultSupabase = activeObj.client;
 
   const targetVideoId = (process.env.TARGET_VIDEO_ID || '').trim() || null;
   const rawTargetPlatform = (process.env.TARGET_PLATFORM || '').toLowerCase().trim();
@@ -247,40 +240,41 @@ async function main() {
   const now = new Date();
   console.log(`Auto-Publish Config: targetVideoId=${targetVideoId || 'any scheduled'}, targetPlatform=${targetPlatform}, forcePublish=${forcePublish}`);
 
-  // 1. Fetch videos to process
+  // 1. Fetch videos to process across configured Supabase projects
   let videos = [];
   if (targetVideoId) {
-    console.log(`Fetching specific video [${targetVideoId}]...`);
-    const { data, error } = await supabase
-      .from('shorts_queue')
-      .select('*')
-      .eq('id', targetVideoId);
-
-    if (error) {
-      console.error('Error fetching target video:', error);
-      process.exit(1);
-    }
-    const found = data && data[0];
-    if (!found) {
+    console.log(`Fetching specific video [${targetVideoId}] across configured projects...`);
+    const found = await findVideoAcrossProjects(targetVideoId);
+    if (!found || !found.video) {
       console.log(`Target video [${targetVideoId}] not found. Exiting gracefully.`);
       process.exit(0);
     }
-
-    videos = [found];
+    const v = found.video;
+    v._client = found.client;
+    videos = [v];
   } else {
-    // Scheduled Cron Job Mode: Find videos that are in a scheduled state
-    console.log(`Checking for scheduled videos due to be published at or before ${now.toISOString()}...`);
-    const { data, error } = await supabase
-      .from('shorts_queue')
-      .select('*')
-      .not('video_url', 'is', null)
-      .in('status', ['Scheduled', 'Needs_Approval']);
+    // Scheduled Cron Job Mode: Find videos across all configured projects
+    console.log(`Checking for scheduled videos due to be published at or before ${now.toISOString()} across all configured projects...`);
+    const configs = getSupabaseConfigs();
+    for (const cfg of configs) {
+      try {
+        const cl = getClientForConfig(cfg);
+        const { data, error } = await cl
+          .from('shorts_queue')
+          .select('*')
+          .not('video_url', 'is', null)
+          .in('status', ['Scheduled', 'Needs_Approval']);
 
-    if (error) {
-      console.error('Error fetching scheduled videos:', error);
-      process.exit(1);
+        if (!error && Array.isArray(data)) {
+          for (const item of data) {
+            item._client = cl;
+            videos.push(item);
+          }
+        }
+      } catch (e) {
+        // Skip failed project
+      }
     }
-    videos = data || [];
   }
 
   if (!videos || videos.length === 0) {
@@ -329,13 +323,8 @@ async function main() {
 
   async function getFreshVideoData(id) {
     try {
-      const { data, error } = await supabase
-        .from('shorts_queue')
-        .select('*')
-        .eq('id', id)
-        .single();
-      if (error || !data) return null;
-      return data;
+      const found = await findVideoAcrossProjects(id);
+      return found ? found.video : null;
     } catch (e) {
       return null;
     }
@@ -344,6 +333,7 @@ async function main() {
   for (const rawVideo of videos) {
     const fresh = await getFreshVideoData(rawVideo.id);
     const video = fresh || rawVideo;
+    const videoClient = rawVideo._client || defaultSupabase;
 
     console.log(`\n======================================================`);
     console.log(`Processing video: [${video.id}] "${video.topic}"`);
@@ -476,7 +466,7 @@ async function main() {
               // Immediate DB update to prevent any concurrent runner from uploading YouTube again
               const currentFresh = await getFreshVideoData(video.id);
               const curData = currentFresh?.data_json || {};
-              await supabase
+              await videoClient
                 .from('shorts_queue')
                 .update({
                   data_json: {
@@ -609,7 +599,7 @@ async function main() {
       console.log(`\nUpload summary for [${video.id}]:`, uploadResults);
       console.log(`New platform statuses: YouTube=${updatedDataJson.youtube_status || 'Pending'}, Meta=${updatedDataJson.meta_status || 'Pending'}, Overall=${overallStatus}`);
 
-      const { error: updateError } = await supabase
+      const { error: updateError } = await videoClient
         .from('shorts_queue')
         .update({
           status: overallStatus,

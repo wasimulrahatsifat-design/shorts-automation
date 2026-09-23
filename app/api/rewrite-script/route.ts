@@ -1,12 +1,9 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { Octokit } from 'octokit';
 import { generateGeminiJson } from '@/lib/gemini';
 import { fetchElevenLabsTTS } from '@/lib/elevenlabs';
+import { findVideoAcrossProjects, uploadToStorageWithFailover } from '@/lib/supabase';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 
 // No image generation logic here anymore
@@ -19,16 +16,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Missing parameters' }, { status: 400 });
     }
 
-    // 1. Fetch current row
-    const { data: row, error: fetchError } = await supabase
-      .from('shorts_queue')
-      .select('*')
-      .eq('id', videoId)
-      .single();
-
-    if (fetchError || !row) {
+    // 1. Fetch current row across configured projects
+    const found = await findVideoAcrossProjects(videoId);
+    if (!found || !found.video) {
       throw new Error('Video not found');
     }
+    const { video: row, client: videoClient } = found;
 
     const currentScript = row.data_json.script;
     const currentItems = JSON.stringify(row.data_json.items || []);
@@ -84,9 +77,8 @@ export async function POST(request: Request) {
           const elResponse = await fetchElevenLabs(text);
           const audioBuffer = Buffer.from(await elResponse.arrayBuffer());
           const ttsFileName = `tts_${crypto.randomUUID()}.mp3`;
-          await supabase.storage.from('shorts').upload(ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
-          const { data: publicUrlData } = supabase.storage.from('shorts').getPublicUrl(ttsFileName);
-          return publicUrlData.publicUrl;
+          const { publicUrl } = await uploadToStorageWithFailover('shorts', ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
+          return publicUrl;
         };
 
         for (const q of newItems) {
@@ -106,9 +98,8 @@ export async function POST(request: Request) {
           const elResponse = await fetchElevenLabs(text);
           const audioBuffer = Buffer.from(await elResponse.arrayBuffer());
           const ttsFileName = `tts_${crypto.randomUUID()}.mp3`;
-          await supabase.storage.from('shorts').upload(ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
-          const { data: publicUrlData } = supabase.storage.from('shorts').getPublicUrl(ttsFileName);
-          return publicUrlData.publicUrl;
+          const { publicUrl } = await uploadToStorageWithFailover('shorts', ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
+          return publicUrl;
         };
 
         for (const s of newItems) {
@@ -132,11 +123,8 @@ export async function POST(request: Request) {
         if (!elResponse.ok) throw new Error(`ElevenLabs API error: ${elResponse.statusText}`);
         const audioBuffer = Buffer.from(await elResponse.arrayBuffer());
         const ttsFileName = `tts_${crypto.randomUUID()}.mp3`;
-        const { error: uploadError } = await supabase.storage.from('shorts').upload(ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
-        if (!uploadError) {
-          const { data: publicUrlData } = supabase.storage.from('shorts').getPublicUrl(ttsFileName);
-          tts_url = publicUrlData.publicUrl;
-        }
+        const { publicUrl } = await uploadToStorageWithFailover('shorts', ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
+        tts_url = publicUrl;
       }
     } catch (ttsError) {
       console.error('TTS Generation failed:', ttsError);
@@ -152,7 +140,7 @@ export async function POST(request: Request) {
       duration_seconds: parseInt(targetDuration)
     };
 
-    const { error: updateError } = await supabase
+    const { error: updateError } = await videoClient
       .from('shorts_queue')
       .update({
         data_json: updatedDataJson,

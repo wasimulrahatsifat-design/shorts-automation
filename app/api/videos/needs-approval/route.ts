@@ -1,27 +1,19 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { queryAllProjectsVideos } from '@/lib/supabase';
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const platform = searchParams.get('platform') || 'all';
 
-    // Fetch videos that have a rendered video_url
-    const { data, error } = await supabase
-      .from('shorts_queue')
-      .select('id, topic, status, video_url, created_at, scheduled_time, data_json')
-      .not('video_url', 'is', null)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      throw error;
-    }
-
-    const allVideos = data || [];
+    // Fetch videos that have a rendered video_url across all configured projects
+    const allVideos = await queryAllProjectsVideos((client) =>
+      client
+        .from('shorts_queue')
+        .select('id, topic, status, video_url, created_at, scheduled_time, data_json')
+        .not('video_url', 'is', null)
+        .order('created_at', { ascending: false })
+    );
 
     // Helper to determine if a video needs approval for YouTube
     const isYouTubePending = (v: any) => {

@@ -1,32 +1,26 @@
-import { createClient } from '@supabase/supabase-js';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import { findVideoAcrossProjects, uploadToStorageWithFailover, getActiveSupabase } from './supabase-helper.mjs';
 
 async function main() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const videoId = process.env.VIDEO_ID;
 
-  if (!supabaseUrl || !supabaseAnonKey || !videoId) {
-    console.error('Missing required environment variables.');
+  if (!videoId) {
+    console.error('Missing required VIDEO_ID environment variable.');
     process.exit(1);
   }
 
-  const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-  // 1. Fetch data from Supabase
+  // 1. Fetch data from Supabase across configured projects
   console.log(`Fetching data for video ID: ${videoId}`);
-  const { data: row, error: fetchError } = await supabase
-    .from('shorts_queue')
-    .select('topic, data_json')
-    .eq('id', videoId)
-    .single();
+  const found = await findVideoAcrossProjects(videoId);
 
-  if (fetchError || !row) {
-    console.error('Error fetching data:', fetchError);
+  if (!found || !found.video) {
+    console.error(`Error: Video [${videoId}] not found across configured Supabase projects.`);
     process.exit(1);
   }
+
+  const { video: row, client: videoClient } = found;
 
   // 2. Prepare props for Remotion
   const props = {
@@ -65,47 +59,24 @@ async function main() {
     process.exit(1);
   }
 
-  // 4. Upload to Supabase Storage with retry
+  // 4. Upload to Supabase Storage with failover
   console.log('Uploading to Supabase Storage...');
   const fileBuffer = fs.readFileSync(outPath);
   const fileName = `${videoId}.mp4`;
   
-  let uploadError = null;
-  const maxRetries = 5;
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    const { error } = await supabase.storage
-      .from('shorts')
-      .upload(fileName, fileBuffer, {
-        contentType: 'video/mp4',
-        upsert: true,
-      });
+  const { publicUrl, client: storageClient } = await uploadToStorageWithFailover(
+    'shorts',
+    fileName,
+    fileBuffer,
+    { contentType: 'video/mp4', upsert: true }
+  );
 
-    if (!error) {
-      uploadError = null;
-      console.log(`Upload succeeded on attempt ${attempt}`);
-      break;
-    }
-
-    uploadError = error;
-    console.warn(`Upload attempt ${attempt}/${maxRetries} failed:`, error.message || error);
-    if (attempt < maxRetries) {
-      const delayMs = Math.min(2000 * Math.pow(2, attempt - 1), 15000);
-      console.log(`Waiting ${delayMs}ms before retrying upload...`);
-      await new Promise(r => setTimeout(r, delayMs));
-    }
-  }
-
-  if (uploadError) {
-    console.error('Failed to upload video after all retries:', uploadError);
-    process.exit(1);
-  }
+  console.log(`Video uploaded successfully to Supabase Storage: ${publicUrl}`);
 
   // 5. Update Supabase Row
-  const { data: publicUrlData } = supabase.storage.from('shorts').getPublicUrl(fileName);
-  const publicUrl = publicUrlData.publicUrl;
-
   console.log('Updating database row...');
-  const { error: updateError } = await supabase
+  // Update on the database where the video belongs
+  const { error: updateError } = await videoClient
     .from('shorts_queue')
     .update({
       video_url: publicUrl,

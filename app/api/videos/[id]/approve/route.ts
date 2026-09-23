@@ -1,10 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { Octokit } from 'octokit';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { findVideoAcrossProjects } from '@/lib/supabase';
 
 const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN,
@@ -20,16 +16,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       ? new Date().toISOString() 
       : scheduled_time;
 
-    // Fetch existing row to preserve existing platform statuses
-    const { data: existing, error: fetchErr } = await supabase
-      .from('shorts_queue')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (fetchErr || !existing) {
-      throw new Error(fetchErr?.message || 'Video not found');
+    // Fetch existing row across configured projects
+    const found = await findVideoAcrossProjects(id);
+    if (!found || !found.video) {
+      throw new Error('Video not found');
     }
+    const { video: existing, client: videoClient } = found;
 
     const currentDataJson = existing.data_json || {};
     const updatedDataJson = { ...currentDataJson };
@@ -90,7 +82,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       : 'Scheduled';
 
     // Update the video row in Supabase
-    const { error: updateError } = await supabase
+    const { error: updateError } = await videoClient
       .from('shorts_queue')
       .update({
         status: rowStatus,

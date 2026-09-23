@@ -1,21 +1,20 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { findVideoAcrossProjects, supabase } from '@/lib/supabase';
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
 
+    const found = await findVideoAcrossProjects(id);
+    const client = found ? found.client : supabase;
+
     // 1. Delete video file from Storage (best effort)
     try {
-      await supabase.storage.from('shorts').remove([`${id}.mp4`]);
+      await client.storage.from('shorts').remove([`${id}.mp4`]);
     } catch (e) {}
 
     // 2. Delete the video row from Supabase
-    const { error } = await supabase
+    const { error } = await client
       .from('shorts_queue')
       .delete()
       .eq('id', id);

@@ -1,12 +1,7 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { Octokit } from 'octokit';
 import { fetchElevenLabsTTS } from '@/lib/elevenlabs';
-
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { uploadToStorageWithFailover, executeWithSupabaseFailover } from '@/lib/supabase';
 
 const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN,
@@ -41,9 +36,8 @@ export async function POST(request: Request) {
           const elResponse = await fetchElevenLabs(text);
           const audioBuffer = Buffer.from(await elResponse.arrayBuffer());
           const ttsFileName = `tts_${crypto.randomUUID()}.mp3`;
-          await supabase.storage.from('shorts').upload(ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
-          const { data: publicUrlData } = supabase.storage.from('shorts').getPublicUrl(ttsFileName);
-          return publicUrlData.publicUrl;
+          const { publicUrl } = await uploadToStorageWithFailover('shorts', ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
+          return publicUrl;
         };
 
         for (const q of data_json.questions) {
@@ -64,9 +58,8 @@ export async function POST(request: Request) {
           const elResponse = await fetchElevenLabs(text);
           const audioBuffer = Buffer.from(await elResponse.arrayBuffer());
           const ttsFileName = `tts_${crypto.randomUUID()}.mp3`;
-          await supabase.storage.from('shorts').upload(ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
-          const { data: publicUrlData } = supabase.storage.from('shorts').getPublicUrl(ttsFileName);
-          return publicUrlData.publicUrl;
+          const { publicUrl } = await uploadToStorageWithFailover('shorts', ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
+          return publicUrl;
         };
 
         for (const s of data_json.scenarios) {
@@ -97,11 +90,8 @@ export async function POST(request: Request) {
         if (!elResponse.ok) throw new Error(`ElevenLabs API error: ${elResponse.statusText}`);
         const audioBuffer = Buffer.from(await elResponse.arrayBuffer());
         const ttsFileName = `tts_${crypto.randomUUID()}.mp3`;
-        const { error: uploadError } = await supabase.storage.from('shorts').upload(ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
-        if (!uploadError) {
-          const { data: publicUrlData } = supabase.storage.from('shorts').getPublicUrl(ttsFileName);
-          tts_url = publicUrlData.publicUrl;
-        }
+        const { publicUrl } = await uploadToStorageWithFailover('shorts', ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
+        tts_url = publicUrl;
       }
     } catch (ttsError) {
       console.error('TTS Generation failed:', ttsError);
@@ -134,29 +124,31 @@ export async function POST(request: Request) {
     const finalBgMusicUrl = isBgMusicEnabled ? (body.bg_music_url || data_json.bg_music_url || undefined) : undefined;
     const finalBgMusicVolume = isBgMusicEnabled ? (typeof body.bg_music_volume === 'number' ? body.bg_music_volume : data_json.bg_music_volume) : undefined;
 
-    // Insert into Supabase
-    const { data: dbData, error } = await supabase
-      .from('shorts_queue')
-      .insert([
-        {
-          topic: topic,
-          data_json: {
-            ...data_json,
-            tts_url: tts_url,
-            tts_urls: tts_urls,
-            bg_music_url: finalBgMusicUrl,
-            bg_music_volume: finalBgMusicVolume,
-            bg_music_enabled: isBgMusicEnabled,
-            show_subtitles: showSubtitles,
-            duration_seconds: finalDuration
+    // Insert into Supabase with failover
+    const { data: dbData, error } = await executeWithSupabaseFailover((client) =>
+      client
+        .from('shorts_queue')
+        .insert([
+          {
+            topic: topic,
+            data_json: {
+              ...data_json,
+              tts_url: tts_url,
+              tts_urls: tts_urls,
+              bg_music_url: finalBgMusicUrl,
+              bg_music_volume: finalBgMusicVolume,
+              bg_music_enabled: isBgMusicEnabled,
+              show_subtitles: showSubtitles,
+              duration_seconds: finalDuration
+            },
+            status: 'Pending', // Status is Pending until GitHub Action picks it up
           },
-          status: 'Pending', // Status is Pending until GitHub Action picks it up
-        },
-      ])
-      .select();
+        ])
+        .select()
+    );
 
-    if (error) {
-      throw error;
+    if (error || !dbData || dbData.length === 0) {
+      throw error || new Error('Failed to insert video into database.');
     }
 
     const videoId = dbData[0].id;

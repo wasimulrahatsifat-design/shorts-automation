@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
 import {
   findImageInLibrary,
   saveImageToLibrary,
@@ -10,11 +10,6 @@ import {
 import { POPULAR_VOICES, VoiceOption } from '../lib/voices';
 import { DEFAULT_MUSIC_TRACKS, MusicTrack } from '../lib/music-tracks';
 import { formatDataToHumanScript, parseHumanScriptToData } from '../lib/scriptFormatter';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 type VideoItem = {
   id: string;

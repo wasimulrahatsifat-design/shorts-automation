@@ -1,9 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { findVideoAcrossProjects } from '@/lib/supabase';
 
 export async function PATCH(
   request: Request,
@@ -14,19 +10,15 @@ export async function PATCH(
     const body = await request.json();
     const { topic, description } = body;
 
-    // Fetch existing row to preserve existing data_json fields
-    const { data: existing, error: fetchErr } = await supabase
-      .from('shorts_queue')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (fetchErr || !existing) {
+    // Fetch existing row across configured projects
+    const found = await findVideoAcrossProjects(id);
+    if (!found || !found.video) {
       return NextResponse.json(
-        { success: false, error: fetchErr?.message || 'Video not found' },
+        { success: false, error: 'Video not found' },
         { status: 404 }
       );
     }
+    const { video: existing, client: videoClient } = found;
 
     const currentDataJson = existing.data_json || {};
     const updatedDataJson = {
@@ -43,7 +35,7 @@ export async function PATCH(
       updatePayload.topic = topic.trim();
     }
 
-    const { data: updated, error: updateErr } = await supabase
+    const { data: updated, error: updateErr } = await videoClient
       .from('shorts_queue')
       .update(updatePayload)
       .eq('id', id)

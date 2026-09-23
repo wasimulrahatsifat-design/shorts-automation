@@ -1,13 +1,8 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { Octokit } from 'octokit';
 import { generateGeminiJson } from '@/lib/gemini';
 import { fetchElevenLabsTTS } from '@/lib/elevenlabs';
-
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { uploadToStorageWithFailover, executeWithSupabaseFailover } from '@/lib/supabase';
 
 const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN,
@@ -172,9 +167,8 @@ Your scripts ALWAYS hook viewers in the first 2 seconds, keep them glued until t
           const elResponse = await fetchElevenLabs(text);
           const audioBuffer = Buffer.from(await elResponse.arrayBuffer());
           const ttsFileName = `tts_${crypto.randomUUID()}.mp3`;
-          await supabase.storage.from('shorts').upload(ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
-          const { data: publicUrlData } = supabase.storage.from('shorts').getPublicUrl(ttsFileName);
-          return publicUrlData.publicUrl;
+          const { publicUrl } = await uploadToStorageWithFailover('shorts', ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
+          return publicUrl;
         };
 
         for (const q of dataPayload.questions) {
@@ -194,9 +188,8 @@ Your scripts ALWAYS hook viewers in the first 2 seconds, keep them glued until t
           const elResponse = await fetchElevenLabs(text);
           const audioBuffer = Buffer.from(await elResponse.arrayBuffer());
           const ttsFileName = `tts_${crypto.randomUUID()}.mp3`;
-          await supabase.storage.from('shorts').upload(ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
-          const { data: publicUrlData } = supabase.storage.from('shorts').getPublicUrl(ttsFileName);
-          return publicUrlData.publicUrl;
+          const { publicUrl } = await uploadToStorageWithFailover('shorts', ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
+          return publicUrl;
         };
 
         for (const s of dataPayload.scenarios) {
@@ -220,11 +213,8 @@ Your scripts ALWAYS hook viewers in the first 2 seconds, keep them glued until t
         if (!elResponse.ok) throw new Error(`ElevenLabs API error: ${elResponse.statusText}`);
         const audioBuffer = Buffer.from(await elResponse.arrayBuffer());
         const ttsFileName = `tts_${crypto.randomUUID()}.mp3`;
-        const { error: uploadError } = await supabase.storage.from('shorts').upload(ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
-        if (!uploadError) {
-          const { data: publicUrlData } = supabase.storage.from('shorts').getPublicUrl(ttsFileName);
-          tts_url = publicUrlData.publicUrl;
-        }
+        const { publicUrl } = await uploadToStorageWithFailover('shorts', ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
+        tts_url = publicUrl;
       }
     } catch (ttsError) {
       console.error('TTS Generation failed:', ttsError);
@@ -250,26 +240,28 @@ Your scripts ALWAYS hook viewers in the first 2 seconds, keep them glued until t
       finalDuration = Math.round(totalSeconds + (hasOutro ? 2.8 : 0));
     }
 
-    // Insert into Supabase
-    const { data: dbData, error } = await supabase
-      .from('shorts_queue')
-      .insert([
-        {
-          topic: topic,
-          data_json: {
-            ...dataPayload,
-            tts_url: tts_url,
-            tts_urls: tts_urls,
-            show_subtitles: true,
-            duration_seconds: finalDuration
+    // Insert into Supabase with failover
+    const { data: dbData, error } = await executeWithSupabaseFailover((client) =>
+      client
+        .from('shorts_queue')
+        .insert([
+          {
+            topic: topic,
+            data_json: {
+              ...dataPayload,
+              tts_url: tts_url,
+              tts_urls: tts_urls,
+              show_subtitles: true,
+              duration_seconds: finalDuration
+            },
+            status: 'Pending',
           },
-          status: 'Pending',
-        },
-      ])
-      .select();
+        ])
+        .select()
+    );
 
-    if (error) {
-      throw error;
+    if (error || !dbData || dbData.length === 0) {
+      throw error || new Error('Failed to insert into shorts_queue');
     }
 
     const videoId = dbData[0].id;
