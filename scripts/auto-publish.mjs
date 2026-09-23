@@ -321,19 +321,23 @@ async function main() {
 
   console.log(`Processing ${videos.length} candidate video(s)...`);
 
-  async function getFreshVideoData(id) {
+  async function getFreshVideoRecord(id) {
     try {
-      const found = await findVideoAcrossProjects(id);
-      return found ? found.video : null;
+      return await findVideoAcrossProjects(id);
     } catch (e) {
       return null;
     }
   }
 
+  async function getFreshVideoData(id) {
+    const record = await getFreshVideoRecord(id);
+    return record ? record.video : null;
+  }
+
   for (const rawVideo of videos) {
-    const fresh = await getFreshVideoData(rawVideo.id);
-    const video = fresh || rawVideo;
-    const videoClient = rawVideo._client || defaultSupabase;
+    const freshRecord = await getFreshVideoRecord(rawVideo.id);
+    const video = freshRecord?.video || rawVideo;
+    const videoClient = freshRecord?.client || rawVideo._client || defaultSupabase;
 
     console.log(`\n======================================================`);
     console.log(`Processing video: [${video.id}] "${video.topic}"`);
@@ -414,7 +418,7 @@ async function main() {
       lockDataJson.meta_uploading_at = new Date().toISOString();
     }
 
-    await supabase
+    await videoClient
       .from('shorts_queue')
       .update({ data_json: lockDataJson })
       .eq('id', video.id);
@@ -422,14 +426,38 @@ async function main() {
     // Download the MP4 from Supabase Storage
     console.log('Downloading video file from Supabase Storage...');
     const fileName = `${video.id}.mp4`;
-    const { data: fileData, error: downloadError } = await supabase.storage
-      .from('shorts')
-      .download(fileName);
+    let fileBuffer = null;
 
-    if (downloadError) {
-      console.error('Failed to download video from Supabase:', downloadError);
+    try {
+      const { data: fileData, error: downloadError } = await videoClient.storage
+        .from('shorts')
+        .download(fileName);
+
+      if (!downloadError && fileData) {
+        fileBuffer = Buffer.from(await fileData.arrayBuffer());
+      } else if (downloadError) {
+        console.warn('Storage download error:', downloadError.message || downloadError);
+      }
+    } catch (err) {
+      console.warn('Storage download threw exception:', err.message);
+    }
+
+    if (!fileBuffer && video.video_url) {
+      try {
+        console.log(`Fallback: downloading video directly from video_url: ${video.video_url}`);
+        const res = await fetch(video.video_url);
+        if (res.ok) {
+          fileBuffer = Buffer.from(await res.arrayBuffer());
+        }
+      } catch (fetchErr) {
+        console.error('Failed to fetch from video_url:', fetchErr.message);
+      }
+    }
+
+    if (!fileBuffer) {
+      console.error('Failed to download video from Supabase.');
       // Revert locks on download error
-      await supabase
+      await videoClient
         .from('shorts_queue')
         .update({ data_json: video.data_json })
         .eq('id', video.id);
@@ -437,7 +465,7 @@ async function main() {
     }
 
     const localFilePath = path.join(process.cwd(), fileName);
-    fs.writeFileSync(localFilePath, Buffer.from(await fileData.arrayBuffer()));
+    fs.writeFileSync(localFilePath, fileBuffer);
     console.log(`Video downloaded locally to: ${localFilePath}`);
 
     const uploadResults = {
@@ -504,7 +532,7 @@ async function main() {
               // Immediate DB update to prevent any concurrent runner from uploading to Facebook again!
               const currentFresh = await getFreshVideoData(video.id);
               const curData = currentFresh?.data_json || {};
-              await supabase
+              await videoClient
                 .from('shorts_queue')
                 .update({
                   data_json: {
@@ -539,7 +567,7 @@ async function main() {
               // Immediate DB update to prevent any concurrent runner from uploading to Instagram again!
               const currentFresh = await getFreshVideoData(video.id);
               const curData = currentFresh?.data_json || {};
-              await supabase
+              await videoClient
                 .from('shorts_queue')
                 .update({
                   data_json: {
