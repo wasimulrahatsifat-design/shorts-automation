@@ -216,8 +216,9 @@ Your scripts ALWAYS hook viewers in the first 2 seconds, keep them glued until t
         const { publicUrl } = await uploadToStorageWithFailover('shorts', ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
         tts_url = publicUrl;
       }
-    } catch (ttsError) {
+    } catch (ttsError: any) {
       console.error('TTS Generation failed:', ttsError);
+      throw new Error(`Voice generation failed: ${ttsError?.message || ttsError}`);
     }
 
     let finalDuration = 15;

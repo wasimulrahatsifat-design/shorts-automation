@@ -126,8 +126,9 @@ export async function POST(request: Request) {
         const { publicUrl } = await uploadToStorageWithFailover('shorts', ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
         tts_url = publicUrl;
       }
-    } catch (ttsError) {
+    } catch (ttsError: any) {
       console.error('TTS Generation failed:', ttsError);
+      throw new Error(`Voice generation failed: ${ttsError?.message || ttsError}`);
     }
 
     // 4. Update Database
