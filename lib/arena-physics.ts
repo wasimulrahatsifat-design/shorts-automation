@@ -402,7 +402,7 @@ export function generateArenaSimulation(
       hitCombo: 0,
       health: c.starting_health || 100,
       maxHealth: c.starting_health || 100,
-      damage: c.damage || 25,
+      damage: c.damage && c.damage > 0 ? c.damage : 25,
       specialPower: c.special_power || 'none',
       specialAbility: ability,
       abilityCooldownTimer: initialCooldown,
@@ -626,6 +626,7 @@ export function generateArenaSimulation(
           // Execute Alien-Specific Signature Move (PHYSICAL ONLY - NO REMOTE INVISIBLE DAMAGE)
           const aType = getAlienType(f);
           const targetAngle = Math.atan2(nearestOpp.y - f.y, nearestOpp.x - f.x);
+          const abilityPower = f.specialAbility?.power_value || Math.round(f.damage * 1.1) || 30;
 
           if (aType === 'four_arms') {
             // FOUR ARMS: SONIC SHOCKWAVE CLAP!
@@ -642,7 +643,7 @@ export function generateArenaSimulation(
               vy: Math.sin(targetAngle) * 19,
               ownerId: f.id,
               color: '#dc2626',
-              damage: 28,
+              damage: Math.round(abilityPower),
               life: 55,
               bulletType: 'shockwave',
               size: 44,
@@ -678,7 +679,7 @@ export function generateArenaSimulation(
                 vy: Math.sin(targetAngle + spread) * 19,
                 ownerId: f.id,
                 color: '#ea580c',
-                damage: 10,
+                damage: Math.max(5, Math.round(abilityPower / 3)),
                 life: 60,
                 bulletType: 'fireball',
                 size: 28,
@@ -720,11 +721,11 @@ export function generateArenaSimulation(
             }
           } else if (aType === 'diamondhead') {
             // DIAMONDHEAD: CRYSTAL DIAMOND SHARD VOLLEY & PRISM BARRIER
-            f.bonusShield = 50;
+            f.bonusShield = Math.round(abilityPower * 1.5) || 50;
             f.abilityAuraTimer = 85;
             f.abilityAuraColor = '#10b981';
             soundEvents.push({ frame, sound: 'ability', abilityType: 'shield', volume: 0.9 });
-            floatingTexts.push({ id: `shd_${frame}_${f.id}`, x: f.x, y: f.y - 40, text: 'CRYSTAL BARRIER +50', color: '#10b981', alpha: 1, vy: -2.2, scale: 1.25 });
+            floatingTexts.push({ id: `shd_${frame}_${f.id}`, x: f.x, y: f.y - 40, text: `CRYSTAL BARRIER +${f.bonusShield}`, color: '#10b981', alpha: 1, vy: -2.2, scale: 1.25 });
 
             // Volley of 4 sharp emerald crystal shards aimed at enemy
             for (let s = -1.5; s <= 1.5; s += 1.0) {
@@ -736,7 +737,7 @@ export function generateArenaSimulation(
                 vy: Math.sin(targetAngle + sp) * 21,
                 ownerId: f.id,
                 color: '#10b981',
-                damage: 7,
+                damage: Math.max(3, Math.round(abilityPower / 4)),
                 life: 55,
                 bulletType: 'shard',
                 size: 24,
@@ -777,7 +778,7 @@ export function generateArenaSimulation(
                 vy: Math.sin(targetAngle) * 26,
                 ownerId: f.id,
                 color: '#22c55e',
-                damage: 10,
+                damage: Math.max(4, Math.round(abilityPower / 3)),
                 life: 50,
                 bulletType: 'laser',
                 size: 30,
@@ -795,7 +796,7 @@ export function generateArenaSimulation(
               vy: Math.sin(targetAngle) * 28,
               ownerId: f.id,
               color: '#facc15',
-              damage: 28,
+              damage: Math.round(abilityPower),
               life: 50,
               bulletType: 'beam',
               size: 38,
@@ -813,7 +814,7 @@ export function generateArenaSimulation(
                 vy: Math.sin(targetAngle + spread) * 16,
                 ownerId: f.id,
                 color: '#84cc16',
-                damage: 9,
+                damage: Math.max(3, Math.round(abilityPower / 3)),
                 life: 55,
                 bulletType: 'acid',
                 size: 26,
@@ -832,7 +833,7 @@ export function generateArenaSimulation(
               vy: Math.sin(targetAngle) * 15,
               ownerId: f.id,
               color: '#a855f7',
-              damage: 20,
+              damage: Math.round(abilityPower * 0.7),
               life: 60,
               bulletType: 'shockwave',
               size: 38,
@@ -1166,18 +1167,18 @@ export function generateArenaSimulation(
             // Alien specific physical collision buffs
             if (A.abilityAuraTimer > 0) {
               if (aAlien === 'heatblast') {
-                dmgA += 20; // Burning impact
+                dmgA += Math.round(A.damage * 0.6) || 20; // Burning impact
                 floatingTexts.push({ id: `fire_${frame}_${B.id}`, x: B.x, y: B.y - 45, text: 'FIRE BLAST!', color: '#ea580c', alpha: 1, vy: -2, scale: 1.1 });
               } else if (aAlien === 'cannonbolt') {
-                dmgA += 25; // Armored kinetic impact
+                dmgA += Math.round(A.damage * 0.75) || 25; // Armored kinetic impact
                 B.vx += nx * 14; B.vy += ny * 14;
                 floatingTexts.push({ id: `slam_${frame}_${B.id}`, x: B.x, y: B.y - 45, text: 'KINETIC SLAM!', color: '#f59e0b', alpha: 1, vy: -2, scale: 1.1 });
               } else if (aAlien === 'wildmutt') {
-                dmgA += 20; // Steel bite
+                dmgA += Math.round(A.damage * 0.6) || 20; // Steel bite
                 B.speedBoostTimer = -45; // Slow down
                 floatingTexts.push({ id: `bite_${frame}_${B.id}`, x: B.x, y: B.y - 45, text: 'STEEL BITE!', color: '#f97316', alpha: 1, vy: -2, scale: 1.1 });
               } else if (aAlien === 'ripjaws') {
-                dmgA += 30; // Pierce jaws
+                dmgA += Math.round(A.damage * 0.9) || 30; // Pierce jaws
                 B.bonusShield = 0; B.hasShield = false; // shred shield
                 floatingTexts.push({ id: `jaw_${frame}_${B.id}`, x: B.x, y: B.y - 45, text: 'PIERCE CRUSH!', color: '#06b6d4', alpha: 1, vy: -2, scale: 1.2 });
               }
@@ -1185,18 +1186,18 @@ export function generateArenaSimulation(
 
             if (B.abilityAuraTimer > 0) {
               if (bAlien === 'heatblast') {
-                dmgB += 20;
+                dmgB += Math.round(B.damage * 0.6) || 20;
                 floatingTexts.push({ id: `fire_${frame}_${A.id}`, x: A.x, y: A.y - 45, text: 'FIRE BLAST!', color: '#ea580c', alpha: 1, vy: -2, scale: 1.1 });
               } else if (bAlien === 'cannonbolt') {
-                dmgB += 25;
+                dmgB += Math.round(B.damage * 0.75) || 25;
                 A.vx -= nx * 14; A.vy -= ny * 14;
                 floatingTexts.push({ id: `slam_${frame}_${A.id}`, x: A.x, y: A.y - 45, text: 'KINETIC SLAM!', color: '#f59e0b', alpha: 1, vy: -2, scale: 1.1 });
               } else if (bAlien === 'wildmutt') {
-                dmgB += 20;
+                dmgB += Math.round(B.damage * 0.6) || 20;
                 A.speedBoostTimer = -45;
                 floatingTexts.push({ id: `bite_${frame}_${A.id}`, x: A.x, y: A.y - 45, text: 'STEEL BITE!', color: '#f97316', alpha: 1, vy: -2, scale: 1.1 });
               } else if (bAlien === 'ripjaws') {
-                dmgB += 30;
+                dmgB += Math.round(B.damage * 0.9) || 30;
                 A.bonusShield = 0; A.hasShield = false;
                 floatingTexts.push({ id: `jaw_${frame}_${A.id}`, x: A.x, y: A.y - 45, text: 'PIERCE CRUSH!', color: '#06b6d4', alpha: 1, vy: -2, scale: 1.2 });
               }

@@ -2170,9 +2170,11 @@ export default function GamePage() {
         setHeroTimeBanner(true);
         playSound('victory');
 
+        const custom1 = contestants.find((c) => c.id === chosen1.id || c.name === chosen1.name);
+        const custom2 = contestants.find((c) => c.id === chosen2.id || c.name === chosen2.name);
         const matchContestants: ContestantConfig[] = [
-          { ...chosen1, id: 'fighter_1' },
-          { ...chosen2, id: 'fighter_2' },
+          { ...(custom1 || chosen1), id: 'fighter_1' },
+          { ...(custom2 || chosen2), id: 'fighter_2' },
         ];
         setContestants(matchContestants);
         setContestantCount(2);
@@ -2226,14 +2228,14 @@ export default function GamePage() {
 
   const handlePlayToggle = () => {
     const sim = simResultRef.current;
-    if (selectionPhase === 'idle') {
-      handleStartSelection();
+    if (selectionPhase === 'select_p1' || selectionPhase === 'select_p2') {
+      handleCenterSlam();
       return;
     }
     if (!isPlaying) {
       if (sim && currentFrameRef.current >= sim.frames.length - 1) {
-        currentFrameRef.current = 90;
-        lastSoundFrameRef.current = 89;
+        currentFrameRef.current = 0;
+        lastSoundFrameRef.current = -1;
         setWinner(null);
       }
       setIsPlaying(true);
@@ -2539,8 +2541,14 @@ export default function GamePage() {
       loadedImagesRef.current.set(updates.image_url, cachedImg);
     }
 
-    if (BEN10_ALIEN_PRESETS[index]) {
-      Object.assign(BEN10_ALIEN_PRESETS[index], updates);
+    const targetFighter = contestants[index];
+    if (targetFighter) {
+      const preset = BEN10_ALIEN_PRESETS.find(
+        (p) => p.id === targetFighter.id || p.name === targetFighter.name
+      );
+      if (preset) {
+        Object.assign(preset, updates);
+      }
     }
   };
 
@@ -2824,9 +2832,22 @@ export default function GamePage() {
                         <input
                           type="number"
                           min="10"
-                          max="500"
-                          value={fighter.starting_health}
-                          onChange={(e) => updateContestant(idx, { starting_health: Math.max(10, Number(e.target.value) || 10) })}
+                          max="999"
+                          value={fighter.starting_health === 0 ? '' : fighter.starting_health}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === '') {
+                              updateContestant(idx, { starting_health: 0 });
+                            } else {
+                              const num = parseInt(val, 10);
+                              updateContestant(idx, { starting_health: isNaN(num) ? 0 : Math.min(999, Math.max(0, num)) });
+                            }
+                          }}
+                          onBlur={() => {
+                            if (!fighter.starting_health || fighter.starting_health < 10) {
+                              updateContestant(idx, { starting_health: 100 });
+                            }
+                          }}
                           className="w-12 bg-transparent text-emerald-400 font-bold text-right focus:outline-none"
                         />
                       </div>
@@ -2837,9 +2858,22 @@ export default function GamePage() {
                         <input
                           type="number"
                           min="1"
-                          max="150"
-                          value={fighter.damage}
-                          onChange={(e) => updateContestant(idx, { damage: Math.max(1, Number(e.target.value) || 1) })}
+                          max="200"
+                          value={fighter.damage === 0 ? '' : fighter.damage}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === '') {
+                              updateContestant(idx, { damage: 0 });
+                            } else {
+                              const num = parseInt(val, 10);
+                              updateContestant(idx, { damage: isNaN(num) ? 0 : Math.min(200, Math.max(0, num)) });
+                            }
+                          }}
+                          onBlur={() => {
+                            if (!fighter.damage || fighter.damage < 1) {
+                              updateContestant(idx, { damage: 25 });
+                            }
+                          }}
                           className="w-12 bg-transparent text-rose-400 font-bold text-right focus:outline-none"
                         />
                       </div>
@@ -2901,13 +2935,21 @@ export default function GamePage() {
                           <span className="text-slate-500">CD:</span>
                           <input
                             type="number"
-                            min="2"
-                            max="20"
+                            min="1"
+                            max="60"
                             step="1"
-                            value={fighter.special_ability?.cooldown_seconds || 5}
+                            value={fighter.special_ability?.cooldown_seconds === 0 ? '' : (fighter.special_ability?.cooldown_seconds ?? 5)}
                             onChange={(e) => {
                               const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30 };
-                              updateContestant(idx, { special_ability: { ...cur, cooldown_seconds: Math.max(2, Number(e.target.value) || 2) } });
+                              const val = e.target.value;
+                              const num = val === '' ? 0 : parseInt(val, 10);
+                              updateContestant(idx, { special_ability: { ...cur, cooldown_seconds: isNaN(num) ? 0 : Math.min(60, Math.max(0, num)) } });
+                            }}
+                            onBlur={() => {
+                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                              if (!cur.cooldown_seconds || cur.cooldown_seconds < 1) {
+                                updateContestant(idx, { special_ability: { ...cur, cooldown_seconds: 5 } });
+                              }
                             }}
                             className="w-8 bg-transparent text-amber-300 font-bold text-right focus:outline-none"
                           />
@@ -2919,11 +2961,19 @@ export default function GamePage() {
                           <input
                             type="number"
                             min="1"
-                            max="100"
-                            value={fighter.special_ability?.power_value || 30}
+                            max="200"
+                            value={fighter.special_ability?.power_value === 0 ? '' : (fighter.special_ability?.power_value ?? 30)}
                             onChange={(e) => {
                               const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30 };
-                              updateContestant(idx, { special_ability: { ...cur, power_value: Math.max(1, Number(e.target.value) || 1) } });
+                              const val = e.target.value;
+                              const num = val === '' ? 0 : parseInt(val, 10);
+                              updateContestant(idx, { special_ability: { ...cur, power_value: isNaN(num) ? 0 : Math.min(200, Math.max(0, num)) } });
+                            }}
+                            onBlur={() => {
+                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                              if (!cur.power_value || cur.power_value < 1) {
+                                updateContestant(idx, { special_ability: { ...cur, power_value: 30 } });
+                              }
                             }}
                             className="w-10 bg-transparent text-pink-400 font-bold text-right focus:outline-none"
                           />
