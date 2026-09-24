@@ -588,7 +588,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
               />
             </div>
 
-            {/* Holographic Selection Alien Badge */}
+            {/* Holographic Selection Alien Badge (No emoji) */}
             {current.selectedAlienName && (
               <div
                 style={{
@@ -598,20 +598,17 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                   border: `2px solid ${current.selectedAlienColor || '#00ff66'}`,
                   boxShadow: `0 0 25px ${current.selectedAlienColor || '#00ff66'}`,
                   borderRadius: 14,
-                  padding: '5px 18px',
+                  padding: '6px 22px',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 8,
-                  fontSize: 16,
+                  fontSize: 18,
                   fontWeight: 900,
                   color: '#ffffff',
                   whiteSpace: 'nowrap',
                   letterSpacing: '1px',
                 }}
               >
-                <span style={{ color: current.selectedAlienColor || '#00ff66' }}>⚡</span>
                 <span>{current.selectedAlienName}</span>
-                <span style={{ color: current.selectedAlienColor || '#00ff66' }}>⚡</span>
               </div>
             )}
           </div>

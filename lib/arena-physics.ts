@@ -285,15 +285,22 @@ export function generateArenaSimulation(
   const fighters: SimFighter[] = contestants.map((c, idx) => {
     const angle = (idx / count) * Math.PI * 2 - Math.PI / 2;
     const spawnRadius = (ARENA_BOX.width / 2) * 0.62;
-    const x = ARENA_CENTER.x + Math.cos(angle) * spawnRadius;
-    const y = ARENA_CENTER.y + Math.sin(angle) * spawnRadius;
+    let x = ARENA_CENTER.x + Math.cos(angle) * spawnRadius;
+    let y = ARENA_CENTER.y + Math.sin(angle) * spawnRadius;
 
     let baseSpd = c.speed || 6.8;
     if (c.special_power === 'speedster') baseSpd *= 1.35;
 
     const moveAngle = angle + Math.PI + (rng() - 0.5) * 0.7;
-    const vx = Math.cos(moveAngle) * baseSpd;
-    const vy = Math.sin(moveAngle) * baseSpd;
+    let vx = Math.cos(moveAngle) * baseSpd;
+    let vy = Math.sin(moveAngle) * baseSpd;
+
+    if (count === 2) {
+      x = idx === 0 ? ARENA_CENTER.x - 220 : ARENA_CENTER.x + 220;
+      y = ARENA_CENTER.y;
+      vx = idx === 0 ? Math.abs(baseSpd) * 0.9 : -Math.abs(baseSpd) * 0.9;
+      vy = (rng() - 0.5) * baseSpd * 0.6;
+    }
 
     // Resolve Special Ability
     const ability: SpecialAbility = c.special_ability ||
@@ -404,25 +411,10 @@ export function generateArenaSimulation(
         selectionDialScale = 1.0;
       }
 
-      // 2. Selection cycle text & sound
-      if (frame < 15) {
-        selectedAlienName = 'DIALING OMNITRIX...';
-      } else if (frame < 72) {
-        const cycleProgress = (frame - 15) / 57;
-        const alienIdx = Math.floor(cycleProgress * count) % count;
-        const curAlien = contestants[alienIdx];
-        selectedAlienName = curAlien?.name?.toUpperCase() || 'OMNITRIX';
-        selectedAlienColor = curAlien?.color || '#00ff66';
-
-        // Periodic dial sound click every 14 frames
-        if (frame % 14 === 0) {
-          soundEvents.push({ frame, sound: 'ability', abilityType: 'speed', volume: 0.5 });
-        }
-      } else if (frame < 85) {
-        selectedAlienName = 'MATCH LOCKED IN! ⚡';
-        selectedAlienColor = '#facc15';
-      } else {
-        selectedAlienName = "IT'S HERO TIME! 💥";
+      // 2. Selection cycle text & sound: clean without emoji, only It's Hero Time! at the end
+      selectedAlienName = '';
+      if (frame >= 85) {
+        selectedAlienName = "It's Hero Time!";
         selectedAlienColor = '#00ff66';
       }
 
@@ -446,7 +438,7 @@ export function generateArenaSimulation(
           id: 'hero_time_text',
           x: ARENA_CENTER.x,
           y: ARENA_CENTER.y - 150,
-          text: "IT'S HERO TIME! 💥",
+          text: "It's Hero Time!",
           color: '#00ff66',
           alpha: 1,
           vy: -1.2,

@@ -166,12 +166,21 @@ export default function GamePage() {
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  const [selectionOverlay, setSelectionOverlay] = useState<{ active: boolean; scale: number; name: string; color: string }>({
-    active: false,
-    scale: 1,
-    name: '',
-    color: '#00ff66',
-  });
+  // Interactive Ben 10 Omnitrix Selection State
+  type SelectionPhase = 'idle' | 'select_p1' | 'select_p2' | 'hero_time' | 'battling';
+  const [selectionPhase, setSelectionPhase] = useState<SelectionPhase>('idle');
+  const selectionPhaseRef = useRef<SelectionPhase>('idle');
+  useEffect(() => {
+    selectionPhaseRef.current = selectionPhase;
+  }, [selectionPhase]);
+
+  const [p1Index, setP1Index] = useState<number>(0);
+  const [p2Index, setP2Index] = useState<number>(1);
+  const [selectedP1, setSelectedP1] = useState<ContestantConfig | null>(null);
+  const [selectedP2, setSelectedP2] = useState<ContestantConfig | null>(null);
+  const [dialRotationAngle, setDialRotationAngle] = useState<number>(0);
+  const [greenFlash, setGreenFlash] = useState<boolean>(false);
+  const [heroTimeBanner, setHeroTimeBanner] = useState<boolean>(false);
 
   // Preload Omnitrix rotation animation GIF
   useEffect(() => {
@@ -435,16 +444,6 @@ export default function GamePage() {
 
     if (sim.frames.length > 0) {
       drawFrame(sim.frames[0]);
-      if (sim.frames[0].isSelectionIntro) {
-        setSelectionOverlay({
-          active: true,
-          scale: sim.frames[0].selectionDialScale || 1,
-          name: sim.frames[0].selectedAlienName || '',
-          color: sim.frames[0].selectedAlienColor || '#00ff66',
-        });
-      } else {
-        setSelectionOverlay({ active: false, scale: 1, name: '', color: '#00ff66' });
-      }
     }
   };
 
@@ -591,76 +590,9 @@ export default function GamePage() {
         ctx.stroke();
       }
 
-      // Ben 10 Omnitrix Center Dial & Selection Animation
+      // Ben 10 Omnitrix Center Dial on floor
       const dialRadius = 135;
-      const isSelectionIntro = current.isSelectionIntro ?? false;
-      const dialScale = current.selectionDialScale ?? 1.0;
-      const selectedAlien = current.selectedAlienName;
-      const selectedColor = current.selectedAlienColor || '#00ff66';
-
-      const rotImg = loadedImagesRef.current.get('/images/omnitrix_rotation.gif');
-
-      if (isSelectionIntro && rotImg && rotImg.complete && rotImg.naturalWidth > 0 && dialScale > 1.05) {
-        ctx.save();
-        const scaledR = dialRadius * dialScale;
-
-        // 1. Intense Outer Pulsing Neon Green Aura
-        ctx.shadowColor = '#00ff66';
-        ctx.shadowBlur = 45;
-        ctx.beginPath();
-        ctx.arc(cx, cy, scaledR + 8, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(0, 255, 102, 0.25)';
-        ctx.fill();
-        ctx.shadowBlur = 0;
-
-        // 2. Render user rotation GIF
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(cx, cy, scaledR, 0, Math.PI * 2);
-        ctx.clip();
-        ctx.drawImage(rotImg, cx - scaledR, cy - scaledR, scaledR * 2, scaledR * 2);
-        ctx.restore();
-
-        // 3. Glowing Green Outer Bezel Ring
-        ctx.beginPath();
-        ctx.arc(cx, cy, scaledR, 0, Math.PI * 2);
-        ctx.lineWidth = 6;
-        ctx.strokeStyle = '#00ff66';
-        ctx.shadowColor = '#00ff66';
-        ctx.shadowBlur = 30;
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-
-        // 4. Holographic Selection Alien Badge
-        if (selectedAlien) {
-          ctx.font = '900 32px "Montserrat", sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          const textW = ctx.measureText(selectedAlien).width;
-          const badgeW = textW + 60;
-          const badgeH = 50;
-          const badgeY = cy + scaledR + 42;
-
-          ctx.beginPath();
-          ctx.roundRect(cx - badgeW / 2, badgeY - badgeH / 2, badgeW, badgeH, 16);
-          ctx.fillStyle = 'rgba(2, 9, 4, 0.95)';
-          ctx.fill();
-          ctx.lineWidth = 3;
-          ctx.strokeStyle = selectedColor;
-          ctx.shadowColor = selectedColor;
-          ctx.shadowBlur = 20;
-          ctx.stroke();
-
-          ctx.fillStyle = '#ffffff';
-          ctx.shadowBlur = 0;
-          ctx.fillText(`⚡ ${selectedAlien} ⚡`, cx, badgeY);
-        }
-
-        ctx.restore();
-      } else {
-        // Authentic static vector Omnitrix dial on floor
-        drawOmnitrixDial(ctx, cx, cy, dialRadius);
-      }
+      drawOmnitrixDial(ctx, cx, cy, dialRadius);
 
       // Glowing Neon Omnitrix Square Wall
       ctx.beginPath();
@@ -761,7 +693,18 @@ export default function GamePage() {
       });
 
       // Contestants (Spherical Alien Balls with Centered Live HP)
-      fighters.forEach((f) => {
+      // "সিলেক্ট করার আগে স্ক্রিনে কোনো এলিয়েন দেখাবে না। ১ম সিলেক্ট করার পর প্রথম এলিয়েন, ২য় সিলেক্টের পর ২য় এলিয়েন দেখাবে।"
+      const currentPhase = selectionPhaseRef.current;
+      let visibleFighters: SimFighter[] = [];
+      if (currentPhase === 'hero_time' || currentPhase === 'battling') {
+        visibleFighters = fighters;
+      } else if (currentPhase === 'select_p2') {
+        visibleFighters = fighters.slice(0, 1);
+      } else {
+        visibleFighters = [];
+      }
+
+      visibleFighters.forEach((f) => {
         if (f.isDead) return;
 
         const half = f.size / 2;
@@ -909,8 +852,11 @@ export default function GamePage() {
       ctx.fillText(topic.toUpperCase() || 'ARENA CLASH', width / 2, 170);
       ctx.restore();
 
-      // Dual Sided Healthbars below arena
-      drawLiveHealthBars(ctx, fighters, width);
+      // Dual Sided Healthbars below arena - ONLY shown after selection is completed!
+      const activePhase = selectionPhaseRef.current;
+      if (activePhase === 'hero_time' || activePhase === 'battling') {
+        drawLiveHealthBars(ctx, fighters, width);
+      }
 
       // Victory Overlay: ONLY SHOWN WHEN frameWinner IS PRESENT!
       if (frameWinner) {
@@ -1175,16 +1121,6 @@ export default function GamePage() {
           if (curFrameState.winner && !winner) {
             setWinner(curFrameState.winner as any);
           }
-          if (curFrameState.isSelectionIntro) {
-            setSelectionOverlay({
-              active: true,
-              scale: curFrameState.selectionDialScale || 1,
-              name: curFrameState.selectedAlienName || '',
-              color: curFrameState.selectedAlienColor || '#00ff66',
-            });
-          } else {
-            setSelectionOverlay((prev) => (prev.active ? { active: false, scale: 1, name: '', color: '#00ff66' } : prev));
-          }
         }
 
         if (nextFrame >= sim.frames.length - 1) {
@@ -1204,25 +1140,266 @@ export default function GamePage() {
     };
   }, [isPlaying, simSpeed, winner, topic, isFullscreen, soundEnabled]);
 
-  // 8. Handlers & Simulation Controls
+  // 8. Handlers & Interactive Selection Controls
+  const handleStartSelection = () => {
+    if (selectionPhase === 'idle') {
+      playSound('ability');
+      setSelectionPhase('select_p1');
+      setP1Index(0);
+      setDialRotationAngle(0);
+    }
+  };
+
+  const handleRotateAlien = (direction: 'next' | 'prev', e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    playSound('bounce');
+    const rosterLen = BEN10_ALIEN_PRESETS.length;
+    if (selectionPhase === 'select_p1') {
+      setP1Index((prev) => (direction === 'next' ? (prev + 1) % rosterLen : (prev - 1 + rosterLen) % rosterLen));
+      setDialRotationAngle((prev) => prev + (direction === 'next' ? 45 : -45));
+    } else if (selectionPhase === 'select_p2') {
+      setP2Index((prev) => (direction === 'next' ? (prev + 1) % rosterLen : (prev - 1 + rosterLen) % rosterLen));
+      setDialRotationAngle((prev) => prev + (direction === 'next' ? 45 : -45));
+    }
+  };
+
+  const handleCenterSlam = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    playSound('hit');
+    playSound('item');
+    setGreenFlash(true);
+
+    if (selectionPhase === 'select_p1') {
+      const chosen1 = BEN10_ALIEN_PRESETS[p1Index];
+      setSelectedP1(chosen1);
+
+      if (chosen1.image_url && !loadedImagesRef.current.has(chosen1.image_url)) {
+        const img = new Image();
+        img.src = chosen1.image_url;
+        loadedImagesRef.current.set(chosen1.image_url, img);
+      }
+
+      setTimeout(() => {
+        setGreenFlash(false);
+        setSelectionPhase('select_p2');
+        setP2Index((p1Index + 1) % BEN10_ALIEN_PRESETS.length);
+        setDialRotationAngle(0);
+      }, 450);
+    } else if (selectionPhase === 'select_p2') {
+      const chosen1 = selectedP1 || BEN10_ALIEN_PRESETS[p1Index];
+      const chosen2 = BEN10_ALIEN_PRESETS[p2Index];
+      setSelectedP2(chosen2);
+
+      if (chosen2.image_url && !loadedImagesRef.current.has(chosen2.image_url)) {
+        const img = new Image();
+        img.src = chosen2.image_url;
+        loadedImagesRef.current.set(chosen2.image_url, img);
+      }
+
+      setTimeout(() => {
+        setGreenFlash(false);
+        setSelectionPhase('hero_time');
+        setHeroTimeBanner(true);
+        playSound('victory');
+
+        const matchContestants: ContestantConfig[] = [
+          { ...chosen1, id: 'fighter_1' },
+          { ...chosen2, id: 'fighter_2' },
+        ];
+        setContestants(matchContestants);
+        setContestantCount(2);
+
+        const sim = generateArenaSimulation(
+          matchContestants.map((c) => ({
+            id: c.id,
+            name: c.name,
+            color: c.color,
+            image_url: c.image_url,
+            starting_health: c.starting_health,
+            damage: c.damage,
+            speed: c.speed,
+            special_power: c.special_power,
+            special_ability: c.special_ability,
+          })),
+          3600,
+          battleSeedRef.current
+        );
+        simResultRef.current = sim;
+        currentFrameRef.current = 90;
+        lastSoundFrameRef.current = 89;
+        setWinner(null);
+        setAliveCount(2);
+
+        setTimeout(() => {
+          setHeroTimeBanner(false);
+          setSelectionPhase('battling');
+          setIsPlaying(true);
+        }, 1500);
+      }, 450);
+    }
+  };
+
   const resetSimulation = () => {
     setIsPlaying(false);
-    setSelectionOverlay({ active: false, scale: 1, name: '', color: '#00ff66' });
+    setSelectionPhase('idle');
+    setSelectedP1(null);
+    setSelectedP2(null);
+    setHeroTimeBanner(false);
+    setGreenFlash(false);
+    currentFrameRef.current = 0;
+    lastSoundFrameRef.current = -1;
+    setWinner(null);
     initSimulation(true);
   };
 
   const handlePlayToggle = () => {
     const sim = simResultRef.current;
+    if (selectionPhase === 'idle') {
+      handleStartSelection();
+      return;
+    }
     if (!isPlaying) {
       if (sim && currentFrameRef.current >= sim.frames.length - 1) {
-        currentFrameRef.current = 0;
-        lastSoundFrameRef.current = -1;
+        currentFrameRef.current = 90;
+        lastSoundFrameRef.current = 89;
         setWinner(null);
       }
       setIsPlaying(true);
     } else {
       setIsPlaying(false);
     }
+  };
+
+  const currentDialAlien = selectionPhase === 'select_p1' ? BEN10_ALIEN_PRESETS[p1Index] : BEN10_ALIEN_PRESETS[p2Index];
+
+  const renderOmnitrixOverlay = () => {
+    return (
+      <>
+        {/* Idle Screen Tap Indicator */}
+        {selectionPhase === 'idle' && (
+          <div
+            className="absolute inset-0 z-20 flex items-center justify-center cursor-pointer group"
+            onClick={handleStartSelection}
+          >
+            <div className="px-5 py-2.5 rounded-2xl bg-black/85 backdrop-blur border-2 border-emerald-400 text-emerald-300 group-hover:text-white group-hover:border-emerald-300 font-black text-xs tracking-wider uppercase transition shadow-[0_0_25px_rgba(0,255,102,0.6)] animate-pulse">
+              Click Arena to Activate Omnitrix
+            </div>
+          </div>
+        )}
+
+        {/* Interactive Omnitrix Alien Selector (Popped up large in center of arena) */}
+        {(selectionPhase === 'select_p1' || selectionPhase === 'select_p2') && (
+          <div
+            className="absolute flex flex-col items-center justify-center z-30 select-none animate-in zoom-in-75 duration-300"
+            style={{
+              left: '50%',
+              top: `${(830 / 1920) * 100}%`,
+              transform: 'translate(-50%, -50%)',
+              width: '74%',
+              maxWidth: 320,
+              aspectRatio: '1/1',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Outer Glowing Alien Aura */}
+            <div className="absolute -inset-8 rounded-full bg-emerald-500/35 blur-2xl animate-pulse pointer-events-none" />
+
+            {/* Omnitrix Outer Metallic Dial Body */}
+            <div className="relative w-full h-full rounded-full bg-gradient-to-b from-[#182a1c] via-[#08150c] to-[#020803] border-[6px] border-[#00ff66] shadow-[0_0_50px_rgba(0,255,102,0.85)] flex items-center justify-center p-3">
+              
+              {/* Left Dial Turn Button / Side Bezel Click Area */}
+              <button
+                type="button"
+                onClick={(e) => handleRotateAlien('prev', e)}
+                title="Rotate Alien Left"
+                className="absolute left-1 z-30 w-11 h-16 rounded-l-full bg-slate-900/90 hover:bg-emerald-950 border-2 border-emerald-400/80 hover:border-emerald-300 text-emerald-400 hover:text-white flex items-center justify-center font-black text-xl transition active:scale-90 shadow-[0_0_15px_rgba(0,255,102,0.5)] cursor-pointer"
+              >
+                <span>◀</span>
+              </button>
+
+              {/* Right Dial Turn Button / Side Bezel Click Area */}
+              <button
+                type="button"
+                onClick={(e) => handleRotateAlien('next', e)}
+                title="Rotate Alien Right"
+                className="absolute right-1 z-30 w-11 h-16 rounded-r-full bg-slate-900/90 hover:bg-emerald-950 border-2 border-emerald-400/80 hover:border-emerald-300 text-emerald-400 hover:text-white flex items-center justify-center font-black text-xl transition active:scale-90 shadow-[0_0_15px_rgba(0,255,102,0.5)] cursor-pointer"
+              >
+                <span>▶</span>
+              </button>
+
+              {/* Rotating Outer Bezel */}
+              <div
+                className="w-full h-full rounded-full border-4 border-slate-700/80 flex items-center justify-center transition-transform duration-200"
+                style={{ transform: `rotate(${dialRotationAngle}deg)` }}
+              >
+                <div className="absolute inset-2 rounded-full border-2 border-dashed border-emerald-500/40 pointer-events-none" />
+                <div className="absolute top-1 w-3 h-3 rounded-full bg-emerald-400 shadow-[0_0_8px_#00ff66]" />
+                <div className="absolute bottom-1 w-3 h-3 rounded-full bg-emerald-400 shadow-[0_0_8px_#00ff66]" />
+                <div className="absolute left-1 w-3 h-3 rounded-full bg-emerald-400 shadow-[0_0_8px_#00ff66]" />
+                <div className="absolute right-1 w-3 h-3 rounded-full bg-emerald-400 shadow-[0_0_8px_#00ff66]" />
+              </div>
+
+              {/* Center Omnitrix Core Activator Button (Slam to lock in & flash green!) */}
+              <button
+                type="button"
+                onClick={(e) => handleCenterSlam(e)}
+                title="Click Center to Select Alien & Strike!"
+                className="absolute inset-10 rounded-full bg-gradient-to-b from-[#0a2211] via-black to-[#031107] border-4 border-emerald-400 shadow-[0_0_30px_rgba(0,255,102,0.9),inset_0_0_20px_rgba(0,255,102,0.5)] hover:border-white hover:shadow-[0_0_45px_#00ff66] transition active:scale-95 flex flex-col items-center justify-center overflow-hidden cursor-pointer group"
+              >
+                {/* Green Hourglass Silhouette in Core */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-35 group-hover:opacity-60 transition">
+                  <svg viewBox="0 0 100 100" className="w-full h-full text-emerald-400 fill-current">
+                    <polygon points="20,10 80,10 50,50" />
+                    <polygon points="20,90 80,90 50,50" />
+                  </svg>
+                </div>
+
+                {/* Alien Thumbnail Avatar */}
+                <div className="relative z-10 w-20 h-20 rounded-full overflow-hidden border-2 border-emerald-400/80 bg-black flex items-center justify-center shadow-lg">
+                  {currentDialAlien?.image_url ? (
+                    <img
+                      src={currentDialAlien.image_url}
+                      alt={currentDialAlien.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-3xl font-black text-white">{currentDialAlien?.name?.charAt(0)}</span>
+                  )}
+                </div>
+              </button>
+            </div>
+
+            {/* Clean Alien Name Tag Below (No emoji, clean typography) */}
+            {currentDialAlien && (
+              <div
+                className="mt-3 px-5 py-1.5 rounded-full bg-black/95 border-2 text-white font-black text-sm tracking-wider whitespace-nowrap shadow-2xl flex items-center gap-2"
+                style={{
+                  borderColor: currentDialAlien.color || '#00ff66',
+                  boxShadow: `0 0 20px ${currentDialAlien.color || '#00ff66'}90`,
+                }}
+              >
+                <span>{currentDialAlien.name}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Clean "It's Hero Time!" Banner (Strictly NO emojis) */}
+        {heroTimeBanner && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none animate-in zoom-in-95 duration-200">
+            <div
+              className="px-8 py-4 rounded-3xl bg-black/90 border-4 border-emerald-400 text-white font-black text-3xl tracking-widest uppercase text-center"
+              style={{
+                boxShadow: '0 0 60px rgba(0, 255, 102, 0.9), inset 0 0 30px rgba(0, 255, 102, 0.4)',
+                textShadow: '0 0 20px #00ff66',
+              }}
+            >
+              It's Hero Time!
+            </div>
+          </div>
+        )}
+      </>
+    );
   };
 
   const openCropModal = (index: number, imageSrc: string) => {
@@ -1846,7 +2023,12 @@ export default function GamePage() {
               </div>
 
               {/* Canvas Viewport (1080 x 1920 Logical) */}
-              <div className="flex-1 w-full h-full rounded-[30px] overflow-hidden bg-black relative">
+              <div
+                className="flex-1 w-full h-full rounded-[30px] overflow-hidden bg-black relative cursor-pointer"
+                onClick={() => {
+                  if (selectionPhase === 'idle') handleStartSelection();
+                }}
+              >
                 <canvas
                   ref={canvasRef}
                   width={1080}
@@ -1855,39 +2037,7 @@ export default function GamePage() {
                 />
 
                 {/* Pre-Battle Omnitrix Alien Selection Overlay */}
-                {selectionOverlay.active && (
-                  <div
-                    className="absolute pointer-events-none flex flex-col items-center justify-center z-20"
-                    style={{
-                      left: '50%',
-                      top: `${(830 / 1920) * 100}%`,
-                      transform: `translate(-50%, -50%) scale(${selectionOverlay.scale})`,
-                      width: '26%',
-                      aspectRatio: '1/1',
-                      transition: 'transform 0.05s linear',
-                    }}
-                  >
-                    <div className="absolute -inset-6 rounded-full bg-emerald-500/35 blur-xl animate-pulse" />
-                    <img
-                      src="/images/omnitrix_rotation.gif"
-                      alt="Omnitrix Dial"
-                      className="w-full h-full object-contain rounded-full shadow-[0_0_35px_rgba(0,255,102,0.9)] border-2 border-emerald-400"
-                    />
-                    {selectionOverlay.name && (
-                      <div
-                        className="absolute top-[108%] px-3 py-1 rounded-xl bg-black/90 border-2 font-black text-white text-[11px] tracking-wider whitespace-nowrap shadow-2xl flex items-center gap-1.5"
-                        style={{
-                          borderColor: selectionOverlay.color || '#00ff66',
-                          boxShadow: `0 0 16px ${selectionOverlay.color || '#00ff66'}80`,
-                        }}
-                      >
-                        <span className="text-emerald-400">⚡</span>
-                        <span>{selectionOverlay.name}</span>
-                        <span className="text-emerald-400">⚡</span>
-                      </div>
-                    )}
-                  </div>
-                )}
+                {renderOmnitrixOverlay()}
               </div>
             </div>
 
@@ -1981,7 +2131,12 @@ export default function GamePage() {
             </div>
 
             {/* Fullscreen 9:16 Frame */}
-            <div className="h-[90vh] aspect-[9/16] bg-black rounded-[36px] overflow-hidden border-4 border-slate-800 shadow-2xl shadow-cyan-950/40 relative">
+            <div
+              className="h-[90vh] aspect-[9/16] bg-black rounded-[36px] overflow-hidden border-4 border-slate-800 shadow-2xl shadow-cyan-950/40 relative cursor-pointer"
+              onClick={() => {
+                if (selectionPhase === 'idle') handleStartSelection();
+              }}
+            >
               <canvas
                 ref={fullscreenCanvasRef}
                 width={1080}
@@ -1990,39 +2145,7 @@ export default function GamePage() {
               />
 
               {/* Pre-Battle Omnitrix Alien Selection Overlay */}
-              {selectionOverlay.active && (
-                <div
-                  className="absolute pointer-events-none flex flex-col items-center justify-center z-20"
-                  style={{
-                    left: '50%',
-                    top: `${(830 / 1920) * 100}%`,
-                    transform: `translate(-50%, -50%) scale(${selectionOverlay.scale})`,
-                    width: '26%',
-                    aspectRatio: '1/1',
-                    transition: 'transform 0.05s linear',
-                  }}
-                >
-                  <div className="absolute -inset-6 rounded-full bg-emerald-500/35 blur-xl animate-pulse" />
-                  <img
-                    src="/images/omnitrix_rotation.gif"
-                    alt="Omnitrix Dial"
-                    className="w-full h-full object-contain rounded-full shadow-[0_0_35px_rgba(0,255,102,0.9)] border-2 border-emerald-400"
-                  />
-                  {selectionOverlay.name && (
-                    <div
-                      className="absolute top-[108%] px-3.5 py-1 rounded-xl bg-black/90 border-2 font-black text-white text-xs tracking-wider whitespace-nowrap shadow-2xl flex items-center gap-1.5"
-                      style={{
-                        borderColor: selectionOverlay.color || '#00ff66',
-                        boxShadow: `0 0 16px ${selectionOverlay.color || '#00ff66'}80`,
-                      }}
-                    >
-                      <span className="text-emerald-400">⚡</span>
-                      <span>{selectionOverlay.name}</span>
-                      <span className="text-emerald-400">⚡</span>
-                    </div>
-                  )}
-                </div>
-              )}
+              {renderOmnitrixOverlay()}
             </div>
           </div>
         )}
@@ -2173,7 +2296,26 @@ export default function GamePage() {
             </div>
           </div>
         )}
+
+        {/* Full-Screen Vivid Omnitrix Green Light Flash */}
+        {greenFlash && (
+          <div
+            className="fixed inset-0 z-[9999] pointer-events-none bg-[#00ff66]"
+            style={{
+              boxShadow: 'inset 0 0 150px rgba(255, 255, 255, 0.95)',
+              animation: 'omnitrixGreenFlash 0.45s ease-out forwards',
+            }}
+          />
+        )}
       </div>
+
+      <style jsx global>{`
+        @keyframes omnitrixGreenFlash {
+          0% { opacity: 0.95; }
+          40% { opacity: 0.9; }
+          100% { opacity: 0; }
+        }
+      `}</style>
     </div>
   );
 }
