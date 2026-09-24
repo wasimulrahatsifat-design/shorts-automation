@@ -1237,6 +1237,7 @@ export default function GamePage() {
             ctx.lineWidth = 1.5;
             ctx.stroke();
 
+            ctx.restore();
           });
 
           // Rotating Hexagonal Taydenite Crystal Prism Shield when active!
