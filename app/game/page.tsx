@@ -12,6 +12,7 @@ import {
   FloatingText,
   LiveFighter,
   ARENA_CENTER,
+  ARENA_BOX,
   ARENA_RADIUS,
   BOX_SIZE,
 } from './types';
@@ -20,32 +21,124 @@ import {
   SimulationResult,
   SimFrameState,
   SimFighter,
+  BEN10_DEFAULT_ABILITIES,
 } from '../../lib/arena-physics';
 
 export { SPECIAL_POWERS, COLOR_SWATCHES };
 export type { ContestantConfig };
 
+const BEN10_ALIEN_PRESETS: ContestantConfig[] = [
+  {
+    id: 'four_arms',
+    name: 'Four Arms',
+    color: '#dc2626',
+    image_url: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=300&auto=format&fit=crop&q=80',
+    starting_health: 120,
+    damage: 32,
+    speed: 5.8,
+    special_power: 'berserker',
+    special_ability: BEN10_DEFAULT_ABILITIES['four_arms'],
+  },
+  {
+    id: 'heatblast',
+    name: 'Heatblast',
+    color: '#ea580c',
+    image_url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=300&auto=format&fit=crop&q=80',
+    starting_health: 100,
+    damage: 28,
+    speed: 6.8,
+    special_power: 'thorns',
+    special_ability: BEN10_DEFAULT_ABILITIES['heatblast'],
+  },
+  {
+    id: 'xlr8',
+    name: 'XLR8',
+    color: '#0284c7',
+    image_url: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=300&auto=format&fit=crop&q=80',
+    starting_health: 90,
+    damage: 20,
+    speed: 9.5,
+    special_power: 'speedster',
+    special_ability: BEN10_DEFAULT_ABILITIES['xlr8'],
+  },
+  {
+    id: 'diamondhead',
+    name: 'Diamondhead',
+    color: '#10b981',
+    image_url: null,
+    starting_health: 110,
+    damage: 24,
+    speed: 6.2,
+    special_power: 'iron_shield',
+    special_ability: BEN10_DEFAULT_ABILITIES['diamondhead'],
+  },
+  {
+    id: 'cannonbolt',
+    name: 'Cannonbolt',
+    color: '#f59e0b',
+    image_url: null,
+    starting_health: 115,
+    damage: 26,
+    speed: 7.2,
+    special_power: 'none',
+    special_ability: BEN10_DEFAULT_ABILITIES['cannonbolt'],
+  },
+  {
+    id: 'upgrade',
+    name: 'Upgrade',
+    color: '#22c55e',
+    image_url: null,
+    starting_health: 95,
+    damage: 24,
+    speed: 6.5,
+    special_power: 'vampiric',
+    special_ability: BEN10_DEFAULT_ABILITIES['upgrade'],
+  },
+  {
+    id: 'ghostfreak',
+    name: 'Ghostfreak',
+    color: '#94a3b8',
+    image_url: null,
+    starting_health: 85,
+    damage: 22,
+    speed: 7.0,
+    special_power: 'phoenix',
+    special_ability: BEN10_DEFAULT_ABILITIES['ghostfreak'],
+  },
+  {
+    id: 'ripjaws',
+    name: 'Ripjaws',
+    color: '#06b6d4',
+    image_url: null,
+    starting_health: 100,
+    damage: 27,
+    speed: 6.6,
+    special_power: 'none',
+    special_ability: BEN10_DEFAULT_ABILITIES['ripjaws'],
+  },
+];
+
 const PRESET_ABILITIES = [
-  { name: 'Repulsor Blast', icon: '💥', type: 'damage' as const, cooldown_seconds: 5, power_value: 35, description: 'Fires energy blast' },
-  { name: 'Smoke Shield', icon: '🛡️', type: 'shield' as const, cooldown_seconds: 6, power_value: 40, description: 'Absorbs 40 damage' },
-  { name: 'Web Freeze', icon: '❄️', type: 'freeze' as const, cooldown_seconds: 7, power_value: 2.2, description: 'Freezes target in web' },
-  { name: 'Solar Surge', icon: '⚡', type: 'speed' as const, cooldown_seconds: 4, power_value: 2.5, description: 'Hyper sonic rush' },
-  { name: 'Kamehameha', icon: '☄️', type: 'damage' as const, cooldown_seconds: 6, power_value: 45, description: 'Massive energy beam' },
-  { name: 'Shadow Clone', icon: '⚡', type: 'speed' as const, cooldown_seconds: 5, power_value: 2.5, description: 'Deceptive speed dash' },
-  { name: 'Gear Blast', icon: '💥', type: 'damage' as const, cooldown_seconds: 5, power_value: 38, description: 'Stretchy punch impact' },
-  { name: 'Bankai Slash', icon: '🗡️', type: 'damage' as const, cooldown_seconds: 5, power_value: 42, description: 'Cuts through defenses' },
+  BEN10_DEFAULT_ABILITIES['four_arms'],
+  BEN10_DEFAULT_ABILITIES['heatblast'],
+  BEN10_DEFAULT_ABILITIES['xlr8'],
+  BEN10_DEFAULT_ABILITIES['diamondhead'],
+  BEN10_DEFAULT_ABILITIES['cannonbolt'],
+  BEN10_DEFAULT_ABILITIES['upgrade'],
+  BEN10_DEFAULT_ABILITIES['ghostfreak'],
+  BEN10_DEFAULT_ABILITIES['ripjaws'],
 ];
 
 const PRESET_TOPICS = [
+  { topic: 'Ben 10 Omnitrix Clash', names: ['Four Arms', 'Heatblast', 'XLR8', 'Diamondhead', 'Cannonbolt', 'Upgrade', 'Ghostfreak', 'Ripjaws'] },
   { topic: 'Marvel vs DC', names: ['Iron Man', 'Batman', 'Spider-Man', 'Superman'] },
   { topic: 'Anime Titans', names: ['Goku', 'Naruto', 'Luffy', 'Ichigo'] },
   { topic: 'Monsters Clash', names: ['Godzilla', 'Kong', 'T-Rex', 'Megalodon'] },
-  { topic: 'Fast Food Royale', names: ['Burger', 'Pizza', 'Taco', 'Fries'] },
 ];
 
 export default function GamePage() {
   // Topic and Contestants State
-  const [topic, setTopic] = useState('Marvel vs DC');
+  const [topic, setTopic] = useState('Ben 10 Omnitrix Clash');
   const [contestantCount, setContestantCount] = useState<number>(4);
   const [contestants, setContestants] = useState<ContestantConfig[]>([]);
 
@@ -87,26 +180,58 @@ export default function GamePage() {
   const lastSoundFrameRef = useRef<number>(-1);
   const screenShakeRef = useRef(0);
 
-  // 1. Initialize Contestants
+  // 1. Initialize Contestants with Ben 10 presets by default
+  const handleLoadBen10 = () => {
+    setTopic('Ben 10 Omnitrix Clash');
+    setContestantCount(BEN10_ALIEN_PRESETS.length);
+    setContestants(BEN10_ALIEN_PRESETS.map((alien) => ({ ...alien })));
+    initSimulation(true);
+  };
+
+  const handleLoadPreset = (index: number) => {
+    const selected = PRESET_TOPICS[index];
+    if (!selected) return;
+    setTopic(selected.topic);
+    if (selected.topic === 'Ben 10 Omnitrix Clash') {
+      handleLoadBen10();
+      return;
+    }
+    setContestantCount(selected.names.length);
+    setContestants(
+      selected.names.map((name, i) => ({
+        id: `fighter_${i + 1}`,
+        name,
+        color: COLOR_SWATCHES[i % COLOR_SWATCHES.length].hex,
+        image_url: null,
+        starting_health: 100,
+        damage: 25,
+        speed: 6.5,
+        special_power: SPECIAL_POWERS[(i % (SPECIAL_POWERS.length - 1)) + 1].id,
+        special_ability: PRESET_ABILITIES[i % PRESET_ABILITIES.length],
+      }))
+    );
+    initSimulation(true);
+  };
+
   useEffect(() => {
     setContestants((prev) => {
       const updated: ContestantConfig[] = [];
-      const preset = PRESET_TOPICS[0].names;
 
       for (let i = 0; i < contestantCount; i++) {
         if (prev[i]) {
           updated.push(prev[i]);
         } else {
+          const alien = BEN10_ALIEN_PRESETS[i % BEN10_ALIEN_PRESETS.length];
           updated.push({
-            id: `fighter_${i + 1}`,
-            name: preset[i] || `Fighter ${i + 1}`,
-            color: COLOR_SWATCHES[i % COLOR_SWATCHES.length].hex,
-            image_url: null,
-            starting_health: 100,
-            damage: 25,
-            speed: 6.5,
-            special_power: SPECIAL_POWERS[(i % (SPECIAL_POWERS.length - 1)) + 1].id,
-            special_ability: PRESET_ABILITIES[i % PRESET_ABILITIES.length],
+            id: alien.id || `fighter_${i + 1}`,
+            name: alien.name,
+            color: alien.color,
+            image_url: alien.image_url,
+            starting_health: alien.starting_health,
+            damage: alien.damage,
+            speed: alien.speed,
+            special_power: alien.special_power,
+            special_ability: alien.special_ability,
           });
         }
       }
@@ -336,42 +461,71 @@ export default function GamePage() {
         ctx.stroke();
       }
 
-      // Circular Arena Floor (Enlarged Radius: 430px)
+      // Ben 10 Square Arena Floor (ARENA_BOX: 900x900)
       ctx.save();
-      ctx.beginPath();
-      ctx.arc(cx, cy, ARENA_RADIUS, 0, Math.PI * 2);
-      ctx.fillStyle = '#0c101c';
-      ctx.fill();
+      ctx.fillStyle = '#030c06';
+      ctx.fillRect(ARENA_BOX.left, ARENA_BOX.top, ARENA_BOX.width, ARENA_BOX.height);
 
-      const floorGrad = ctx.createRadialGradient(cx, cy, 30, cx, cy, ARENA_RADIUS);
-      floorGrad.addColorStop(0, 'rgba(30, 41, 59, 0.6)');
-      floorGrad.addColorStop(0.85, 'rgba(15, 23, 42, 0.9)');
-      floorGrad.addColorStop(1, 'rgba(2, 6, 23, 0.98)');
-      ctx.fillStyle = floorGrad;
-      ctx.fill();
+      // Subtle Mechamorph Green Grid Lines
+      ctx.strokeStyle = 'rgba(0, 255, 102, 0.06)';
+      ctx.lineWidth = 1.5;
+      for (let x = ARENA_BOX.left; x <= ARENA_BOX.right; x += 45) {
+        ctx.beginPath();
+        ctx.moveTo(x, ARENA_BOX.top);
+        ctx.lineTo(x, ARENA_BOX.bottom);
+        ctx.stroke();
+      }
+      for (let y = ARENA_BOX.top; y <= ARENA_BOX.bottom; y += 45) {
+        ctx.beginPath();
+        ctx.moveTo(ARENA_BOX.left, y);
+        ctx.lineTo(ARENA_BOX.right, y);
+        ctx.stroke();
+      }
 
-      // Inner ring
-      ctx.beginPath();
-      ctx.arc(cx, cy, ARENA_RADIUS * 0.45, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
-      ctx.lineWidth = 4;
-      ctx.stroke();
-
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
-      ctx.font = '900 90px "Montserrat", sans-serif';
+      // Center Omnitrix Hourglass Emblem
+      ctx.font = '100px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('VS', cx, cy);
+      ctx.fillStyle = 'rgba(0, 255, 102, 0.1)';
+      ctx.fillText('⌛', cx, cy);
 
-      // Glowing Wall
+      // Glowing Neon Omnitrix Square Wall
       ctx.beginPath();
-      ctx.arc(cx, cy, ARENA_RADIUS, 0, Math.PI * 2);
-      ctx.lineWidth = 12;
-      ctx.strokeStyle = '#38bdf8';
-      ctx.shadowColor = '#0284c7';
-      ctx.shadowBlur = 30;
+      ctx.rect(ARENA_BOX.left, ARENA_BOX.top, ARENA_BOX.width, ARENA_BOX.height);
+      ctx.lineWidth = 8;
+      ctx.strokeStyle = '#00ff66';
+      ctx.shadowColor = '#00ff66';
+      ctx.shadowBlur = 28;
       ctx.stroke();
       ctx.shadowBlur = 0;
+
+      // 4 Corner Sci-Fi Brackets
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = '#00ff66';
+      // Top-Left
+      ctx.beginPath();
+      ctx.moveTo(ARENA_BOX.left + 35, ARENA_BOX.top);
+      ctx.lineTo(ARENA_BOX.left, ARENA_BOX.top);
+      ctx.lineTo(ARENA_BOX.left, ARENA_BOX.top + 35);
+      ctx.stroke();
+      // Top-Right
+      ctx.beginPath();
+      ctx.moveTo(ARENA_BOX.right - 35, ARENA_BOX.top);
+      ctx.lineTo(ARENA_BOX.right, ARENA_BOX.top);
+      ctx.lineTo(ARENA_BOX.right, ARENA_BOX.top + 35);
+      ctx.stroke();
+      // Bottom-Left
+      ctx.beginPath();
+      ctx.moveTo(ARENA_BOX.left + 35, ARENA_BOX.bottom);
+      ctx.lineTo(ARENA_BOX.left, ARENA_BOX.bottom);
+      ctx.lineTo(ARENA_BOX.left, ARENA_BOX.bottom - 35);
+      ctx.stroke();
+      // Bottom-Right
+      ctx.beginPath();
+      ctx.moveTo(ARENA_BOX.right - 35, ARENA_BOX.bottom);
+      ctx.lineTo(ARENA_BOX.right, ARENA_BOX.bottom);
+      ctx.lineTo(ARENA_BOX.right, ARENA_BOX.bottom - 35);
+      ctx.stroke();
       ctx.restore();
 
       // Draw Items
@@ -391,7 +545,7 @@ export default function GamePage() {
 
         ctx.beginPath();
         ctx.arc(0, 0, 28, 0, Math.PI * 2);
-        ctx.fillStyle = '#0f172a';
+        ctx.fillStyle = '#031408';
         ctx.strokeStyle = item.color;
         ctx.lineWidth = 3;
         ctx.fill();
@@ -433,26 +587,51 @@ export default function GamePage() {
         ctx.restore();
       });
 
-      // Contestants (Enlarged Box Size: 120px) with clearly visible names
+      // Contestants (Spherical Alien Balls with Centered Live HP)
       fighters.forEach((f) => {
         if (f.isDead) return;
 
         const half = f.size / 2;
-        const cornerRadius = 22;
+        const isCharged = (f.energyCharge || 0) >= 100 || f.specialMoveReady;
 
         ctx.save();
         ctx.translate(f.x, f.y);
 
-        ctx.shadowColor = f.color;
-        ctx.shadowBlur = 24;
+        // Rotating Attached Weapon / Fist / Prop
+        const weaponType = f.specialAbility?.weapon_type;
+        const weaponIcon = f.specialAbility?.weapon_icon || '⚔️';
+        if (weaponType && weaponType !== 'none') {
+          ctx.save();
+          ctx.rotate(f.angle || 0);
+          ctx.font = `${Math.round(f.size * 0.38)}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.shadowColor = '#00ff66';
+          ctx.shadowBlur = 10;
+          ctx.fillText(weaponIcon, half + 14, 0);
+          ctx.restore();
+        }
 
+        // Charged Omnitrix Pulsing Ring
+        if (isCharged) {
+          ctx.beginPath();
+          ctx.arc(0, 0, half + 8, 0, Math.PI * 2);
+          ctx.strokeStyle = '#00ff66';
+          ctx.lineWidth = 4;
+          ctx.shadowColor = '#00ff66';
+          ctx.shadowBlur = 20;
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+        }
+
+        // Round Spherical Ball Body
         ctx.beginPath();
-        ctx.roundRect(-half, -half, f.size, f.size, cornerRadius);
-        ctx.fillStyle = '#0f172a';
+        ctx.arc(0, 0, half, 0, Math.PI * 2);
+        ctx.fillStyle = '#031408';
         ctx.fill();
 
         ctx.save();
-        ctx.clip();
+        ctx.clip(); // Circular image clip
 
         const img = f.image_url ? loadedImagesRef.current.get(f.image_url) : null;
         if (img && img.complete && img.naturalWidth > 0) {
@@ -460,12 +639,12 @@ export default function GamePage() {
         } else {
           const grad = ctx.createLinearGradient(-half, -half, half, half);
           grad.addColorStop(0, f.color);
-          grad.addColorStop(1, '#020617');
+          grad.addColorStop(1, '#020904');
           ctx.fillStyle = grad;
           ctx.fillRect(-half, -half, f.size, f.size);
 
           ctx.fillStyle = f.color === '#ffffff' ? '#000' : '#fff';
-          ctx.font = '900 54px "Montserrat", sans-serif';
+          ctx.font = '900 50px "Montserrat", sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(f.name.charAt(0).toUpperCase(), 0, 0);
@@ -478,43 +657,57 @@ export default function GamePage() {
 
         ctx.restore();
 
+        // Ball Border
         ctx.beginPath();
-        ctx.roundRect(-half, -half, f.size, f.size, cornerRadius);
-        ctx.lineWidth = 7;
-        ctx.strokeStyle = f.hitFlash > 0 ? '#ffffff' : f.color;
+        ctx.arc(0, 0, half, 0, Math.PI * 2);
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = f.hitFlash > 0 ? '#ffffff' : isCharged ? '#00ff66' : f.color;
         ctx.stroke();
 
-        ctx.shadowBlur = 0;
+        // LIVE HP NUMBER DISPLAYED DIRECTLY INSIDE CENTER OF BALL (Viral Video Style)
+        ctx.font = `900 ${Math.round(f.size * 0.38)}px "Montserrat", sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = '#000000';
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeText(Math.round(f.health).toString(), 0, 2);
+        ctx.fillText(Math.round(f.health).toString(), 0, 2);
 
-        // Distinct, Clearly Visible Name Badge directly below the box
+        // Distinct, Clearly Visible Name Badge directly below the ball
         ctx.save();
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
-        ctx.strokeStyle = f.color;
+        ctx.fillStyle = 'rgba(3, 16, 8, 0.95)';
+        ctx.strokeStyle = isCharged ? '#00ff66' : f.color;
         ctx.lineWidth = 2;
         ctx.font = '900 16px "Montserrat", sans-serif';
         const nameW = ctx.measureText(f.name).width;
         ctx.beginPath();
-        ctx.roundRect(-nameW / 2 - 12, half + 6, nameW + 24, 28, 10);
+        ctx.roundRect(-nameW / 2 - 12, half + 8, nameW + 24, 28, 10);
         ctx.fill();
         ctx.stroke();
 
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(f.name, 0, half + 20);
+        ctx.fillText(f.name, 0, half + 22);
         ctx.restore();
 
-        // Active Item Badge Floating Above
+        // Active Item / Ability Badge Floating Above
         let itemBadge = '';
-        if (f.hasShield) itemBadge += '🛡️';
+        if (f.bonusShield > 0 || f.hasShield) itemBadge += '🛡️';
         if (f.hasDagger) itemBadge += '🗡️';
         if (f.gunBullets > 0) itemBadge += `🔫x${f.gunBullets}`;
         if (f.speedBoostTimer > 0) itemBadge += '⚡';
+        if (f.frozenTimer > 0) itemBadge += '❄️';
+        if (isCharged) itemBadge += '⚡ READY';
 
         if (itemBadge) {
-          ctx.font = '18px sans-serif';
+          ctx.font = 'bold 16px sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText(itemBadge, 0, -half - 14);
+          ctx.fillStyle = '#00ff66';
+          ctx.shadowColor = '#000';
+          ctx.shadowBlur = 6;
+          ctx.fillText(itemBadge, 0, -half - 12);
         }
 
         ctx.restore();
@@ -602,13 +795,13 @@ export default function GamePage() {
 
   // Helper: Live Health Bars below arena
   const drawLiveHealthBars = (ctx: CanvasRenderingContext2D, fighters: SimFighter[], width: number) => {
-    const startY = 1220;
+    const startY = 1175; // Right below ARENA_BOX.bottom (1150)
     const count = fighters.length;
     const colWidth = 460;
     const leftX = 50;
     const rightX = width - colWidth - 50;
     const rows = Math.ceil(count / 2);
-    const rowHeight = Math.min(125, 580 / Math.max(rows, 2));
+    const rowHeight = Math.min(130, 680 / Math.max(rows, 2));
 
     fighters.forEach((f, idx) => {
       let x = leftX;
@@ -638,20 +831,30 @@ export default function GamePage() {
       ctx.save();
       ctx.translate(x, y);
 
-      ctx.beginPath();
-      ctx.roundRect(0, 0, colWidth, rowHeight - 16, 20);
-      ctx.fillStyle = f.isDead ? 'rgba(15, 23, 42, 0.45)' : 'rgba(15, 23, 42, 0.9)';
-      ctx.fill();
-      ctx.lineWidth = f.isDead ? 1 : 3;
-      ctx.strokeStyle = f.isDead ? '#334155' : f.color;
-      ctx.stroke();
+      const isCharged = (f.energyCharge ?? 0) >= 100;
+      const cardHeight = rowHeight - 14;
 
-      const thumbSize = rowHeight - 36;
-      ctx.save();
-      ctx.translate(10, 10);
+      // Card Background (Dark Ben 10 Omnitrix Theme)
       ctx.beginPath();
-      ctx.roundRect(0, 0, thumbSize, thumbSize, 14);
-      ctx.fillStyle = f.color;
+      ctx.roundRect(0, 0, colWidth, cardHeight, 16);
+      ctx.fillStyle = f.isDead ? 'rgba(5, 12, 8, 0.45)' : 'rgba(4, 18, 10, 0.92)';
+      ctx.fill();
+      ctx.lineWidth = f.isDead ? 1 : isCharged ? 3 : 2;
+      ctx.strokeStyle = f.isDead ? '#1e293b' : isCharged ? '#00ff66' : f.color;
+      if (isCharged && !f.isDead) {
+        ctx.shadowColor = '#00ff66';
+        ctx.shadowBlur = 12;
+      }
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // Spherical Ball Avatar thumbnail
+      const thumbSize = cardHeight - 24;
+      ctx.save();
+      ctx.translate(12, 12);
+      ctx.beginPath();
+      ctx.arc(thumbSize / 2, thumbSize / 2, thumbSize / 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#031408';
       ctx.fill();
       ctx.clip();
 
@@ -667,8 +870,15 @@ export default function GamePage() {
       }
       ctx.restore();
 
+      // Thumbnail Border
+      ctx.beginPath();
+      ctx.arc(12 + thumbSize / 2, 12 + thumbSize / 2, thumbSize / 2, 0, Math.PI * 2);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = f.isDead ? '#475569' : isCharged ? '#00ff66' : f.color;
+      ctx.stroke();
+
       const textX = thumbSize + 24;
-      ctx.font = count <= 4 ? '900 28px "Montserrat", sans-serif' : '900 24px "Montserrat", sans-serif';
+      ctx.font = '900 22px "Montserrat", sans-serif';
       ctx.fillStyle = f.isDead ? '#64748b' : '#ffffff';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
@@ -683,19 +893,21 @@ export default function GamePage() {
 
       ctx.fillText(`${f.name} ${abIcon}${itemTag}`, textX, 10);
 
-      ctx.font = '800 18px "Montserrat", sans-serif';
-      ctx.fillStyle = f.isDead ? '#ef4444' : '#38bdf8';
+      // HP text
+      ctx.font = '900 20px "Montserrat", sans-serif';
+      ctx.fillStyle = f.isDead ? '#ef4444' : '#00ff66';
       ctx.textAlign = 'right';
-      ctx.fillText(f.isDead ? 'ELIMINATED' : `${Math.round(f.health)} HP`, colWidth - 16, 14);
+      ctx.fillText(f.isDead ? 'ELIMINATED' : `${Math.round(f.health)} HP`, colWidth - 14, 10);
 
       const barX = textX;
-      const barY = rowHeight - 38;
-      const barW = colWidth - textX - 16;
-      const barH = 16;
+      const barW = colWidth - textX - 14;
 
+      // 1. Health Bar
+      const hpBarY = 40;
+      const hpBarH = 12;
       ctx.beginPath();
-      ctx.roundRect(barX, barY, barW, barH, 8);
-      ctx.fillStyle = 'rgba(30, 41, 59, 0.85)';
+      ctx.roundRect(barX, hpBarY, barW, hpBarH, 6);
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
       ctx.fill();
 
       if (!f.isDead && f.health > 0) {
@@ -705,12 +917,51 @@ export default function GamePage() {
         else if (hpPct < 0.5) hpColor = '#f59e0b';
 
         ctx.beginPath();
-        ctx.roundRect(barX, barY, barW * hpPct, barH, 8);
+        ctx.roundRect(barX, hpBarY, barW * hpPct, hpBarH, 6);
         ctx.fillStyle = hpColor;
         ctx.shadowColor = hpColor;
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = 8;
         ctx.fill();
         ctx.shadowBlur = 0;
+      }
+
+      // 2. Omnitrix Energy Charge Bar
+      const energyBarY = 58;
+      const energyBarH = 8;
+      const energy = Math.round(f.energyCharge ?? 0);
+      const energyW = barW - 65;
+
+      ctx.beginPath();
+      ctx.roundRect(barX, energyBarY, energyW, energyBarH, 4);
+      ctx.fillStyle = 'rgba(0, 20, 10, 0.85)';
+      ctx.fill();
+
+      if (!f.isDead && energy > 0) {
+        ctx.beginPath();
+        ctx.roundRect(barX, energyBarY, energyW * (Math.min(100, energy) / 100), energyBarH, 4);
+        ctx.fillStyle = isCharged ? '#00ff66' : '#10b981';
+        if (isCharged) {
+          ctx.shadowColor = '#00ff66';
+          ctx.shadowBlur = 8;
+        }
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+
+      // Energy text
+      ctx.font = '800 12px "Montserrat", sans-serif';
+      ctx.fillStyle = isCharged ? '#00ff66' : '#94a3b8';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(isCharged ? '⚡ READY!' : `${energy}%`, colWidth - 14, energyBarY + 4);
+
+      // 3. Ability Name Tag
+      if (f.specialAbility) {
+        ctx.font = '700 11px "Montserrat", sans-serif';
+        ctx.fillStyle = '#64748b';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(`${f.specialAbility.icon} ${f.specialAbility.name}`, barX, 72);
       }
 
       ctx.restore();
@@ -925,23 +1176,6 @@ export default function GamePage() {
     });
   };
 
-  const handleLoadPreset = (presetIndex: number) => {
-    const p = PRESET_TOPICS[presetIndex];
-    setTopic(p.topic);
-    setContestantCount(p.names.length);
-    setContestants(
-      p.names.map((name, i) => ({
-        id: `fighter_${i + 1}`,
-        name,
-        color: COLOR_SWATCHES[i % COLOR_SWATCHES.length].hex,
-        image_url: null,
-        starting_health: 100,
-        damage: 25,
-        speed: 6.5,
-        special_power: SPECIAL_POWERS[(i % (SPECIAL_POWERS.length - 1)) + 1].id,
-      }))
-    );
-  };
 
   // 9. Queue Video to YouTube Shorts with Full Dynamic Match Duration and Identical Seed
   const handleQueueVideo = async () => {
@@ -1073,7 +1307,15 @@ export default function GamePage() {
             <div className="bg-slate-900/40 border border-slate-800/60 rounded-2xl p-4 space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Battle Headline</span>
-                <div className="flex gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={handleLoadBen10}
+                    className="px-2.5 py-0.5 rounded-md bg-emerald-950 hover:bg-emerald-900 border border-emerald-500/60 text-[11px] font-bold text-emerald-300 transition flex items-center gap-1 shadow-sm"
+                  >
+                    <span>⌛</span>
+                    <span>Ben 10 Aliens</span>
+                  </button>
                   {PRESET_TOPICS.map((p, idx) => (
                     <button
                       key={idx}
@@ -1318,6 +1560,48 @@ export default function GamePage() {
                             }}
                             className="w-10 bg-transparent text-pink-400 font-bold text-right focus:outline-none"
                           />
+                        </div>
+                      </div>
+
+                      {/* Trigger Criteria & Weapon Selector */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] pt-1.5 border-t border-slate-900">
+                        <div className="flex items-center gap-1.5 bg-slate-900/90 px-2 py-1 rounded-lg border border-slate-800">
+                          <span className="text-slate-400 font-semibold whitespace-nowrap text-[10px]">🎯 Trigger:</span>
+                          <select
+                            value={fighter.special_ability?.trigger_type || 'charge'}
+                            onChange={(e) => {
+                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '⚡', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                              updateContestant(idx, { special_ability: { ...cur, trigger_type: e.target.value as any } });
+                            }}
+                            className="bg-transparent text-emerald-400 font-bold focus:outline-none flex-1 text-[10px]"
+                          >
+                            <option value="charge" className="bg-slate-900 text-white">⚡ 100% Omnitrix Charge</option>
+                            <option value="hp_threshold" className="bg-slate-900 text-white">🩸 Low HP (&lt;50%) Rage</option>
+                            <option value="hit_combo" className="bg-slate-900 text-white">🥊 4x Hit Combo</option>
+                            <option value="cooldown" className="bg-slate-900 text-white">⏱️ Cooldown Timer</option>
+                          </select>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 bg-slate-900/90 px-2 py-1 rounded-lg border border-slate-800">
+                          <span className="text-slate-400 font-semibold whitespace-nowrap text-[10px]">⚔️ Weapon:</span>
+                          <select
+                            value={fighter.special_ability?.weapon_icon || '🥊'}
+                            onChange={(e) => {
+                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '⚡', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                              updateContestant(idx, { special_ability: { ...cur, weapon_icon: e.target.value } });
+                            }}
+                            className="bg-transparent text-amber-300 font-bold focus:outline-none flex-1 text-[10px]"
+                          >
+                            <option value="🥊" className="bg-slate-900 text-white">🥊 Fist / Sonic Blow</option>
+                            <option value="🔥" className="bg-slate-900 text-white">🔥 Fireball Orbit</option>
+                            <option value="💎" className="bg-slate-900 text-white">💎 Diamond Crystal</option>
+                            <option value="🗡️" className="bg-slate-900 text-white">🗡️ Plasma Blade</option>
+                            <option value="⚡" className="bg-slate-900 text-white">⚡ Electric Arc</option>
+                            <option value="🛡️" className="bg-slate-900 text-white">🛡️ Energy Shield</option>
+                            <option value="⚙️" className="bg-slate-900 text-white">⚙️ Galvanic Gear</option>
+                            <option value="🦈" className="bg-slate-900 text-white">🦈 Steel Jaws</option>
+                            <option value="" className="bg-slate-900 text-white">None</option>
+                          </select>
                         </div>
                       </div>
                     </div>

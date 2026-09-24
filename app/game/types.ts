@@ -33,6 +33,10 @@ export interface SpecialAbility {
   cooldown_seconds: number;
   power_value: number;
   description?: string;
+  trigger_type?: 'charge' | 'hp_threshold' | 'hit_combo' | 'cooldown';
+  trigger_value?: number;
+  weapon_type?: 'sword' | 'fist' | 'flame' | 'crystal' | 'none';
+  weapon_icon?: string;
 }
 
 export interface ContestantConfig {
@@ -120,6 +124,14 @@ export interface LiveFighter {
   speedBoostTimer: number;
 }
 
+export const ARENA_BOX = {
+  left: 90,
+  top: 250,
+  right: 990,
+  bottom: 1150,
+  width: 900,
+  height: 900,
+};
 export const ARENA_RADIUS = 430;
-export const ARENA_CENTER = { x: 540, y: 690 };
+export const ARENA_CENTER = { x: 540, y: 700 };
 export const BOX_SIZE = 120;

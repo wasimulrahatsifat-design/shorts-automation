@@ -1,12 +1,16 @@
-// Deterministic 2D Physics Simulator for Arena Clash Royale
+// Deterministic 2D Physics Simulator for Ben 10 Square Arena Ball Battle
 
 export interface SpecialAbility {
-  name: string;             // e.g., "Thunder Strike", "Inferno Blast"
-  icon: string;             // Emoji e.g. "⚡", "🔥", "🛡️", "❄️", "💚"
+  name: string;             // e.g., "Sonic Clap", "Supernova Inferno"
+  icon: string;             // Emoji e.g. "💥", "🔥", "⚡", "💎", "🛡️"
   type: 'damage' | 'shield' | 'heal' | 'freeze' | 'speed';
   cooldown_seconds: number; // e.g. 5, 8
   power_value: number;      // Damage amount, heal amount, shield durability, or freeze duration
   description?: string;
+  trigger_type?: 'charge' | 'hp_threshold' | 'hit_combo' | 'cooldown';
+  trigger_value?: number;   // 100 for 100% charge, 50 for 50% HP, 5 for 5 hits
+  weapon_type?: 'sword' | 'fist' | 'flame' | 'crystal' | 'none';
+  weapon_icon?: string;
 }
 
 export interface FighterInput {
@@ -31,6 +35,9 @@ export interface SimFighter {
   vx: number;
   vy: number;
   size: number;
+  angle: number;             // Radians rotation for ball rolling & weapon
+  energyCharge: number;      // 0 to 100% (Omnitrix gauge)
+  hitCombo: number;          // Consecutive hits landed
   health: number;
   maxHealth: number;
   damage: number;
@@ -53,6 +60,7 @@ export interface SimFighter {
   daggerActivated: boolean;
   gunBullets: number;
   speedBoostTimer: number;
+  specialMoveReady: boolean;
 }
 
 export interface SimItem {
@@ -141,22 +149,124 @@ export function getFighterSize(count: number): number {
   return Math.max(62, Math.round(300 / Math.sqrt(count)));
 }
 
-// Circular arena dimensions
-export const ARENA_RADIUS = 430;
-export const ARENA_CENTER = { x: 540, y: 690 };
+// High-tech Square Arena dimensions (Centered in 1080x1920 Shorts canvas)
+export const ARENA_BOX = {
+  left: 90,
+  top: 250,
+  right: 990,
+  bottom: 1150,
+  width: 900,
+  height: 900,
+};
+export const ARENA_RADIUS = 450; // Kept for backwards compatibility
+export const ARENA_CENTER = { x: 540, y: 700 };
 export const BOX_SIZE = 120; // Default fallback for backwards compatibility
 
-// Default ability presets if none provided
-const DEFAULT_ABILITIES: Record<string, SpecialAbility> = {
-  iron_shield: { name: 'Iron Bastion', icon: '🛡️', type: 'shield', cooldown_seconds: 6, power_value: 40 },
-  berserker: { name: 'Berserk Strike', icon: '💥', type: 'damage', cooldown_seconds: 5, power_value: 35 },
-  vampiric: { name: 'Life Drain', icon: '🩸', type: 'heal', cooldown_seconds: 6, power_value: 25 },
-  thorns: { name: 'Spike Burst', icon: '🌵', type: 'damage', cooldown_seconds: 5, power_value: 30 },
-  speedster: { name: 'Flash Dash', icon: '⚡', type: 'speed', cooldown_seconds: 4, power_value: 2 },
-  phoenix: { name: 'Holy Heal', icon: '💚', type: 'heal', cooldown_seconds: 7, power_value: 35 },
-  freeze: { name: 'Frost Freeze', icon: '❄️', type: 'freeze', cooldown_seconds: 7, power_value: 2.2 },
-  none: { name: 'Power Strike', icon: '⚡', type: 'damage', cooldown_seconds: 6, power_value: 30 },
+// Authentic Ben 10 Alien Presets & Abilities
+export const BEN10_DEFAULT_ABILITIES: Record<string, SpecialAbility> = {
+  four_arms: {
+    name: 'Sonic Clap',
+    icon: '💥',
+    type: 'damage',
+    cooldown_seconds: 5,
+    power_value: 40,
+    trigger_type: 'charge',
+    trigger_value: 100,
+    weapon_type: 'fist',
+    weapon_icon: '🥊',
+    description: 'Deals massive shockwave blast and knocks opponents back!',
+  },
+  heatblast: {
+    name: 'Supernova Inferno',
+    icon: '🔥',
+    type: 'damage',
+    cooldown_seconds: 6,
+    power_value: 45,
+    trigger_type: 'hp_threshold',
+    trigger_value: 50,
+    weapon_type: 'flame',
+    weapon_icon: '🔥',
+    description: 'Ignites when HP < 50%, unleashing blazing firestorm beams!',
+  },
+  xlr8: {
+    name: 'Turbo Blitz',
+    icon: '⚡',
+    type: 'speed',
+    cooldown_seconds: 4,
+    power_value: 2.2,
+    trigger_type: 'charge',
+    trigger_value: 100,
+    weapon_type: 'none',
+    description: 'Lightspeed acceleration bouncing across the square arena!',
+  },
+  diamondhead: {
+    name: 'Crystal Spike',
+    icon: '💎',
+    type: 'shield',
+    cooldown_seconds: 6,
+    power_value: 50,
+    trigger_type: 'charge',
+    trigger_value: 100,
+    weapon_type: 'crystal',
+    weapon_icon: '💎',
+    description: 'Erupts indestructible crystal barriers absorbing hits!',
+  },
+  cannonbolt: {
+    name: 'Wrecking Roll',
+    icon: '🛡️',
+    type: 'damage',
+    cooldown_seconds: 5,
+    power_value: 38,
+    trigger_type: 'charge',
+    trigger_value: 100,
+    weapon_type: 'none',
+    description: 'Indestructible rolling ball crushing opponents!',
+  },
+  upgrade: {
+    name: 'Circuit Overload',
+    icon: '🤖',
+    type: 'damage',
+    cooldown_seconds: 5,
+    power_value: 36,
+    trigger_type: 'charge',
+    trigger_value: 100,
+    weapon_type: 'none',
+    description: 'Electrifies the square arena walls with green laser sparks!',
+  },
+  ghostfreak: {
+    name: 'Shadow Phase',
+    icon: '👻',
+    type: 'freeze',
+    cooldown_seconds: 7,
+    power_value: 2.5,
+    trigger_type: 'hp_threshold',
+    trigger_value: 40,
+    weapon_type: 'none',
+    description: 'Phases through reality and telekinetically freezes opponents!',
+  },
+  ripjaws: {
+    name: 'Steel Jaw Bite',
+    icon: '🦈',
+    type: 'damage',
+    cooldown_seconds: 5,
+    power_value: 42,
+    trigger_type: 'hit_combo',
+    trigger_value: 4,
+    weapon_type: 'none',
+    description: 'After 4 hit combo, chomps down with ferocious crushing jaws!',
+  },
+  // Generic fallbacks
+  iron_shield: { name: 'Iron Bastion', icon: '🛡️', type: 'shield', cooldown_seconds: 6, power_value: 40, trigger_type: 'charge', trigger_value: 100 },
+  berserker: { name: 'Berserk Strike', icon: '💥', type: 'damage', cooldown_seconds: 5, power_value: 35, trigger_type: 'hp_threshold', trigger_value: 30 },
+  vampiric: { name: 'Life Drain', icon: '🩸', type: 'heal', cooldown_seconds: 6, power_value: 25, trigger_type: 'charge', trigger_value: 100 },
+  thorns: { name: 'Spike Burst', icon: '🌵', type: 'damage', cooldown_seconds: 5, power_value: 30, trigger_type: 'charge', trigger_value: 100 },
+  speedster: { name: 'Flash Dash', icon: '⚡', type: 'speed', cooldown_seconds: 4, power_value: 2, trigger_type: 'charge', trigger_value: 100 },
+  phoenix: { name: 'Holy Heal', icon: '💚', type: 'heal', cooldown_seconds: 7, power_value: 35, trigger_type: 'hp_threshold', trigger_value: 35 },
+  freeze: { name: 'Frost Freeze', icon: '❄️', type: 'freeze', cooldown_seconds: 7, power_value: 2.2, trigger_type: 'charge', trigger_value: 100 },
+  none: { name: 'Omnitrix Blast', icon: '⚡', type: 'damage', cooldown_seconds: 5, power_value: 30, trigger_type: 'charge', trigger_value: 100 },
 };
+
+export const DEFAULT_ABILITIES = BEN10_DEFAULT_ABILITIES;
 
 export function generateArenaSimulation(
   contestants: FighterInput[],
@@ -167,10 +277,10 @@ export function generateArenaSimulation(
   const count = Math.max(2, contestants.length);
   const dynamicSize = getFighterSize(count);
 
-  // Initialize Fighters
+  // Initialize Fighters inside Square Arena Box
   const fighters: SimFighter[] = contestants.map((c, idx) => {
     const angle = (idx / count) * Math.PI * 2 - Math.PI / 2;
-    const spawnRadius = ARENA_RADIUS * 0.62;
+    const spawnRadius = (ARENA_BOX.width / 2) * 0.62;
     const x = ARENA_CENTER.x + Math.cos(angle) * spawnRadius;
     const y = ARENA_CENTER.y + Math.sin(angle) * spawnRadius;
 
@@ -183,17 +293,19 @@ export function generateArenaSimulation(
 
     // Resolve Special Ability
     const ability: SpecialAbility = c.special_ability ||
-      DEFAULT_ABILITIES[c.special_power || 'none'] || {
-        name: 'Thunder Strike',
+      BEN10_DEFAULT_ABILITIES[c.special_power || 'none'] ||
+      BEN10_DEFAULT_ABILITIES['four_arms'] || {
+        name: 'Omnitrix Blast',
         icon: '⚡',
         type: 'damage',
         cooldown_seconds: 5,
-        power_value: 30,
+        power_value: 35,
+        trigger_type: 'charge',
+        trigger_value: 100,
       };
 
     const cooldownFrames = Math.max(60, Math.round(ability.cooldown_seconds * 30));
-    // Stagger initial ability triggers slightly so they don't all fire simultaneously at frame 0
-    const initialCooldown = Math.round(cooldownFrames * (0.4 + rng() * 0.5));
+    const initialCooldown = Math.round(cooldownFrames * (0.3 + rng() * 0.4));
 
     return {
       id: c.id || `fighter_${idx + 1}`,
@@ -205,6 +317,9 @@ export function generateArenaSimulation(
       vx,
       vy,
       size: dynamicSize,
+      angle: rng() * Math.PI * 2,
+      energyCharge: 0,
+      hitCombo: 0,
       health: c.starting_health || 100,
       maxHealth: c.starting_health || 100,
       damage: c.damage || 25,
@@ -213,7 +328,7 @@ export function generateArenaSimulation(
       abilityCooldownTimer: initialCooldown,
       abilityCooldownMax: cooldownFrames,
       abilityAuraTimer: 0,
-      abilityAuraColor: '#ffffff',
+      abilityAuraColor: '#00ff66',
       abilityAuraIcon: ability.icon,
       frozenTimer: 0,
       bonusShield: 0,
@@ -227,6 +342,7 @@ export function generateArenaSimulation(
       daggerActivated: false,
       gunBullets: 0,
       speedBoostTimer: 0,
+      specialMoveReady: false,
     };
   });
 
@@ -292,19 +408,19 @@ export function generateArenaSimulation(
       break;
     }
 
-    // Item Spawner: 8 seconds (240 frames) AFTER an item is picked up (or initial spawn)
+    // Item Spawner: 8 seconds (240 frames) AFTER an item is picked up (or initial spawn) inside ARENA_BOX
     if (items.length === 0 && !winner) {
       if (nextItemSpawnCooldown > 0) {
         nextItemSpawnCooldown--;
       } else {
         const pick = itemTypes[Math.floor(rng() * itemTypes.length)];
-        const a = rng() * Math.PI * 2;
-        const r = rng() * (ARENA_RADIUS - 90);
+        const spawnX = ARENA_BOX.left + 90 + rng() * (ARENA_BOX.width - 180);
+        const spawnY = ARENA_BOX.top + 90 + rng() * (ARENA_BOX.height - 180);
         items.push({
           id: `item_${frame}`,
           type: pick.type,
-          x: ARENA_CENTER.x + Math.cos(a) * r,
-          y: ARENA_CENTER.y + Math.sin(a) * r,
+          x: spawnX,
+          y: spawnY,
           icon: pick.icon,
           name: pick.name,
           color: pick.color,
@@ -314,7 +430,7 @@ export function generateArenaSimulation(
       }
     }
 
-    // Process Special Abilities for each alive fighter
+    // Process Ben 10 Special Moves with specific Trigger Criteria for each alive fighter
     if (!winner) {
       aliveFighters.forEach((f) => {
         if (f.frozenTimer > 0) {
@@ -323,12 +439,27 @@ export function generateArenaSimulation(
         }
 
         if (f.abilityAuraTimer > 0) f.abilityAuraTimer--;
+        if (f.abilityCooldownTimer > 0) f.abilityCooldownTimer--;
 
-        if (f.abilityCooldownTimer > 0) {
-          f.abilityCooldownTimer--;
-        } else {
-          // Trigger special ability!
-          const ab = f.specialAbility;
+        const ab = f.specialAbility;
+        const triggerType = ab.trigger_type || 'charge';
+        const triggerVal = ab.trigger_value !== undefined ? ab.trigger_value : (triggerType === 'charge' ? 100 : triggerType === 'hp_threshold' ? 50 : 4);
+
+        // Check if criteria is satisfied
+        let isTriggerReady = false;
+        if (triggerType === 'charge') {
+          isTriggerReady = f.energyCharge >= 100 && f.abilityCooldownTimer <= 0;
+        } else if (triggerType === 'hp_threshold') {
+          isTriggerReady = f.health <= (f.maxHealth * triggerVal) / 100 && f.abilityCooldownTimer <= 0;
+        } else if (triggerType === 'hit_combo') {
+          isTriggerReady = f.hitCombo >= triggerVal && f.abilityCooldownTimer <= 0;
+        } else if (triggerType === 'cooldown') {
+          isTriggerReady = f.abilityCooldownTimer <= 0;
+        }
+
+        f.specialMoveReady = isTriggerReady;
+
+        if (isTriggerReady) {
           const otherFighters = aliveFighters.filter((opp) => opp.id !== f.id);
           if (otherFighters.length === 0) return;
 
@@ -343,51 +474,65 @@ export function generateArenaSimulation(
             }
           }
 
-          // Ability Visual Announcement Banner
+          // Special Move Announcement Banner
           floatingTexts.push({
             id: `ab_banner_${frame}_${f.id}`,
             x: f.x,
-            y: f.y - (f.size / 2 + 30),
-            text: `${ab.icon} ${ab.name.toUpperCase()}!`,
-            color: f.color,
+            y: f.y - (f.size / 2 + 35),
+            text: `⚡ ${f.name.toUpperCase()}: ${ab.name.toUpperCase()}! ⚡`,
+            color: '#00ff66',
             alpha: 1,
             vy: -2.8,
-            scale: 1.35,
+            scale: 1.4,
           });
 
-          f.abilityAuraTimer = 35;
+          f.abilityAuraTimer = 45;
           f.abilityAuraIcon = ab.icon;
+          f.abilityAuraColor = '#00ff66';
 
+          // Reset trigger gauges
+          f.energyCharge = 0;
+          f.hitCombo = 0;
+          f.specialMoveReady = false;
+          f.abilityCooldownTimer = isOvertime
+            ? Math.round(f.abilityCooldownMax * 0.6)
+            : f.abilityCooldownMax;
+
+          // Execute Alien Signature Move
           if (ab.type === 'damage') {
-            f.abilityAuraColor = '#f43f5e';
-            const baseDmg = ab.power_value || 30;
+            const baseDmg = ab.power_value || 38;
             const finalDmg = isOvertime ? baseDmg * 2 : baseDmg;
 
             // Damage nearest opponent
-            nearestOpp.hitFlash = 14;
+            nearestOpp.hitFlash = 16;
             nearestOpp.health = Math.max(0, nearestOpp.health - finalDmg);
             soundEvents.push({ frame, sound: 'ability', abilityType: 'damage', volume: 1.0 });
+
+            // Push nearest opponent violently back (knockback)
+            const knockAngle = Math.atan2(nearestOpp.y - f.y, nearestOpp.x - f.x);
+            nearestOpp.vx = Math.cos(knockAngle) * 18;
+            nearestOpp.vy = Math.sin(knockAngle) * 18;
 
             floatingTexts.push({
               id: `ab_dmg_${frame}_${nearestOpp.id}`,
               x: nearestOpp.x,
-              y: nearestOpp.y - 40,
+              y: nearestOpp.y - 45,
               text: `-${finalDmg} ${ab.icon}`,
               color: '#ef4444',
               alpha: 1,
               vy: -2.5,
-              scale: 1.25,
+              scale: 1.3,
             });
 
-            // Shockwave particles from caster to target
-            for (let k = 0; k < 12; k++) {
+            // Omnitrix Green Shockwave particles
+            for (let k = 0; k < 16; k++) {
               particles.push({
                 x: nearestOpp.x + (rng() - 0.5) * 40,
                 y: nearestOpp.y + (rng() - 0.5) * 40,
-                vx: (rng() - 0.5) * 8,
-                vy: (rng() - 0.5) * 8,
-                color: f.color,
-                radius: rng() * 5 + 3,
+                vx: (rng() - 0.5) * 12,
+                vy: (rng() - 0.5) * 12,
+                color: '#00ff66',
+                radius: rng() * 6 + 3,
                 alpha: 1,
               });
             }
@@ -397,24 +542,34 @@ export function generateArenaSimulation(
               soundEvents.push({ frame, sound: 'explosion', volume: 1.0 });
             }
           } else if (ab.type === 'shield') {
-            f.abilityAuraColor = '#a855f7';
             f.hasShield = true;
-            f.bonusShield = ab.power_value || 40;
+            f.bonusShield = ab.power_value || 50;
             soundEvents.push({ frame, sound: 'ability', abilityType: 'shield', volume: 0.9 });
 
             floatingTexts.push({
               id: `ab_shd_${frame}_${f.id}`,
               x: f.x,
               y: f.y - 40,
-              text: `🛡️ SHIELD +${f.bonusShield}`,
-              color: '#a855f7',
+              text: `💎 CRYSTAL SHIELD +${f.bonusShield}`,
+              color: '#10b981',
               alpha: 1,
               vy: -2.2,
-              scale: 1.2,
+              scale: 1.25,
             });
+
+            for (let k = 0; k < 12; k++) {
+              particles.push({
+                x: f.x + (rng() - 0.5) * (f.size + 20),
+                y: f.y + (rng() - 0.5) * (f.size + 20),
+                vx: (rng() - 0.5) * 4,
+                vy: (rng() - 0.5) * 4,
+                color: '#10b981',
+                radius: rng() * 4 + 2,
+                alpha: 1,
+              });
+            }
           } else if (ab.type === 'heal') {
-            f.abilityAuraColor = '#22c55e';
-            const healAmt = Math.min(f.maxHealth - f.health, ab.power_value || 30);
+            const healAmt = Math.min(f.maxHealth - f.health, ab.power_value || 35);
             f.health += healAmt;
             soundEvents.push({ frame, sound: 'ability', abilityType: 'heal', volume: 0.9 });
 
@@ -429,7 +584,7 @@ export function generateArenaSimulation(
               scale: 1.25,
             });
 
-            for (let k = 0; k < 8; k++) {
+            for (let k = 0; k < 10; k++) {
               particles.push({
                 x: f.x + (rng() - 0.5) * 40,
                 y: f.y + (rng() - 0.5) * 40,
@@ -441,8 +596,7 @@ export function generateArenaSimulation(
               });
             }
           } else if (ab.type === 'freeze') {
-            f.abilityAuraColor = '#38bdf8';
-            nearestOpp.frozenTimer = Math.round((ab.power_value || 2) * 30);
+            nearestOpp.frozenTimer = Math.round((ab.power_value || 2.5) * 30);
             soundEvents.push({ frame, sound: 'ability', abilityType: 'freeze', volume: 1.0 });
 
             floatingTexts.push({
@@ -456,49 +610,43 @@ export function generateArenaSimulation(
               scale: 1.25,
             });
 
-            for (let k = 0; k < 10; k++) {
+            for (let k = 0; k < 12; k++) {
               particles.push({
                 x: nearestOpp.x + (rng() - 0.5) * 45,
                 y: nearestOpp.y + (rng() - 0.5) * 45,
-                vx: (rng() - 0.5) * 3,
-                vy: (rng() - 0.5) * 3,
+                vx: (rng() - 0.5) * 4,
+                vy: (rng() - 0.5) * 4,
                 color: '#38bdf8',
                 radius: rng() * 4 + 3,
                 alpha: 1,
               });
             }
           } else if (ab.type === 'speed') {
-            f.abilityAuraColor = '#eab308';
-            f.speedBoostTimer = Math.round((ab.power_value || 2.5) * 30);
+            f.speedBoostTimer = Math.round((ab.power_value || 2.8) * 30);
             soundEvents.push({ frame, sound: 'ability', abilityType: 'speed', volume: 0.9 });
 
             floatingTexts.push({
               id: `ab_spd_${frame}_${f.id}`,
               x: f.x,
               y: f.y - 40,
-              text: `⚡ DASH!`,
-              color: '#eab308',
+              text: `⚡ XLR8 TURBO!`,
+              color: '#00ff66',
               alpha: 1,
               vy: -2.5,
-              scale: 1.25,
+              scale: 1.35,
             });
           }
-
-          // Reset cooldown (halved in overtime for intense action)
-          f.abilityCooldownTimer = isOvertime
-            ? Math.round(f.abilityCooldownMax * 0.6)
-            : f.abilityCooldownMax;
         }
       });
     }
 
-    // Move Fighters & Circular Wall Bounce
+    // Move Spherical Balls & 4-Wall Bounces inside ARENA_BOX
     aliveFighters.forEach((f) => {
       if (f.invulnerableTimer > 0) f.invulnerableTimer--;
       if (f.hitFlash > 0) f.hitFlash--;
 
       if (f.frozenTimer > 0) {
-        // Frozen: speed is 0, cannot move
+        // Frozen: ball cannot move or roll
         return;
       }
 
@@ -512,42 +660,93 @@ export function generateArenaSimulation(
 
       if (f.speedBoostTimer > 0) f.speedBoostTimer--;
 
-      const spdMult = f.speedBoostTimer > 0 ? 1.5 : 1.0;
+      const spdMult = f.speedBoostTimer > 0 ? 1.6 : 1.0;
       f.x += f.vx * spdMult;
       f.y += f.vy * spdMult;
 
-      // Circle bounce
-      const dx = f.x - ARENA_CENTER.x;
-      const dy = f.y - ARENA_CENTER.y;
-      const dist = Math.hypot(dx, dy);
-      const halfSize = (f.size / 2) * 1.02;
+      // Ball rolling rotation angle
+      const rollSpeed = Math.hypot(f.vx, f.vy) / (f.size / 2);
+      f.angle = (f.angle || 0) + (f.vx >= 0 ? rollSpeed : -rollSpeed) * 0.4;
 
-      if (dist + halfSize >= ARENA_RADIUS) {
-        const nx = -dx / dist;
-        const ny = -dy / dist;
+      const r = f.size / 2;
+      let bounced = false;
 
-        f.x = ARENA_CENTER.x - nx * (ARENA_RADIUS - halfSize);
-        f.y = ARENA_CENTER.y - ny * (ARENA_RADIUS - halfSize);
-
-        const dot = f.vx * nx + f.vy * ny;
-        f.vx = f.vx - 2 * dot * nx;
-        f.vy = f.vy - 2 * dot * ny;
-
-        if (frame - lastBounceFrame > 3) {
-          soundEvents.push({ frame, sound: 'bounce', volume: 0.5 });
-          lastBounceFrame = frame;
-        }
-
-        for (let k = 0; k < 3; k++) {
+      // Left Wall Bounce
+      if (f.x - r <= ARENA_BOX.left) {
+        f.x = ARENA_BOX.left + r;
+        f.vx = Math.abs(f.vx) * 1.02;
+        bounced = true;
+        for (let k = 0; k < 4; k++) {
           particles.push({
-            x: f.x,
-            y: f.y,
-            vx: nx * (rng() * 3 + 1) + (rng() - 0.5) * 3,
-            vy: ny * (rng() * 3 + 1) + (rng() - 0.5) * 3,
-            color: '#38bdf8',
+            x: ARENA_BOX.left,
+            y: f.y + (rng() - 0.5) * 30,
+            vx: rng() * 4 + 2,
+            vy: (rng() - 0.5) * 4,
+            color: '#00ff66',
             radius: rng() * 3 + 2,
             alpha: 1,
           });
+        }
+      }
+      // Right Wall Bounce
+      else if (f.x + r >= ARENA_BOX.right) {
+        f.x = ARENA_BOX.right - r;
+        f.vx = -Math.abs(f.vx) * 1.02;
+        bounced = true;
+        for (let k = 0; k < 4; k++) {
+          particles.push({
+            x: ARENA_BOX.right,
+            y: f.y + (rng() - 0.5) * 30,
+            vx: -rng() * 4 - 2,
+            vy: (rng() - 0.5) * 4,
+            color: '#00ff66',
+            radius: rng() * 3 + 2,
+            alpha: 1,
+          });
+        }
+      }
+
+      // Top Wall Bounce
+      if (f.y - r <= ARENA_BOX.top) {
+        f.y = ARENA_BOX.top + r;
+        f.vy = Math.abs(f.vy) * 1.02;
+        bounced = true;
+        for (let k = 0; k < 4; k++) {
+          particles.push({
+            x: f.x + (rng() - 0.5) * 30,
+            y: ARENA_BOX.top,
+            vx: (rng() - 0.5) * 4,
+            vy: rng() * 4 + 2,
+            color: '#00ff66',
+            radius: rng() * 3 + 2,
+            alpha: 1,
+          });
+        }
+      }
+      // Bottom Wall Bounce
+      else if (f.y + r >= ARENA_BOX.bottom) {
+        f.y = ARENA_BOX.bottom - r;
+        f.vy = -Math.abs(f.vy) * 1.02;
+        bounced = true;
+        for (let k = 0; k < 4; k++) {
+          particles.push({
+            x: f.x + (rng() - 0.5) * 30,
+            y: ARENA_BOX.bottom,
+            vx: (rng() - 0.5) * 4,
+            vy: -rng() * 4 - 2,
+            color: '#00ff66',
+            radius: rng() * 3 + 2,
+            alpha: 1,
+          });
+        }
+      }
+
+      if (bounced) {
+        // Wall bounce charges energy gauge (+5%)
+        f.energyCharge = Math.min(100, (f.energyCharge || 0) + 5);
+        if (frame - lastBounceFrame > 2) {
+          soundEvents.push({ frame, sound: 'bounce', volume: 0.5 });
+          lastBounceFrame = frame;
         }
       }
 
@@ -576,7 +775,7 @@ export function generateArenaSimulation(
             vx: Math.cos(angleToOpp) * bulletSpeed,
             vy: Math.sin(angleToOpp) * bulletSpeed,
             ownerId: f.id,
-            color: '#38bdf8',
+            color: '#00ff66',
             damage: 12,
             life: 80,
           });
@@ -587,7 +786,7 @@ export function generateArenaSimulation(
               y: f.y + Math.sin(angleToOpp) * (f.size / 2 + 10),
               vx: Math.cos(angleToOpp + (rng() - 0.5)) * (rng() * 4 + 2),
               vy: Math.sin(angleToOpp + (rng() - 0.5)) * (rng() * 4 + 2),
-              color: '#38bdf8',
+              color: '#00ff66',
               radius: rng() * 3 + 2,
               alpha: 1,
             });
@@ -630,15 +829,20 @@ export function generateArenaSimulation(
       }
     }
 
-    // Bullets Hit
+    // Bullets Hit & Square Arena Boundary
     for (let i = bullets.length - 1; i >= 0; i--) {
       const b = bullets[i];
       b.x += b.vx;
       b.y += b.vy;
       b.life--;
 
-      const bDist = Math.hypot(b.x - ARENA_CENTER.x, b.y - ARENA_CENTER.y);
-      if (bDist >= ARENA_RADIUS || b.life <= 0) {
+      if (
+        b.x <= ARENA_BOX.left ||
+        b.x >= ARENA_BOX.right ||
+        b.y <= ARENA_BOX.top ||
+        b.y >= ARENA_BOX.bottom ||
+        b.life <= 0
+      ) {
         bullets.splice(i, 1);
         continue;
       }
@@ -701,6 +905,12 @@ export function generateArenaSimulation(
               soundEvents.push({ frame, sound: 'hit', volume: 0.8 });
               lastHitFrame = frame;
             }
+
+            // Both balls gain +15% Omnitrix energy on impact and increment hit combo
+            A.energyCharge = Math.min(100, (A.energyCharge || 0) + 15);
+            B.energyCharge = Math.min(100, (B.energyCharge || 0) + 15);
+            A.hitCombo = (A.hitCombo || 0) + 1;
+            B.hitCombo = (B.hitCombo || 0) + 1;
 
             let dmgA = A.damage;
             if (isOvertime) dmgA *= 2;

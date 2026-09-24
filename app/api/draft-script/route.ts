@@ -106,22 +106,25 @@ Your scripts ALWAYS hook viewers in the first 2 seconds, keep them glued until t
       - Create 4 distinct, awesome fighters and an unpredictable, shocking battle royale climax.
       - Unique entropy seed: ${randomSeed}.
 
-      Return a structured JSON object for a 2D circular arena battle royale animation with EXACTLY these fields:
-      - "topic": The generated topic as a string.
+      Return a structured JSON object for a 2D square arena battle royale animation with Ben 10 / viral ball battle aesthetics with EXACTLY these fields:
+      - "topic": The generated battle topic as a string (e.g., "Ben 10 Omnitrix Clash", "Heatblast VS Diamondhead", "Alien Overdrive").
       - "format": "Arena Clash".
       - "script": A short, intense 10-15 second voiceover hook script for a YouTube Short narrating the battle.
-      - "contestants": An array of 4 distinct, awesome fighters. Each object MUST have:
+      - "contestants": An array of 4 distinct, awesome fighters (e.g. Ben 10 aliens like Four Arms, Heatblast, XLR8, Diamondhead, Cannonbolt). Each object MUST have:
         * "id" (string)
         * "name" (string)
-        * "color" (distinct hex string like "#ef4444", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6")
+        * "color" (distinct hex string like "#dc2626", "#ea580c", "#0284c7", "#10b981", "#f59e0b", "#8b5cf6")
         * "image_keyword" (A VERY SPECIFIC search keyword for Wikipedia to find an image for this contestant)
         * "starting_health" (number, typically 100)
         * "damage" (number, between 20 and 32)
         * "speed" (number, between 6.0 and 7.5)
         * "special_ability": An object with:
-            "name" (string, creative thematic ability name like "Thunder Strike", "Frost Nova", "Dragon Flame", "Iron Aegis"),
+            "name" (string, creative thematic ability name like "Sonic Clap", "Supernova Inferno", "Turbo Blitz", "Crystal Wall", "Wrecking Roll"),
             "icon" (string, a single emoji like "⚡", "🔥", "🛡️", "❄️", "🩸", "☄️"),
             "type" (string, exactly one of: "damage", "shield", "heal", "freeze", "speed"),
+            "trigger_type" (string, one of: "charge", "hp_threshold", "hit_combo", "cooldown"),
+            "trigger_value" (number, e.g. 100 for charge, 50 for hp_threshold, 4 for hit_combo, 5 for cooldown),
+            "weapon_icon" (string, emoji like "🥊", "🔥", "💎", "🗡️", "⚡", "⚙️"),
             "cooldown_seconds" (number, 4 to 8),
             "power_value" (number, if damage: 25-45, if shield: 30-50, if heal: 20-35, if freeze: 1.8-2.5, if speed: 2-3),
             "description" (short string explaining the effect)

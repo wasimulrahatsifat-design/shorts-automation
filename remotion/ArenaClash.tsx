@@ -3,8 +3,8 @@ import { AbsoluteFill, useCurrentFrame, useVideoConfig, Img, Audio, Sequence, st
 import { TypewriterText } from './TypewriterText';
 import {
   generateArenaSimulation,
+  ARENA_BOX,
   ARENA_CENTER,
-  ARENA_RADIUS,
   SpecialAbility,
 } from '../lib/arena-physics';
 
@@ -78,7 +78,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
   const { durationInFrames, width } = useVideoConfig();
 
   const contestants = data_json.contestants || [];
-  const headline = topic || data_json.topic || 'ARENA CLASH';
+  const headline = topic || data_json.topic || 'OMNITRIX ALIEN BATTLE';
   const seed = data_json.seed || 42;
 
   // Run 100% deterministic simulation until winner is crowned
@@ -100,15 +100,15 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
 
   const { fighters, items, bullets, floatingTexts, particles, winner: frameWinner } = current;
 
-  // Render High-Contrast, Large-Text Healthbars below the Arena (y = 1220 to 1880)
+  // Render Ben 10 Omnitrix Alien Dossier Status Cards below the Arena Box
   const renderHealthBars = () => {
-    const startY = 1220;
+    const startY = ARENA_BOX.bottom + 25; // 1175
     const count = fighters.length;
     const colWidth = 470;
     const leftX = 45;
     const rightX = width - colWidth - 45;
     const rows = Math.ceil(count / 2);
-    const rowHeight = Math.min(135, 590 / Math.max(rows, 2));
+    const rowHeight = Math.min(135, 690 / Math.max(rows, 2));
 
     return fighters.map((f, idx) => {
       let x = leftX;
@@ -116,7 +116,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
 
       if (count === 2) {
         x = idx === 0 ? leftX : rightX;
-        y = startY + 70;
+        y = startY + 40;
       } else if (count === 3) {
         if (idx === 0) {
           x = leftX;
@@ -126,7 +126,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
           y = startY;
         } else {
           x = (width - colWidth) / 2;
-          y = startY + rowHeight + 20;
+          y = startY + rowHeight + 15;
         }
       } else {
         const isRight = idx % 2 === 1;
@@ -136,9 +136,9 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
       }
 
       const hpPct = Math.max(0, f.health / f.maxHealth);
-      let hpColor = '#10b981';
+      let hpColor = '#00ff66';
       if (hpPct < 0.25) hpColor = '#ef4444';
-      else if (hpPct < 0.5) hpColor = '#f59e0b';
+      else if (hpPct < 0.55) hpColor = '#f59e0b';
 
       let itemTag = '';
       if (f.bonusShield > 0 || f.hasShield) itemTag += ' 🛡️';
@@ -147,9 +147,9 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
       if (f.speedBoostTimer > 0) itemTag += ' ⚡';
       if (f.frozenTimer > 0) itemTag += ' ❄️';
 
-      // Special Ability Badge Text
       const ab = f.specialAbility;
-      const abilityBadge = ab ? `${ab.icon} ${ab.name}` : '';
+      const energy = Math.round(f.energyCharge || 0);
+      const isCharged = energy >= 100 || f.specialMoveReady;
 
       return (
         <div
@@ -159,31 +159,36 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
             left: x,
             top: y,
             width: colWidth,
-            height: rowHeight - 14,
-            borderRadius: 22,
-            backgroundColor: f.isDead ? 'rgba(15, 23, 42, 0.45)' : 'rgba(15, 23, 42, 0.95)',
-            border: `3.5px solid ${f.isDead ? '#334155' : f.color}`,
+            height: rowHeight - 12,
+            borderRadius: 18,
+            backgroundColor: f.isDead ? 'rgba(5, 15, 10, 0.45)' : 'rgba(3, 16, 8, 0.95)',
+            border: `3px solid ${f.isDead ? '#1e293b' : isCharged ? '#00ff66' : f.color}`,
             display: 'flex',
             alignItems: 'center',
-            padding: '10px 16px',
+            padding: '8px 14px',
             boxSizing: 'border-box',
-            gap: 16,
+            gap: 14,
             overflow: 'hidden',
-            boxShadow: f.isDead ? 'none' : `0 4px 20px ${f.color}33`,
+            boxShadow: f.isDead
+              ? 'none'
+              : isCharged
+              ? '0 0 25px rgba(0, 255, 102, 0.5)'
+              : `0 4px 16px ${f.color}33`,
           }}
         >
-          {/* Avatar Square Thumbnail */}
+          {/* Avatar Spherical Thumbnail */}
           <div
             style={{
-              width: rowHeight - 34,
-              height: rowHeight - 34,
-              borderRadius: 16,
+              width: rowHeight - 32,
+              height: rowHeight - 32,
+              borderRadius: '50%',
               backgroundColor: f.color,
               overflow: 'hidden',
               flexShrink: 0,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              border: `2px solid ${isCharged ? '#00ff66' : '#ffffff'}`,
               boxShadow: `0 0 14px ${f.color}88`,
             }}
           >
@@ -194,7 +199,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                 style={{
                   color: f.color === '#ffffff' ? '#000' : '#fff',
                   fontWeight: 900,
-                  fontSize: 30,
+                  fontSize: 26,
                 }}
               >
                 {f.name.charAt(0).toUpperCase()}
@@ -202,21 +207,21 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
             )}
           </div>
 
-          {/* Info & Bar */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {/* Top Row: Enlarged Name & Status Badge */}
+          {/* Info & Bars */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {/* Top Row: Alien Name & Live HP */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span
                 style={{
-                  color: f.isDead ? '#94a3b8' : '#ffffff',
+                  color: f.isDead ? '#64748b' : '#ffffff',
                   fontWeight: 900,
-                  fontSize: count <= 4 ? 28 : 24, // Greatly enlarged for maximum legibility!
+                  fontSize: count <= 4 ? 24 : 20,
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
-                  maxWidth: 240,
+                  maxWidth: 220,
                   textShadow: '0 2px 8px rgba(0,0,0,0.9)',
                 }}
               >
@@ -224,10 +229,10 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
               </span>
               <span
                 style={{
-                  color: f.isDead ? '#ef4444' : '#38bdf8',
+                  color: f.isDead ? '#ef4444' : '#00ff66',
                   fontWeight: 900,
                   fontSize: count <= 4 ? 22 : 18,
-                  textShadow: '0 2px 6px rgba(0,0,0,0.9)',
+                  textShadow: '0 0 10px rgba(0, 255, 102, 0.7)',
                 }}
               >
                 {f.isDead ? 'ELIMINATED' : `${Math.round(f.health)} HP`}
@@ -238,9 +243,9 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
             <div
               style={{
                 width: '100%',
-                height: 16,
-                borderRadius: 8,
-                backgroundColor: 'rgba(30, 41, 59, 0.95)',
+                height: 12,
+                borderRadius: 6,
+                backgroundColor: 'rgba(15, 23, 42, 0.95)',
                 overflow: 'hidden',
                 position: 'relative',
               }}
@@ -249,43 +254,60 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                 style={{
                   width: `${hpPct * 100}%`,
                   height: '100%',
-                  borderRadius: 8,
+                  borderRadius: 6,
                   backgroundColor: hpColor,
                   boxShadow: `0 0 10px ${hpColor}`,
-                  transition: 'width 0.1s linear',
                 }}
               />
             </div>
 
-            {/* Bottom Row: Special Ability Indicator */}
-            {abilityBadge && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
-                <span
+            {/* Omnitrix Energy Charge Bar */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+              <div
+                style={{
+                  flex: 1,
+                  height: 6,
+                  borderRadius: 3,
+                  backgroundColor: 'rgba(0, 20, 10, 0.8)',
+                  overflow: 'hidden',
+                }}
+              >
+                <div
                   style={{
-                    fontSize: 14,
-                    fontWeight: 800,
-                    color: f.color,
-                    letterSpacing: '0.3px',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    maxWidth: 260,
+                    width: `${Math.min(100, energy)}%`,
+                    height: '100%',
+                    backgroundColor: isCharged ? '#00ff66' : '#10b981',
+                    boxShadow: isCharged ? '0 0 8px #00ff66' : 'none',
                   }}
-                >
-                  {abilityBadge}
-                </span>
-                {!f.isDead && (
-                  <span
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 700,
-                      color: f.abilityCooldownTimer === 0 ? '#facc15' : '#94a3b8',
-                    }}
-                  >
-                    {f.abilityCooldownTimer === 0 ? 'READY' : `${Math.ceil(f.abilityCooldownTimer / 30)}s`}
-                  </span>
-                )}
+                />
               </div>
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 800,
+                  color: isCharged ? '#00ff66' : '#94a3b8',
+                  textTransform: 'uppercase',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {isCharged ? '⚡ READY!' : `${energy}%`}
+              </span>
+            </div>
+
+            {/* Special Move Badge */}
+            {ab && (
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  color: '#94a3b8',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {ab.icon} {ab.name}
+              </span>
             )}
           </div>
         </div>
@@ -296,7 +318,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
   return (
     <AbsoluteFill
       style={{
-        backgroundColor: '#030712',
+        backgroundColor: '#020904',
         color: '#ffffff',
         fontFamily: 'system-ui, -apple-system, sans-serif',
         overflow: 'hidden',
@@ -321,20 +343,20 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
         );
       })}
 
-      {/* Dynamic Background Glow */}
+      {/* Ben 10 Sci-Fi Radial Glow & Circuit Traces */}
       <div
         style={{
           position: 'absolute',
           inset: 0,
-          background: 'radial-gradient(circle at 50% 38%, rgba(56, 189, 248, 0.12) 0%, rgba(3, 7, 18, 0.95) 75%)',
+          background: 'radial-gradient(circle at 50% 36%, rgba(0, 255, 102, 0.14) 0%, rgba(2, 9, 4, 0.98) 72%)',
         }}
       />
 
-      {/* Top Banner Headline */}
+      {/* Top Banner Headline with Omnitrix Hourglass Logo */}
       <div
         style={{
           position: 'absolute',
-          top: 75,
+          top: 65,
           left: 0,
           right: 0,
           textAlign: 'center',
@@ -347,66 +369,94 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
       >
         <div
           style={{
-            fontSize: 48,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            fontSize: 46,
             fontWeight: 900,
             letterSpacing: '3px',
             textTransform: 'uppercase',
             color: '#ffffff',
-            textShadow: '0 0 25px rgba(56, 189, 248, 0.8), 0 4px 10px rgba(0,0,0,0.9)',
+            textShadow: '0 0 25px rgba(0, 255, 102, 0.8), 0 4px 10px rgba(0,0,0,0.9)',
           }}
         >
-          {headline}
+          <span style={{ color: '#00ff66', filter: 'drop-shadow(0 0 12px #00ff66)' }}>⌛</span>
+          <span>{headline}</span>
+          <span style={{ color: '#00ff66', filter: 'drop-shadow(0 0 12px #00ff66)' }}>⌛</span>
         </div>
         <div
           style={{
-            fontSize: 20,
+            fontSize: 18,
             fontWeight: 800,
-            color: current.isOvertime ? '#ef4444' : '#38bdf8',
-            backgroundColor: current.isOvertime ? 'rgba(239, 68, 68, 0.25)' : 'rgba(56, 189, 248, 0.15)',
-            border: `2px solid ${current.isOvertime ? '#ef4444' : 'rgba(56, 189, 248, 0.4)'}`,
-            padding: '4px 16px',
+            color: current.isOvertime ? '#ef4444' : '#00ff66',
+            backgroundColor: current.isOvertime ? 'rgba(239, 68, 68, 0.25)' : 'rgba(0, 255, 102, 0.15)',
+            border: `2px solid ${current.isOvertime ? '#ef4444' : 'rgba(0, 255, 102, 0.5)'}`,
+            padding: '4px 18px',
             borderRadius: 20,
             letterSpacing: '1px',
             textTransform: 'uppercase',
-            animation: current.isOvertime ? 'pulse 1s infinite' : 'none',
           }}
         >
-          {current.isOvertime ? '⚠️ OVERTIME: 2X DAMAGE' : `${current.aliveCount} FIGHTERS REMAINING`}
+          {current.isOvertime ? '⚠️ OVERTIME: 2X DAMAGE' : `${current.aliveCount} ALIENS BATTLING`}
         </div>
       </div>
 
-      {/* Circular Arena Boundary */}
+      {/* High-Tech Square Arena Box (900x900) */}
       <div
         style={{
           position: 'absolute',
-          left: ARENA_CENTER.x - ARENA_RADIUS,
-          top: ARENA_CENTER.y - ARENA_RADIUS,
-          width: ARENA_RADIUS * 2,
-          height: ARENA_RADIUS * 2,
-          borderRadius: '50%',
-          border: `6px solid ${current.isOvertime ? '#ef4444' : '#38bdf8'}`,
-          boxShadow: `0 0 50px ${current.isOvertime ? 'rgba(239, 68, 68, 0.45)' : 'rgba(56, 189, 248, 0.35)'}, inset 0 0 80px rgba(15, 23, 42, 0.95)`,
-          backgroundColor: '#0a0f1d',
+          left: ARENA_BOX.left,
+          top: ARENA_BOX.top,
+          width: ARENA_BOX.width,
+          height: ARENA_BOX.height,
+          border: `5px solid ${current.isOvertime ? '#ef4444' : '#00ff66'}`,
+          boxShadow: current.isOvertime
+            ? '0 0 50px rgba(239, 68, 68, 0.5), inset 0 0 80px rgba(0,0,0,0.9)'
+            : '0 0 45px rgba(0, 255, 102, 0.45), inset 0 0 80px rgba(0, 20, 10, 0.95)',
+          backgroundColor: '#030c06',
           zIndex: 5,
         }}
       >
-        {/* Subtle Radar Rings */}
+        {/* 4 Corner Sci-Fi Brackets */}
+        <div style={{ position: 'absolute', top: -4, left: -4, width: 34, height: 34, borderTop: '6px solid #00ff66', borderLeft: '6px solid #00ff66' }} />
+        <div style={{ position: 'absolute', top: -4, right: -4, width: 34, height: 34, borderTop: '6px solid #00ff66', borderRight: '6px solid #00ff66' }} />
+        <div style={{ position: 'absolute', bottom: -4, left: -4, width: 34, height: 34, borderBottom: '6px solid #00ff66', borderLeft: '6px solid #00ff66' }} />
+        <div style={{ position: 'absolute', bottom: -4, right: -4, width: 34, height: 34, borderBottom: '6px solid #00ff66', borderRight: '6px solid #00ff66' }} />
+
+        {/* Subtle Galvanic Mechamorph Grid Lines */}
         <div
           style={{
             position: 'absolute',
-            inset: 70,
-            borderRadius: '50%',
-            border: '2px dashed rgba(56, 189, 248, 0.18)',
+            inset: 0,
+            backgroundImage: `
+              linear-gradient(to right, rgba(0, 255, 102, 0.05) 1px, transparent 1px),
+              linear-gradient(to bottom, rgba(0, 255, 102, 0.05) 1px, transparent 1px)
+            `,
+            backgroundSize: '45px 45px',
           }}
         />
+
+        {/* Omnitrix Hourglass Center Emblem */}
         <div
           style={{
             position: 'absolute',
-            inset: 170,
+            left: '50%',
+            top: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: 220,
+            height: 220,
             borderRadius: '50%',
-            border: '2px solid rgba(56, 189, 248, 0.12)',
+            border: '3px dashed rgba(0, 255, 102, 0.15)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 90,
+            color: 'rgba(0, 255, 102, 0.1)',
+            pointerEvents: 'none',
           }}
-        />
+        >
+          ⌛
+        </div>
       </div>
 
       {/* Arena Spawned Items */}
@@ -428,8 +478,8 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
             style={{
               width: 52,
               height: 52,
-              borderRadius: 16,
-              backgroundColor: 'rgba(15, 23, 42, 0.9)',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(3, 16, 8, 0.95)',
               border: `3px solid ${it.color}`,
               boxShadow: `0 0 20px ${it.color}aa`,
               display: 'flex',
@@ -443,7 +493,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
           <span
             style={{
               marginTop: 4,
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: 800,
               color: it.color,
               backgroundColor: 'rgba(0,0,0,0.85)',
@@ -496,7 +546,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
         />
       ))}
 
-      {/* Fighters: Rendered with Dynamic Proportional Sizing */}
+      {/* Spherical Alien Balls with Centered Inside HP & Rotating Weapons */}
       {fighters.map((f) => {
         if (f.isDead) return null;
 
@@ -509,6 +559,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
 
         const isAbilityActive = f.abilityAuraTimer > 0;
         const isFrozen = f.frozenTimer > 0;
+        const isCharged = (f.energyCharge || 0) >= 100 || f.specialMoveReady;
 
         return (
           <div
@@ -521,28 +572,58 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
               height: f.size,
               transform: 'translate(-50%, -50%)',
               zIndex: 20,
-              borderRadius: Math.round(f.size * 0.18),
-              backgroundColor: isFrozen ? '#0369a1' : '#0f172a',
+              borderRadius: '50%', // Round Spherical Ball
+              backgroundColor: isFrozen ? '#0369a1' : '#031408',
               border: `${Math.max(4, Math.round(f.size * 0.055))}px solid ${
-                f.hitFlash > 0 ? '#ffffff' : isFrozen ? '#38bdf8' : isAbilityActive ? f.abilityAuraColor : f.color
+                f.hitFlash > 0
+                  ? '#ffffff'
+                  : isFrozen
+                  ? '#38bdf8'
+                  : isAbilityActive
+                  ? '#00ff66'
+                  : f.color
               }`,
               boxShadow: isAbilityActive
-                ? `0 0 35px ${f.abilityAuraColor}, 0 0 15px #ffffff`
+                ? `0 0 35px #00ff66, 0 0 15px #ffffff`
+                : isCharged
+                ? `0 0 25px #00ff66`
                 : isFrozen
                 ? `0 0 25px #38bdf8`
                 : `0 0 22px ${f.color}aa`,
               display: 'flex',
-              flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            {/* Box Interior / Avatar Image */}
+            {/* Rotating Attached Weapon / Prop (Spinning with Ball Physics) */}
+            {f.specialAbility?.weapon_type && f.specialAbility.weapon_type !== 'none' && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '50%',
+                  width: f.size * 1.5,
+                  height: f.size * 0.35,
+                  transform: `translate(-50%, -50%) rotate(${f.angle || 0}rad)`,
+                  pointerEvents: 'none',
+                  zIndex: 22,
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  alignItems: 'center',
+                }}
+              >
+                <span style={{ fontSize: Math.round(f.size * 0.38), filter: 'drop-shadow(0 0 10px #00ff66)' }}>
+                  {f.specialAbility.weapon_icon || '⚔️'}
+                </span>
+              </div>
+            )}
+
+            {/* Ball Interior / Clipped Circular Avatar Image */}
             <div
               style={{
                 position: 'absolute',
                 inset: 0,
-                borderRadius: Math.round(f.size * 0.13),
+                borderRadius: '50%',
                 overflow: 'hidden',
                 display: 'flex',
                 alignItems: 'center',
@@ -556,7 +637,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                   style={{
                     width: '100%',
                     height: '100%',
-                    background: `linear-gradient(135deg, ${f.color}, #020617)`,
+                    background: `linear-gradient(135deg, ${f.color}, #020904)`,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -600,13 +681,40 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
               )}
             </div>
 
-            {/* Visible Name Badge directly below the fighter box */}
+            {/* LIVE HP NUMBER DISPLAYED DIRECTLY INSIDE CENTER OF BALL (Viral Video Style) */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 10,
+                pointerEvents: 'none',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: Math.round(f.size * 0.38),
+                  fontWeight: 900,
+                  color: '#ffffff',
+                  textShadow:
+                    '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 4px 10px rgba(0,0,0,0.95)',
+                  letterSpacing: '-0.5px',
+                  userSelect: 'none',
+                }}
+              >
+                {Math.round(f.health)}
+              </span>
+            </div>
+
+            {/* Visible Name Badge directly below the ball */}
             <div
               style={{
                 position: 'absolute',
                 bottom: -28,
-                backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                border: `2px solid ${f.color}`,
+                backgroundColor: 'rgba(3, 16, 8, 0.95)',
+                border: `2px solid ${isCharged ? '#00ff66' : f.color}`,
                 padding: '3px 12px',
                 borderRadius: 12,
                 fontSize: 16,
@@ -615,20 +723,20 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                 textTransform: 'uppercase',
                 whiteSpace: 'nowrap',
                 boxShadow: '0 2px 10px rgba(0,0,0,0.8)',
-                zIndex: 4,
+                zIndex: 12,
               }}
             >
               {f.name}
             </div>
 
             {/* Active Item / Ability Badges Floating Above */}
-            {(itemBadge || isAbilityActive) && (
+            {(itemBadge || isAbilityActive || isCharged) && (
               <div
                 style={{
                   position: 'absolute',
                   top: -28,
-                  backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                  border: `2px solid ${isAbilityActive ? f.abilityAuraColor : '#ffffff'}`,
+                  backgroundColor: 'rgba(3, 16, 8, 0.95)',
+                  border: `2px solid ${isCharged ? '#00ff66' : '#ffffff'}`,
                   borderRadius: 12,
                   padding: '2px 8px',
                   fontSize: 14,
@@ -637,9 +745,10 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                   gap: 4,
                   alignItems: 'center',
                   boxShadow: '0 2px 10px rgba(0,0,0,0.8)',
-                  zIndex: 5,
+                  zIndex: 12,
                 }}
               >
+                {isCharged && <span>⚡</span>}
                 {isAbilityActive && <span>{f.abilityAuraIcon}</span>}
                 {itemBadge}
               </div>
@@ -648,7 +757,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
         );
       })}
 
-      {/* Floating Damage & Special Ability Banner Texts */}
+      {/* Floating Combat Text & Special Move Banners */}
       {floatingTexts.map((ft) => (
         <div
           key={ft.id}
@@ -656,64 +765,60 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
             position: 'absolute',
             left: ft.x,
             top: ft.y,
-            transform: `translate(-50%, -50%) scale(${ft.scale})`,
+            transform: `translate(-50%, -50%) scale(${ft.scale || 1})`,
             color: ft.color,
-            fontSize: 22,
+            fontSize: 26,
             fontWeight: 900,
-            textShadow: '0 2px 10px rgba(0,0,0,0.9), 0 0 15px rgba(0,0,0,0.8)',
-            opacity: ft.alpha,
-            zIndex: 25,
+            textShadow: '0 0 12px rgba(0,0,0,0.9), 0 2px 4px #000',
+            opacity: Math.max(0, ft.alpha),
+            zIndex: 35,
+            pointerEvents: 'none',
             whiteSpace: 'nowrap',
-            letterSpacing: '0.5px',
           }}
         >
           {ft.text}
         </div>
       ))}
 
-      {/* Dual-Sided Healthbars below the Arena */}
+      {/* High-Tech Ben 10 Omnitrix Alien Dossier Health Cards */}
       {renderHealthBars()}
 
-      {/* Victory Celebration Overlay: Shown when only 1 champion stands */}
+      {/* Victory Celebration Overlay */}
       {frameWinner && (
         <div
           style={{
             position: 'absolute',
             inset: 0,
-            backgroundColor: 'rgba(3, 7, 18, 0.88)',
-            zIndex: 30,
+            backgroundColor: 'rgba(2, 9, 4, 0.88)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            animation: 'fadeIn 0.5s ease-out',
+            zIndex: 50,
           }}
         >
+          <div style={{ fontSize: 90, filter: 'drop-shadow(0 0 30px #00ff66)' }}>👑</div>
+
+          {/* Winner Spherical Avatar */}
           <div
             style={{
               width: 170,
               height: 170,
-              borderRadius: 32,
+              borderRadius: '50%',
               backgroundColor: frameWinner.color,
-              border: '8px solid #facc15',
-              boxShadow: '0 0 60px #eab308, 0 0 100px rgba(234, 179, 8, 0.5)',
+              border: '6px solid #00ff66',
+              boxShadow: '0 0 50px #00ff66',
               overflow: 'hidden',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              marginBottom: 24,
+              margin: '20px 0',
             }}
           >
             {frameWinner.image_url ? (
               <Img src={frameWinner.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             ) : (
-              <span
-                style={{
-                  fontSize: 78,
-                  fontWeight: 900,
-                  color: frameWinner.color === '#ffffff' ? '#000' : '#fff',
-                }}
-              >
+              <span style={{ fontSize: 75, fontWeight: 900, color: '#fff' }}>
                 {frameWinner.name.charAt(0).toUpperCase()}
               </span>
             )}
@@ -721,12 +826,11 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
 
           <div
             style={{
-              fontSize: 78,
+              fontSize: 68,
               fontWeight: 900,
-              color: '#facc15',
-              textShadow: '0 0 35px #ca8a04',
-              marginBottom: 10,
-              letterSpacing: '2px',
+              letterSpacing: '3px',
+              color: '#00ff66',
+              textShadow: '0 0 35px rgba(0, 255, 102, 0.9), 0 4px 12px #000',
             }}
           >
             VICTORY!
@@ -734,52 +838,16 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
 
           <div
             style={{
-              fontSize: 52,
-              fontWeight: 900,
+              fontSize: 42,
+              fontWeight: 800,
               color: '#ffffff',
+              marginTop: 10,
               textTransform: 'uppercase',
-              textShadow: '0 4px 15px rgba(0,0,0,0.9)',
               letterSpacing: '1px',
             }}
           >
             {frameWinner.name} WINS!
           </div>
-
-          {frameWinner.specialAbility && (
-            <div
-              style={{
-                marginTop: 12,
-                fontSize: 26,
-                fontWeight: 800,
-                color: frameWinner.color,
-                backgroundColor: 'rgba(15, 23, 42, 0.8)',
-                padding: '6px 20px',
-                borderRadius: 16,
-                border: `2px solid ${frameWinner.color}`,
-              }}
-            >
-              Ultimate: {frameWinner.specialAbility.icon} {frameWinner.specialAbility.name}
-            </div>
-          )}
-
-          {data_json.end_title && data_json.end_title.trim() && (
-            <div
-              style={{
-                marginTop: 24,
-                fontSize: 38,
-                fontWeight: 800,
-                color: '#ffffff',
-                backgroundColor: 'rgba(0,0,0,0.75)',
-                padding: '12px 36px',
-                borderRadius: 22,
-                border: '2px solid rgba(255,255,255,0.3)',
-                textAlign: 'center',
-                maxWidth: '85%',
-              }}
-            >
-              <TypewriterText text={data_json.end_title.trim()} delayFrames={10} />
-            </div>
-          )}
         </div>
       )}
     </AbsoluteFill>
