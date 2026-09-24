@@ -379,7 +379,8 @@ export function generateArenaSimulation(
     { type: 'speed', icon: '⚡', name: 'Hyper Speed', color: '#eab308' },
   ];
 
-  const SELECTION_INTRO_FRAMES = 90;
+  // Interactive selection is handled on screen before battle, so physics simulation starts immediately at frame 0
+  const SELECTION_INTRO_FRAMES = 0;
 
   for (let frame = 0; frame < maxFrames; frame++) {
     const aliveFighters = fighters.filter((f) => !f.isDead);

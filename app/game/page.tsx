@@ -407,6 +407,8 @@ export default function GamePage() {
 
   // 3. Initialize & Precompute Simulation
   const initSimulation = (rollNewSeed = false) => {
+    if (selectionPhaseRef.current === 'battling' || selectionPhaseRef.current === 'hero_time') return;
+
     if (rollNewSeed) {
       battleSeedRef.current = Math.floor(Math.random() * 1000000);
     }
@@ -1281,17 +1283,20 @@ export default function GamePage() {
           battleSeedRef.current
         );
         simResultRef.current = sim;
-        currentFrameRef.current = 90;
-        lastSoundFrameRef.current = 89;
+        currentFrameRef.current = 0;
+        lastSoundFrameRef.current = -1;
         setWinner(null);
         setAliveCount(2);
+
+        // Start battle immediately with "It's Hero Time!" banner showing once!
+        setSelectionPhase('battling');
+        setIsPlaying(true);
         drawFrame();
 
+        // Banner fades out smoothly after 1.2s while battle is active!
         setTimeout(() => {
           setHeroTimeBanner(false);
-          setSelectionPhase('battling');
-          setIsPlaying(true);
-        }, 1500);
+        }, 1200);
       }, 450);
     }
   };
