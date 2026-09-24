@@ -413,10 +413,21 @@ export default function GamePage() {
 
     // Preload image elements if any
     contestants.forEach((c) => {
-      if (c.image_url && !loadedImagesRef.current.has(c.image_url)) {
-        const img = new Image();
-        img.src = c.image_url;
-        loadedImagesRef.current.set(c.image_url, img);
+      if (c.image_url) {
+        let img = loadedImagesRef.current.get(c.image_url);
+        if (!img) {
+          img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            drawFrame();
+          };
+          img.src = c.image_url;
+          loadedImagesRef.current.set(c.image_url, img);
+        } else if (!img.complete) {
+          img.onload = () => {
+            drawFrame();
+          };
+        }
       }
     });
 
@@ -749,7 +760,17 @@ export default function GamePage() {
         ctx.save();
         ctx.clip(); // Circular image clip
 
-        const img = f.image_url ? loadedImagesRef.current.get(f.image_url) : null;
+        let img = f.image_url ? loadedImagesRef.current.get(f.image_url) : null;
+        if (!img && f.image_url) {
+          img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            drawFrame();
+          };
+          img.src = f.image_url;
+          loadedImagesRef.current.set(f.image_url, img);
+        }
+
         if (img && img.complete && img.naturalWidth > 0) {
           ctx.drawImage(img, -half, -half, f.size, f.size);
         } else {
@@ -977,7 +998,16 @@ export default function GamePage() {
       ctx.fill();
       ctx.clip();
 
-      const img = f.image_url ? loadedImagesRef.current.get(f.image_url) : null;
+      let img = f.image_url ? loadedImagesRef.current.get(f.image_url) : null;
+      if (!img && f.image_url) {
+        img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          drawFrame();
+        };
+        img.src = f.image_url;
+        loadedImagesRef.current.set(f.image_url, img);
+      }
       if (img && img.complete && img.naturalWidth > 0) {
         ctx.drawImage(img, 0, 0, thumbSize, thumbSize);
       } else {
@@ -1153,7 +1183,8 @@ export default function GamePage() {
   const handleRotateAlien = (direction: 'next' | 'prev', e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     playSound('bounce');
-    const rosterLen = BEN10_ALIEN_PRESETS.length;
+    const roster = contestants.length > 0 ? contestants : BEN10_ALIEN_PRESETS;
+    const rosterLen = roster.length;
     if (selectionPhase === 'select_p1') {
       setP1Index((prev) => (direction === 'next' ? (prev + 1) % rosterLen : (prev - 1 + rosterLen) % rosterLen));
       setDialRotationAngle((prev) => prev + (direction === 'next' ? 45 : -45));
@@ -1169,31 +1200,56 @@ export default function GamePage() {
     playSound('item');
     setGreenFlash(true);
 
+    const roster = contestants.length > 0 ? contestants : BEN10_ALIEN_PRESETS;
+
     if (selectionPhase === 'select_p1') {
-      const chosen1 = BEN10_ALIEN_PRESETS[p1Index];
+      const chosen1 = roster[p1Index % roster.length];
       setSelectedP1(chosen1);
 
-      if (chosen1.image_url && !loadedImagesRef.current.has(chosen1.image_url)) {
-        const img = new Image();
-        img.src = chosen1.image_url;
-        loadedImagesRef.current.set(chosen1.image_url, img);
+      if (chosen1.image_url) {
+        let img = loadedImagesRef.current.get(chosen1.image_url);
+        if (!img) {
+          img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => drawFrame();
+          img.src = chosen1.image_url;
+          loadedImagesRef.current.set(chosen1.image_url, img);
+        }
+      }
+
+      // Sync fighter 0 in current simulation so when select_p2 draws fighter 0 on canvas, it shows chosen1 immediately!
+      if (simResultRef.current) {
+        simResultRef.current.frames.forEach((fr) => {
+          if (fr.fighters[0]) {
+            fr.fighters[0].name = chosen1.name;
+            fr.fighters[0].color = chosen1.color;
+            fr.fighters[0].image_url = chosen1.image_url;
+            if (chosen1.special_ability) fr.fighters[0].specialAbility = chosen1.special_ability;
+          }
+        });
       }
 
       setTimeout(() => {
         setGreenFlash(false);
         setSelectionPhase('select_p2');
-        setP2Index((p1Index + 1) % BEN10_ALIEN_PRESETS.length);
+        setP2Index((p1Index + 1) % roster.length);
         setDialRotationAngle(0);
+        drawFrame();
       }, 450);
     } else if (selectionPhase === 'select_p2') {
-      const chosen1 = selectedP1 || BEN10_ALIEN_PRESETS[p1Index];
-      const chosen2 = BEN10_ALIEN_PRESETS[p2Index];
+      const chosen1 = selectedP1 || roster[p1Index % roster.length];
+      const chosen2 = roster[p2Index % roster.length];
       setSelectedP2(chosen2);
 
-      if (chosen2.image_url && !loadedImagesRef.current.has(chosen2.image_url)) {
-        const img = new Image();
-        img.src = chosen2.image_url;
-        loadedImagesRef.current.set(chosen2.image_url, img);
+      if (chosen2.image_url) {
+        let img = loadedImagesRef.current.get(chosen2.image_url);
+        if (!img) {
+          img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => drawFrame();
+          img.src = chosen2.image_url;
+          loadedImagesRef.current.set(chosen2.image_url, img);
+        }
       }
 
       setTimeout(() => {
@@ -1229,6 +1285,7 @@ export default function GamePage() {
         lastSoundFrameRef.current = 89;
         setWinner(null);
         setAliveCount(2);
+        drawFrame();
 
         setTimeout(() => {
           setHeroTimeBanner(false);
@@ -1270,7 +1327,10 @@ export default function GamePage() {
     }
   };
 
-  const currentDialAlien = selectionPhase === 'select_p1' ? BEN10_ALIEN_PRESETS[p1Index] : BEN10_ALIEN_PRESETS[p2Index];
+  const availableRoster = contestants.length > 0 ? contestants : BEN10_ALIEN_PRESETS;
+  const currentDialAlien = selectionPhase === 'select_p1'
+    ? availableRoster[p1Index % availableRoster.length]
+    : availableRoster[p2Index % availableRoster.length];
 
   const renderOmnitrixOverlay = () => {
     return (
@@ -1355,15 +1415,21 @@ export default function GamePage() {
                 </div>
 
                 {/* Alien Thumbnail Avatar */}
-                <div className="relative z-10 w-20 h-20 rounded-full overflow-hidden border-2 border-emerald-400/80 bg-black flex items-center justify-center shadow-lg">
+                <div className="relative z-10 w-24 h-24 rounded-full overflow-hidden border-2 border-emerald-400 bg-black flex items-center justify-center shadow-lg">
                   {currentDialAlien?.image_url ? (
                     <img
+                      key={currentDialAlien.image_url + (currentDialAlien.name || '')}
                       src={currentDialAlien.image_url}
                       alt={currentDialAlien.name}
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <span className="text-3xl font-black text-white">{currentDialAlien?.name?.charAt(0)}</span>
+                    <div
+                      className="w-full h-full flex items-center justify-center font-black text-3xl"
+                      style={{ backgroundColor: currentDialAlien?.color || '#00ff66', color: '#000000' }}
+                    >
+                      {currentDialAlien?.name?.charAt(0)}
+                    </div>
                   )}
                 </div>
               </button>
@@ -1510,17 +1576,28 @@ export default function GamePage() {
 
       const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
 
+      // Pre-cache in loadedImagesRef immediately so Canvas can draw it with 0 delay
+      const cachedImg = new Image();
+      cachedImg.onload = () => {
+        loadedImagesRef.current.set(croppedDataUrl, cachedImg);
+        drawFrame();
+      };
+      cachedImg.src = croppedDataUrl;
+      loadedImagesRef.current.set(croppedDataUrl, cachedImg);
+
       // Update contestant
       setContestants((prev) => {
         const copy = [...prev];
-        copy[cropTargetIndex] = { ...copy[cropTargetIndex], image_url: croppedDataUrl };
+        if (copy[cropTargetIndex]) {
+          copy[cropTargetIndex] = { ...copy[cropTargetIndex], image_url: croppedDataUrl };
+        }
         return copy;
       });
 
-      // Update loadedImages cache
-      const cachedImg = new Image();
-      cachedImg.src = croppedDataUrl;
-      loadedImagesRef.current.set(croppedDataUrl, cachedImg);
+      // Also update BEN10_ALIEN_PRESETS so preset persistence works
+      if (BEN10_ALIEN_PRESETS[cropTargetIndex]) {
+        BEN10_ALIEN_PRESETS[cropTargetIndex].image_url = croppedDataUrl;
+      }
 
       setCropModalOpen(false);
       setRawImageSrc(null);
@@ -1535,6 +1612,21 @@ export default function GamePage() {
       copy[index] = { ...copy[index], ...updates };
       return copy;
     });
+
+    if (updates.image_url) {
+      const cachedImg = new Image();
+      cachedImg.crossOrigin = 'anonymous';
+      cachedImg.onload = () => {
+        loadedImagesRef.current.set(updates.image_url!, cachedImg);
+        drawFrame();
+      };
+      cachedImg.src = updates.image_url;
+      loadedImagesRef.current.set(updates.image_url, cachedImg);
+    }
+
+    if (BEN10_ALIEN_PRESETS[index]) {
+      Object.assign(BEN10_ALIEN_PRESETS[index], updates);
+    }
   };
 
 
