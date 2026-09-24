@@ -1,8 +1,35 @@
 // Deterministic 2D Physics Simulator for Ben 10 Square Arena Ball Battle
 
+export type AlienType =
+  | 'heatblast'
+  | 'four_arms'
+  | 'xlr8'
+  | 'diamondhead'
+  | 'cannonbolt'
+  | 'wildmutt'
+  | 'ripjaws'
+  | 'upgrade'
+  | 'ghostfreak'
+  | 'normal';
+
+export function getAlienType(f?: { id?: string; name?: string; special_power?: string; specialPower?: string } | null): AlienType {
+  if (!f) return 'normal';
+  const str = `${f.id || ''} ${f.name || ''} ${f.special_power || ''} ${f.specialPower || ''}`.toLowerCase().replace(/[\s_-]+/g, '');
+  if (str.includes('heatblast') || str.includes('fire')) return 'heatblast';
+  if (str.includes('fourarms') || str.includes('four_arms')) return 'four_arms';
+  if (str.includes('xlr8') || str.includes('speedster')) return 'xlr8';
+  if (str.includes('diamondhead') || str.includes('diamond')) return 'diamondhead';
+  if (str.includes('cannonbolt') || str.includes('cannon')) return 'cannonbolt';
+  if (str.includes('wildmutt')) return 'wildmutt';
+  if (str.includes('ripjaws') || str.includes('ripjaw')) return 'ripjaws';
+  if (str.includes('upgrade')) return 'upgrade';
+  if (str.includes('ghostfreak') || str.includes('ghost')) return 'ghostfreak';
+  return 'normal';
+}
+
 export interface SpecialAbility {
   name: string;             // e.g., "Sonic Clap", "Supernova Inferno"
-  icon: string;             // Emoji e.g. "💥", "🔥", "⚡", "💎", "🛡️"
+  icon: string;             // Clean text label (no emojis)
   type: 'damage' | 'shield' | 'heal' | 'freeze' | 'speed';
   cooldown_seconds: number; // e.g. 5, 8
   power_value: number;      // Damage amount, heal amount, shield durability, or freeze duration
@@ -170,31 +197,29 @@ export const BOX_SIZE = 120; // Default fallback for backwards compatibility
 export const BEN10_DEFAULT_ABILITIES: Record<string, SpecialAbility> = {
   four_arms: {
     name: 'Sonic Clap',
-    icon: '💥',
+    icon: 'SONIC CLAP',
     type: 'damage',
     cooldown_seconds: 5,
     power_value: 40,
     trigger_type: 'charge',
     trigger_value: 100,
-    weapon_type: 'fist',
-    weapon_icon: '🥊',
+    weapon_type: 'none',
     description: 'Deals massive shockwave blast and knocks opponents back!',
   },
   heatblast: {
     name: 'Supernova Inferno',
-    icon: '🔥',
+    icon: 'SUPERNOVA',
     type: 'damage',
     cooldown_seconds: 6,
     power_value: 45,
     trigger_type: 'hp_threshold',
     trigger_value: 50,
-    weapon_type: 'flame',
-    weapon_icon: '🔥',
+    weapon_type: 'none',
     description: 'Ignites when HP < 50%, unleashing blazing firestorm beams!',
   },
   xlr8: {
     name: 'Turbo Blitz',
-    icon: '⚡',
+    icon: 'TURBO BLITZ',
     type: 'speed',
     cooldown_seconds: 4,
     power_value: 2.2,
@@ -205,19 +230,18 @@ export const BEN10_DEFAULT_ABILITIES: Record<string, SpecialAbility> = {
   },
   diamondhead: {
     name: 'Crystal Spike',
-    icon: '💎',
+    icon: 'CRYSTAL SPIKE',
     type: 'shield',
     cooldown_seconds: 6,
     power_value: 50,
     trigger_type: 'charge',
     trigger_value: 100,
-    weapon_type: 'crystal',
-    weapon_icon: '💎',
+    weapon_type: 'none',
     description: 'Erupts indestructible crystal barriers absorbing hits!',
   },
   cannonbolt: {
     name: 'Wrecking Roll',
-    icon: '🛡️',
+    icon: 'WRECKING ROLL',
     type: 'damage',
     cooldown_seconds: 5,
     power_value: 38,
@@ -228,7 +252,7 @@ export const BEN10_DEFAULT_ABILITIES: Record<string, SpecialAbility> = {
   },
   upgrade: {
     name: 'Circuit Overload',
-    icon: '🤖',
+    icon: 'CIRCUIT OVERLOAD',
     type: 'damage',
     cooldown_seconds: 5,
     power_value: 36,
@@ -239,7 +263,7 @@ export const BEN10_DEFAULT_ABILITIES: Record<string, SpecialAbility> = {
   },
   ghostfreak: {
     name: 'Shadow Phase',
-    icon: '👻',
+    icon: 'SHADOW PHASE',
     type: 'freeze',
     cooldown_seconds: 7,
     power_value: 2.5,
@@ -250,7 +274,7 @@ export const BEN10_DEFAULT_ABILITIES: Record<string, SpecialAbility> = {
   },
   ripjaws: {
     name: 'Steel Jaw Bite',
-    icon: '🦈',
+    icon: 'STEEL JAW BITE',
     type: 'damage',
     cooldown_seconds: 5,
     power_value: 42,
@@ -259,15 +283,26 @@ export const BEN10_DEFAULT_ABILITIES: Record<string, SpecialAbility> = {
     weapon_type: 'none',
     description: 'After 4 hit combo, chomps down with ferocious crushing jaws!',
   },
+  wildmutt: {
+    name: 'Feral Pounce',
+    icon: 'FERAL POUNCE',
+    type: 'damage',
+    cooldown_seconds: 5,
+    power_value: 36,
+    trigger_type: 'charge',
+    trigger_value: 100,
+    weapon_type: 'none',
+    description: 'Unleashes a beastly pounce with animalistic razor senses!',
+  },
   // Generic fallbacks
-  iron_shield: { name: 'Iron Bastion', icon: '🛡️', type: 'shield', cooldown_seconds: 6, power_value: 40, trigger_type: 'charge', trigger_value: 100 },
-  berserker: { name: 'Berserk Strike', icon: '💥', type: 'damage', cooldown_seconds: 5, power_value: 35, trigger_type: 'hp_threshold', trigger_value: 30 },
-  vampiric: { name: 'Life Drain', icon: '🩸', type: 'heal', cooldown_seconds: 6, power_value: 25, trigger_type: 'charge', trigger_value: 100 },
-  thorns: { name: 'Spike Burst', icon: '🌵', type: 'damage', cooldown_seconds: 5, power_value: 30, trigger_type: 'charge', trigger_value: 100 },
-  speedster: { name: 'Flash Dash', icon: '⚡', type: 'speed', cooldown_seconds: 4, power_value: 2, trigger_type: 'charge', trigger_value: 100 },
-  phoenix: { name: 'Holy Heal', icon: '💚', type: 'heal', cooldown_seconds: 7, power_value: 35, trigger_type: 'hp_threshold', trigger_value: 35 },
-  freeze: { name: 'Frost Freeze', icon: '❄️', type: 'freeze', cooldown_seconds: 7, power_value: 2.2, trigger_type: 'charge', trigger_value: 100 },
-  none: { name: 'Omnitrix Blast', icon: '⚡', type: 'damage', cooldown_seconds: 5, power_value: 30, trigger_type: 'charge', trigger_value: 100 },
+  iron_shield: { name: 'Iron Bastion', icon: 'IRON SHIELD', type: 'shield', cooldown_seconds: 6, power_value: 40, trigger_type: 'charge', trigger_value: 100 },
+  berserker: { name: 'Berserk Strike', icon: 'BERSERK STRIKE', type: 'damage', cooldown_seconds: 5, power_value: 35, trigger_type: 'hp_threshold', trigger_value: 30 },
+  vampiric: { name: 'Life Drain', icon: 'LIFE DRAIN', type: 'heal', cooldown_seconds: 6, power_value: 25, trigger_type: 'charge', trigger_value: 100 },
+  thorns: { name: 'Spike Burst', icon: 'SPIKE BURST', type: 'damage', cooldown_seconds: 5, power_value: 30, trigger_type: 'charge', trigger_value: 100 },
+  speedster: { name: 'Flash Dash', icon: 'FLASH DASH', type: 'speed', cooldown_seconds: 4, power_value: 2, trigger_type: 'charge', trigger_value: 100 },
+  phoenix: { name: 'Holy Heal', icon: 'HOLY HEAL', type: 'heal', cooldown_seconds: 7, power_value: 35, trigger_type: 'hp_threshold', trigger_value: 35 },
+  freeze: { name: 'Frost Freeze', icon: 'FROST FREEZE', type: 'freeze', cooldown_seconds: 7, power_value: 2.2, trigger_type: 'charge', trigger_value: 100 },
+  none: { name: 'Omnitrix Blast', icon: 'OMNITRIX BLAST', type: 'damage', cooldown_seconds: 5, power_value: 30, trigger_type: 'charge', trigger_value: 100 },
 };
 
 export const DEFAULT_ABILITIES = BEN10_DEFAULT_ABILITIES;
@@ -288,8 +323,13 @@ export function generateArenaSimulation(
     let x = ARENA_CENTER.x + Math.cos(angle) * spawnRadius;
     let y = ARENA_CENTER.y + Math.sin(angle) * spawnRadius;
 
+    const alienType = getAlienType(c);
     let baseSpd = c.speed || 6.8;
-    if (c.special_power === 'speedster') baseSpd *= 1.35;
+    if (alienType === 'xlr8') {
+      baseSpd = 14.0; // Always noticeably and significantly faster than other balls
+    } else if (c.special_power === 'speedster') {
+      baseSpd *= 1.35;
+    }
 
     const moveAngle = angle + Math.PI + (rng() - 0.5) * 0.7;
     let vx = Math.cos(moveAngle) * baseSpd;
@@ -304,10 +344,11 @@ export function generateArenaSimulation(
 
     // Resolve Special Ability
     const ability: SpecialAbility = c.special_ability ||
+      BEN10_DEFAULT_ABILITIES[alienType] ||
       BEN10_DEFAULT_ABILITIES[c.special_power || 'none'] ||
       BEN10_DEFAULT_ABILITIES['four_arms'] || {
         name: 'Omnitrix Blast',
-        icon: '⚡',
+        icon: 'OMNITRIX BLAST',
         type: 'damage',
         cooldown_seconds: 5,
         power_value: 35,
@@ -483,27 +524,8 @@ export function generateArenaSimulation(
         break;
       }
 
-      // Item Spawner: 8 seconds (240 frames) AFTER an item is picked up (or initial spawn) inside ARENA_BOX
-      if (items.length === 0 && !winner) {
-      if (nextItemSpawnCooldown > 0) {
-        nextItemSpawnCooldown--;
-      } else {
-        const pick = itemTypes[Math.floor(rng() * itemTypes.length)];
-        const spawnX = ARENA_BOX.left + 90 + rng() * (ARENA_BOX.width - 180);
-        const spawnY = ARENA_BOX.top + 90 + rng() * (ARENA_BOX.height - 180);
-        items.push({
-          id: `item_${frame}`,
-          type: pick.type,
-          x: spawnX,
-          y: spawnY,
-          icon: pick.icon,
-          name: pick.name,
-          color: pick.color,
-          bobOffset: rng() * Math.PI * 2,
-        });
-        soundEvents.push({ frame, sound: 'item', volume: 0.6 });
-      }
-    }
+      // Random item spawner is disabled per user request: No random items will spawn.
+      // items array remains empty throughout the battle.
 
     // Process Ben 10 Special Moves with specific Trigger Criteria for each alive fighter
     if (!winner) {
@@ -549,12 +571,12 @@ export function generateArenaSimulation(
             }
           }
 
-          // Special Move Announcement Banner
+          // Special Move Announcement Banner (NO EMOJIS)
           floatingTexts.push({
             id: `ab_banner_${frame}_${f.id}`,
             x: f.x,
             y: f.y - (f.size / 2 + 35),
-            text: `⚡ ${f.name.toUpperCase()}: ${ab.name.toUpperCase()}! ⚡`,
+            text: `${f.name.toUpperCase()}: ${ab.name.toUpperCase()}!`,
             color: '#00ff66',
             alpha: 1,
             vy: -2.8,
@@ -592,7 +614,7 @@ export function generateArenaSimulation(
               id: `ab_dmg_${frame}_${nearestOpp.id}`,
               x: nearestOpp.x,
               y: nearestOpp.y - 45,
-              text: `-${finalDmg} ${ab.icon}`,
+              text: `-${finalDmg}`,
               color: '#ef4444',
               alpha: 1,
               vy: -2.5,
@@ -625,7 +647,7 @@ export function generateArenaSimulation(
               id: `ab_shd_${frame}_${f.id}`,
               x: f.x,
               y: f.y - 40,
-              text: `💎 CRYSTAL SHIELD +${f.bonusShield}`,
+              text: `CRYSTAL SHIELD +${f.bonusShield}`,
               color: '#10b981',
               alpha: 1,
               vy: -2.2,
@@ -652,7 +674,7 @@ export function generateArenaSimulation(
               id: `ab_heal_${frame}_${f.id}`,
               x: f.x,
               y: f.y - 40,
-              text: `+${healAmt} HP 💚`,
+              text: `+${healAmt} HP`,
               color: '#22c55e',
               alpha: 1,
               vy: -2.2,
@@ -678,7 +700,7 @@ export function generateArenaSimulation(
               id: `ab_frz_${frame}_${nearestOpp.id}`,
               x: nearestOpp.x,
               y: nearestOpp.y - 40,
-              text: `❄️ FROZEN! (${ab.power_value}s)`,
+              text: `FROZEN (${ab.power_value}s)`,
               color: '#38bdf8',
               alpha: 1,
               vy: -2,
@@ -704,7 +726,7 @@ export function generateArenaSimulation(
               id: `ab_spd_${frame}_${f.id}`,
               x: f.x,
               y: f.y - 40,
-              text: `⚡ XLR8 TURBO!`,
+              text: `XLR8 TURBO!`,
               color: '#00ff66',
               alpha: 1,
               vy: -2.5,
@@ -734,6 +756,16 @@ export function generateArenaSimulation(
       }
 
       if (f.speedBoostTimer > 0) f.speedBoostTimer--;
+
+      const aType = getAlienType(f);
+      if (aType === 'xlr8') {
+        const curSpd = Math.hypot(f.vx, f.vy);
+        const targetSpd = 14.0;
+        if (curSpd < targetSpd && curSpd > 0.05) {
+          f.vx = (f.vx / curSpd) * targetSpd;
+          f.vy = (f.vy / curSpd) * targetSpd;
+        }
+      }
 
       const spdMult = f.speedBoostTimer > 0 ? 1.6 : 1.0;
       f.x += f.vx * spdMult;
@@ -1031,12 +1063,12 @@ export function generateArenaSimulation(
               if (A.specialPower === 'vampiric') {
                 const leech = Math.round(dmgA * 0.2);
                 A.health = Math.min(A.maxHealth, A.health + leech);
-                floatingTexts.push({ id: `vamp_${frame}_${A.id}`, x: A.x, y: A.y - 45, text: `+${leech} 🩸`, color: '#ef4444', alpha: 1, vy: -2.5, scale: 1 });
+                floatingTexts.push({ id: `vamp_${frame}_${A.id}`, x: A.x, y: A.y - 45, text: `+${leech} HP`, color: '#ef4444', alpha: 1, vy: -2.5, scale: 1 });
               }
               if (B.specialPower === 'thorns') {
                 const recoil = Math.round(dmgA * 0.3);
                 A.health = Math.max(0, A.health - recoil);
-                floatingTexts.push({ id: `thorn_${frame}_${A.id}`, x: A.x, y: A.y - 35, text: `-${recoil} 🌵`, color: '#eab308', alpha: 1, vy: -2, scale: 1 });
+                floatingTexts.push({ id: `thorn_${frame}_${A.id}`, x: A.x, y: A.y - 35, text: `-${recoil}`, color: '#eab308', alpha: 1, vy: -2, scale: 1 });
               }
             }
 
@@ -1047,12 +1079,12 @@ export function generateArenaSimulation(
               if (B.specialPower === 'vampiric') {
                 const leech = Math.round(dmgB * 0.2);
                 B.health = Math.min(B.maxHealth, B.health + leech);
-                floatingTexts.push({ id: `vamp_${frame}_${B.id}`, x: B.x, y: B.y - 45, text: `+${leech} 🩸`, color: '#ef4444', alpha: 1, vy: -2.5, scale: 1 });
+                floatingTexts.push({ id: `vamp_${frame}_${B.id}`, x: B.x, y: B.y - 45, text: `+${leech} HP`, color: '#ef4444', alpha: 1, vy: -2.5, scale: 1 });
               }
               if (A.specialPower === 'thorns') {
                 const recoil = Math.round(dmgB * 0.3);
                 B.health = Math.max(0, B.health - recoil);
-                floatingTexts.push({ id: `thorn_${frame}_${B.id}`, x: B.x, y: B.y - 35, text: `-${recoil} 🌵`, color: '#eab308', alpha: 1, vy: -2, scale: 1 });
+                floatingTexts.push({ id: `thorn_${frame}_${B.id}`, x: B.x, y: B.y - 35, text: `-${recoil}`, color: '#eab308', alpha: 1, vy: -2, scale: 1 });
               }
             }
 
@@ -1060,12 +1092,12 @@ export function generateArenaSimulation(
             if (A.health <= 0 && A.specialPower === 'phoenix' && !A.phoenixUsed) {
               A.phoenixUsed = true;
               A.health = 20;
-              floatingTexts.push({ id: `phx_${frame}_${A.id}`, x: A.x, y: A.y - 50, text: '🦅 REBIRTH!', color: '#f59e0b', alpha: 1, vy: -3, scale: 1.3 });
+              floatingTexts.push({ id: `phx_${frame}_${A.id}`, x: A.x, y: A.y - 50, text: 'REBIRTH!', color: '#f59e0b', alpha: 1, vy: -3, scale: 1.3 });
             }
             if (B.health <= 0 && B.specialPower === 'phoenix' && !B.phoenixUsed) {
               B.phoenixUsed = true;
               B.health = 20;
-              floatingTexts.push({ id: `phx_${frame}_${B.id}`, x: B.x, y: B.y - 50, text: '🦅 REBIRTH!', color: '#f59e0b', alpha: 1, vy: -3, scale: 1.3 });
+              floatingTexts.push({ id: `phx_${frame}_${B.id}`, x: B.x, y: B.y - 50, text: 'REBIRTH!', color: '#f59e0b', alpha: 1, vy: -3, scale: 1.3 });
             }
 
             // Check eliminations

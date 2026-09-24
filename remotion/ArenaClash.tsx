@@ -6,6 +6,8 @@ import {
   ARENA_BOX,
   ARENA_CENTER,
   SpecialAbility,
+  AlienType,
+  getAlienType,
 } from '../lib/arena-physics';
 
 export interface ArenaClashData {
@@ -233,11 +235,11 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
       else if (hpPct < 0.55) hpColor = '#f59e0b';
 
       let itemTag = '';
-      if (f.bonusShield > 0 || f.hasShield) itemTag += ' 🛡️';
-      if (f.hasDagger) itemTag += ' 🗡️';
-      if (f.gunBullets > 0) itemTag += ` 🔫x${f.gunBullets}`;
-      if (f.speedBoostTimer > 0) itemTag += ' ⚡';
-      if (f.frozenTimer > 0) itemTag += ' ❄️';
+      if (f.bonusShield > 0 || f.hasShield) itemTag += ' [SHIELD]';
+      if (f.hasDagger) itemTag += ' [2X DMG]';
+      if (f.gunBullets > 0) itemTag += ` [BLASTER x${f.gunBullets}]`;
+      if (f.speedBoostTimer > 0) itemTag += ' [SPEED]';
+      if (f.frozenTimer > 0) itemTag += ' [FROZEN]';
 
       const ab = f.specialAbility;
       const energy = Math.round(f.energyCharge || 0);
@@ -382,7 +384,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                   whiteSpace: 'nowrap',
                 }}
               >
-                {isCharged ? '⚡ READY!' : `${energy}%`}
+                {isCharged ? 'READY!' : `${energy}%`}
               </span>
             </div>
 
@@ -398,7 +400,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                   textOverflow: 'ellipsis',
                 }}
               >
-                {ab.icon} {ab.name}
+                {ab.name}
               </span>
             )}
           </div>
@@ -463,7 +465,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 12,
+            justifyContent: 'center',
             fontSize: 46,
             fontWeight: 900,
             letterSpacing: '3px',
@@ -472,9 +474,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
             textShadow: '0 0 25px rgba(0, 255, 102, 0.8), 0 4px 10px rgba(0,0,0,0.9)',
           }}
         >
-          <span style={{ color: '#00ff66', filter: 'drop-shadow(0 0 12px #00ff66)' }}>⌛</span>
           <span>{headline}</span>
-          <span style={{ color: '#00ff66', filter: 'drop-shadow(0 0 12px #00ff66)' }}>⌛</span>
         </div>
         <div
           style={{
@@ -490,9 +490,9 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
           }}
         >
           {current.isOvertime
-            ? '⚠️ OVERTIME: 2X DAMAGE'
+            ? 'OVERTIME: 2X DAMAGE'
             : current.isSelectionIntro
-            ? '⌛ SELECTING COMBATANTS'
+            ? 'SELECTING COMBATANTS'
             : `${current.aliveCount} ALIENS BATTLING`}
         </div>
       </div>
@@ -704,20 +704,22 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
         />
       ))}
 
-      {/* Spherical Alien Balls with Centered Inside HP & Rotating Weapons */}
+      {/* Spherical Alien Balls with Alien-Specific Visual Effects & Centered Live HP */}
       {fighters.map((f) => {
         if (f.isDead) return null;
 
+        const aType = getAlienType(f);
         let itemBadge = '';
-        if (f.bonusShield > 0 || f.hasShield) itemBadge += '🛡️';
-        if (f.hasDagger) itemBadge += '🗡️';
-        if (f.gunBullets > 0) itemBadge += `🔫x${f.gunBullets}`;
-        if (f.speedBoostTimer > 0) itemBadge += '⚡';
-        if (f.frozenTimer > 0) itemBadge += '❄️';
+        if (f.bonusShield > 0 || f.hasShield) itemBadge += ' [SHIELD]';
+        if (f.hasDagger) itemBadge += ' [2X DMG]';
+        if (f.gunBullets > 0) itemBadge += ` [BLASTER x${f.gunBullets}]`;
+        if (f.speedBoostTimer > 0) itemBadge += ' [SPEED]';
+        if (f.frozenTimer > 0) itemBadge += ' [FROZEN]';
 
         const isAbilityActive = f.abilityAuraTimer > 0;
         const isFrozen = f.frozenTimer > 0;
         const isCharged = (f.energyCharge || 0) >= 100 || f.specialMoveReady;
+        const half = f.size / 2;
 
         return (
           <div
@@ -730,7 +732,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
               height: f.size,
               transform: 'translate(-50%, -50%)',
               zIndex: 20,
-              borderRadius: '50%', // Round Spherical Ball
+              borderRadius: '50%',
               backgroundColor: isFrozen ? '#0369a1' : '#031408',
               border: `${Math.max(4, Math.round(f.size * 0.055))}px solid ${
                 f.hitFlash > 0
@@ -753,27 +755,198 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
               justifyContent: 'center',
             }}
           >
-            {/* Rotating Attached Weapon / Prop (Spinning with Ball Physics) */}
-            {f.specialAbility?.weapon_type && f.specialAbility.weapon_type !== 'none' && (
+            {/* ========================================== */}
+            {/* 1. CHARACTER-SPECIFIC VISUAL EFFECTS       */}
+            {/* ========================================== */}
+
+            {/* --- HEATBLAST: BLAZING FIRE FLAME AURA --- */}
+            {aType === 'heatblast' && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: -22,
+                  borderRadius: '50%',
+                  background:
+                    'radial-gradient(circle, rgba(255, 230, 0, 0.95) 20%, rgba(234, 88, 12, 0.85) 55%, rgba(220, 38, 38, 0.6) 75%, transparent 95%)',
+                  filter: 'blur(8px)',
+                  boxShadow: '0 0 35px #ea580c, inset 0 0 20px #ffea00',
+                  pointerEvents: 'none',
+                  zIndex: -1,
+                }}
+              />
+            )}
+
+            {/* --- FOUR ARMS: 4 RED MUSCULAR ARMS (2 ON EACH SIDE) --- */}
+            {aType === 'four_arms' && (
+              <>
+                {/* Upper Left Arm */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: -28,
+                    top: '18%',
+                    width: 32,
+                    height: 18,
+                    backgroundColor: '#dc2626',
+                    borderRadius: '8px 4px 4px 8px',
+                    border: '3px solid #7f1d1d',
+                    boxShadow: '0 0 12px rgba(220, 38, 38, 0.8)',
+                    zIndex: -1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'flex-start',
+                  }}
+                >
+                  <div style={{ width: 6, height: '100%', backgroundColor: '#0f172a' }} />
+                  <div style={{ width: 14, height: 14, borderRadius: '50%', backgroundColor: '#b91c1c' }} />
+                </div>
+                {/* Lower Left Arm */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: -28,
+                    bottom: '18%',
+                    width: 32,
+                    height: 18,
+                    backgroundColor: '#dc2626',
+                    borderRadius: '8px 4px 4px 8px',
+                    border: '3px solid #7f1d1d',
+                    boxShadow: '0 0 12px rgba(220, 38, 38, 0.8)',
+                    zIndex: -1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'flex-start',
+                  }}
+                >
+                  <div style={{ width: 6, height: '100%', backgroundColor: '#0f172a' }} />
+                  <div style={{ width: 14, height: 14, borderRadius: '50%', backgroundColor: '#b91c1c' }} />
+                </div>
+                {/* Upper Right Arm */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    right: -28,
+                    top: '18%',
+                    width: 32,
+                    height: 18,
+                    backgroundColor: '#dc2626',
+                    borderRadius: '4px 8px 8px 4px',
+                    border: '3px solid #7f1d1d',
+                    boxShadow: '0 0 12px rgba(220, 38, 38, 0.8)',
+                    zIndex: -1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'flex-end',
+                  }}
+                >
+                  <div style={{ width: 14, height: 14, borderRadius: '50%', backgroundColor: '#b91c1c' }} />
+                  <div style={{ width: 6, height: '100%', backgroundColor: '#0f172a' }} />
+                </div>
+                {/* Lower Right Arm */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    right: -28,
+                    bottom: '18%',
+                    width: 32,
+                    height: 18,
+                    backgroundColor: '#dc2626',
+                    borderRadius: '4px 8px 8px 4px',
+                    border: '3px solid #7f1d1d',
+                    boxShadow: '0 0 12px rgba(220, 38, 38, 0.8)',
+                    zIndex: -1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'flex-end',
+                  }}
+                >
+                  <div style={{ width: 14, height: 14, borderRadius: '50%', backgroundColor: '#b91c1c' }} />
+                  <div style={{ width: 6, height: '100%', backgroundColor: '#0f172a' }} />
+                </div>
+              </>
+            )}
+
+            {/* --- XLR8: HIGH SPEED CYAN DASH BLUR & ELECTRIC TRAILS --- */}
+            {aType === 'xlr8' && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: -14,
+                  borderRadius: '50%',
+                  boxShadow: '0 0 30px #00f0ff, inset 0 0 18px #0284c7',
+                  border: '2px dashed #38bdf8',
+                  pointerEvents: 'none',
+                  zIndex: -1,
+                }}
+              />
+            )}
+
+            {/* --- DIAMONDHEAD: SHARP CRYSTALLINE SHARDS AROUND PERIMETER --- */}
+            {aType === 'diamondhead' && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: -16,
+                  borderRadius: '35%',
+                  transform: 'rotate(45deg)',
+                  border: '5px solid #10b981',
+                  boxShadow: '0 0 25px #10b981',
+                  pointerEvents: 'none',
+                  zIndex: -1,
+                }}
+              />
+            )}
+
+            {/* --- CANNONBOLT: JAGGED SHARP SILVER ARMOR SHELL --- */}
+            {aType === 'cannonbolt' && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: -12,
+                  borderRadius: '50%',
+                  border: '6px dashed #cbd5e1',
+                  boxShadow: '0 0 20px #94a3b8',
+                  pointerEvents: 'none',
+                  zIndex: -1,
+                }}
+              />
+            )}
+
+            {/* --- RIPJAWS: AQUATIC WAVE RIPPLE & SPLASH RING --- */}
+            {aType === 'ripjaws' && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: -16,
+                  borderRadius: '50%',
+                  background:
+                    'radial-gradient(circle, transparent 60%, rgba(6, 182, 212, 0.45) 80%, rgba(34, 211, 238, 0.8) 100%)',
+                  boxShadow: '0 0 25px #06b6d4',
+                  border: '3px solid rgba(165, 243, 252, 0.7)',
+                  pointerEvents: 'none',
+                  zIndex: -1,
+                }}
+              />
+            )}
+
+            {/* --- GHOSTFREAK: GHOSTLY WISPY FLOWING TAIL & SPECTRAL AURA --- */}
+            {aType === 'ghostfreak' && (
               <div
                 style={{
                   position: 'absolute',
                   left: '50%',
-                  top: '50%',
-                  width: f.size * 1.5,
-                  height: f.size * 0.35,
-                  transform: `translate(-50%, -50%) rotate(${f.angle || 0}rad)`,
-                  pointerEvents: 'none',
-                  zIndex: 22,
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                  alignItems: 'center',
+                  bottom: -36,
+                  transform: 'translateX(-50%)',
+                  width: half * 1.4,
+                  height: 48,
+                  background:
+                    'linear-gradient(to bottom, rgba(148, 163, 184, 0.85), rgba(203, 213, 225, 0.4) 60%, transparent 100%)',
+                  borderRadius: '0 0 50% 50%',
+                  filter: 'blur(2px)',
+                  boxShadow: '0 10px 25px rgba(203, 213, 225, 0.5)',
+                  zIndex: -1,
                 }}
-              >
-                <span style={{ fontSize: Math.round(f.size * 0.38), filter: 'drop-shadow(0 0 10px #00ff66)' }}>
-                  {f.specialAbility.weapon_icon || '⚔️'}
-                </span>
-              </div>
+              />
             )}
 
             {/* Ball Interior / Clipped Circular Avatar Image */}
@@ -820,22 +993,18 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                 />
               )}
 
-              {/* Frozen Ice Tint Overlay */}
+              {/* Frozen Ice Tint Overlay (NO EMOJIS) */}
               {isFrozen && (
                 <div
                   style={{
                     position: 'absolute',
                     inset: 0,
                     backgroundColor: 'rgba(56, 189, 248, 0.45)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: Math.round(f.size * 0.4),
+                    border: '3px solid #38bdf8',
+                    borderRadius: '50%',
                     zIndex: 3,
                   }}
-                >
-                  ❄️
-                </div>
+                />
               )}
             </div>
 
@@ -887,7 +1056,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
               {f.name}
             </div>
 
-            {/* Active Item / Ability Badges Floating Above */}
+            {/* Active Status Badge Floating Above (NO EMOJIS) */}
             {(itemBadge || isAbilityActive || isCharged) && (
               <div
                 style={{
@@ -897,7 +1066,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                   border: `2px solid ${isCharged ? '#00ff66' : '#ffffff'}`,
                   borderRadius: 12,
                   padding: '2px 8px',
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: 800,
                   display: 'flex',
                   gap: 4,
@@ -906,8 +1075,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                   zIndex: 12,
                 }}
               >
-                {isCharged && <span>⚡</span>}
-                {isAbilityActive && <span>{f.abilityAuraIcon}</span>}
+                {isCharged && <span style={{ color: '#00ff66' }}>READY</span>}
                 {itemBadge}
               </div>
             )}
@@ -941,7 +1109,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
       {/* High-Tech Ben 10 Omnitrix Alien Dossier Health Cards */}
       {renderHealthBars()}
 
-      {/* Victory Celebration Overlay */}
+      {/* Victory Celebration Overlay (NO EMOJIS) */}
       {frameWinner && (
         <div
           style={{
@@ -955,7 +1123,25 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
             zIndex: 50,
           }}
         >
-          <div style={{ fontSize: 90, filter: 'drop-shadow(0 0 30px #00ff66)' }}>👑</div>
+          {/* Golden Victory Emblem (NO EMOJIS) */}
+          <div
+            style={{
+              width: 80,
+              height: 80,
+              borderRadius: '50%',
+              backgroundColor: '#facc15',
+              boxShadow: '0 0 35px #eab308',
+              border: '4px solid #ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 24,
+              fontWeight: 900,
+              color: '#031408',
+            }}
+          >
+            WIN
+          </div>
 
           {/* Winner Spherical Avatar */}
           <div

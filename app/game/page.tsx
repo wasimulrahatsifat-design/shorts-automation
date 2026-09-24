@@ -22,6 +22,8 @@ import {
   SimFrameState,
   SimFighter,
   BEN10_DEFAULT_ABILITIES,
+  AlienType,
+  getAlienType,
 } from '../../lib/arena-physics';
 
 export { SPECIAL_POWERS, COLOR_SWATCHES };
@@ -57,7 +59,7 @@ const BEN10_ALIEN_PRESETS: ContestantConfig[] = [
     image_url: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=300&auto=format&fit=crop&q=80',
     starting_health: 90,
     damage: 20,
-    speed: 9.5,
+    speed: 14.0, // Significantly faster than other balls
     special_power: 'speedster',
     special_ability: BEN10_DEFAULT_ABILITIES['xlr8'],
   },
@@ -116,6 +118,17 @@ const BEN10_ALIEN_PRESETS: ContestantConfig[] = [
     special_power: 'none',
     special_ability: BEN10_DEFAULT_ABILITIES['ripjaws'],
   },
+  {
+    id: 'wildmutt',
+    name: 'Wildmutt',
+    color: '#f97316',
+    image_url: null,
+    starting_health: 105,
+    damage: 26,
+    speed: 7.2,
+    special_power: 'none',
+    special_ability: BEN10_DEFAULT_ABILITIES['wildmutt'],
+  },
 ];
 
 const PRESET_ABILITIES = [
@@ -127,10 +140,11 @@ const PRESET_ABILITIES = [
   BEN10_DEFAULT_ABILITIES['upgrade'],
   BEN10_DEFAULT_ABILITIES['ghostfreak'],
   BEN10_DEFAULT_ABILITIES['ripjaws'],
+  BEN10_DEFAULT_ABILITIES['wildmutt'],
 ];
 
 const PRESET_TOPICS = [
-  { topic: 'Ben 10 Omnitrix Clash', names: ['Four Arms', 'Heatblast', 'XLR8', 'Diamondhead', 'Cannonbolt', 'Upgrade', 'Ghostfreak', 'Ripjaws'] },
+  { topic: 'Ben 10 Omnitrix Clash', names: ['Four Arms', 'Heatblast', 'XLR8', 'Diamondhead', 'Cannonbolt', 'Upgrade', 'Ghostfreak', 'Ripjaws', 'Wildmutt'] },
   { topic: 'Marvel vs DC', names: ['Iron Man', 'Batman', 'Spider-Man', 'Superman'] },
   { topic: 'Anime Titans', names: ['Goku', 'Naruto', 'Luffy', 'Ichigo'] },
   { topic: 'Monsters Clash', names: ['Godzilla', 'Kong', 'T-Rex', 'Megalodon'] },
@@ -705,8 +719,7 @@ export default function GamePage() {
         ctx.restore();
       });
 
-      // Contestants (Spherical Alien Balls with Centered Live HP)
-      // "সিলেক্ট করার আগে স্ক্রিনে কোনো এলিয়েন দেখাবে না। ১ম সিলেক্ট করার পর প্রথম এলিয়েন, ২য় সিলেক্টের পর ২য় এলিয়েন দেখাবে।"
+      // Contestants (Spherical Alien Balls with Alien-Specific Visual Effects & Centered Live HP)
       const currentPhase = selectionPhaseRef.current;
       let visibleFighters: SimFighter[] = [];
       if (currentPhase === 'hero_time' || currentPhase === 'battling') {
@@ -722,24 +735,364 @@ export default function GamePage() {
 
         const half = f.size / 2;
         const isCharged = (f.energyCharge || 0) >= 100 || f.specialMoveReady;
+        const aType = getAlienType(f);
+        const curFrame = currentFrameRef.current;
 
         ctx.save();
         ctx.translate(f.x, f.y);
 
-        // Rotating Attached Weapon / Fist / Prop
-        const weaponType = f.specialAbility?.weapon_type;
-        const weaponIcon = f.specialAbility?.weapon_icon || '⚔️';
-        if (weaponType && weaponType !== 'none') {
+        // ==========================================
+        // 1. CHARACTER-SPECIFIC VISUAL EFFECTS (BEHIND / AROUND BALL)
+        // ==========================================
+
+        // --- HEATBLAST: ROARING FLAMES & EMBERS AROUND THE BALL ---
+        if (aType === 'heatblast') {
           ctx.save();
-          ctx.rotate(f.angle || 0);
-          ctx.font = `${Math.round(f.size * 0.38)}px sans-serif`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.shadowColor = '#00ff66';
-          ctx.shadowBlur = 10;
-          ctx.fillText(weaponIcon, half + 14, 0);
+          // Fiery roaring flame perimeter
+          const numFlames = 24;
+          ctx.beginPath();
+          for (let i = 0; i <= numFlames; i++) {
+            const th = (i / numFlames) * Math.PI * 2;
+            const flameNoise =
+              Math.sin(th * 7 + curFrame * 0.28) * 14 +
+              Math.cos(th * 4 - curFrame * 0.18) * 9 +
+              18;
+            const flameR = half + Math.max(6, flameNoise);
+            const fx = Math.cos(th) * flameR;
+            const fy = Math.sin(th) * flameR;
+            if (i === 0) ctx.moveTo(fx, fy);
+            else ctx.lineTo(fx, fy);
+          }
+          ctx.closePath();
+
+          const fireGrad = ctx.createRadialGradient(0, 0, half * 0.6, 0, 0, half + 36);
+          fireGrad.addColorStop(0, 'rgba(255, 240, 50, 0.95)');
+          fireGrad.addColorStop(0.35, 'rgba(255, 120, 0, 0.85)');
+          fireGrad.addColorStop(0.7, 'rgba(220, 38, 38, 0.7)');
+          fireGrad.addColorStop(1, 'rgba(150, 0, 0, 0)');
+          ctx.fillStyle = fireGrad;
+          ctx.shadowColor = '#ea580c';
+          ctx.shadowBlur = 35;
+          ctx.fill();
+
+          // Inner white-hot flame tongues
+          ctx.beginPath();
+          for (let i = 0; i <= numFlames; i++) {
+            const th = (i / numFlames) * Math.PI * 2;
+            const flameNoise = Math.sin(th * 9 - curFrame * 0.35) * 6 + 10;
+            const flameR = half + flameNoise;
+            const fx = Math.cos(th) * flameR;
+            const fy = Math.sin(th) * flameR;
+            if (i === 0) ctx.moveTo(fx, fy);
+            else ctx.lineTo(fx, fy);
+          }
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(255, 255, 200, 0.6)';
+          ctx.fill();
+
+          // Floating ember sparks around Heatblast
+          for (let k = 0; k < 6; k++) {
+            const sparkAngle = (k / 6) * Math.PI * 2 + curFrame * 0.08;
+            const sparkDist = half + 14 + Math.sin(curFrame * 0.1 + k) * 12;
+            const sx = Math.cos(sparkAngle) * sparkDist;
+            const sy = Math.sin(sparkAngle) * sparkDist;
+            ctx.beginPath();
+            ctx.arc(sx, sy, 3.5, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffe600';
+            ctx.shadowColor = '#ff6600';
+            ctx.shadowBlur = 10;
+            ctx.fill();
+          }
           ctx.restore();
         }
+
+        // --- FOUR ARMS: 4 RED MUSCULAR ARMS (2 ON EACH SIDE) ---
+        else if (aType === 'four_arms') {
+          const drawAlienArm = (startX: number, startY: number, angle: number, isLeft: boolean) => {
+            ctx.save();
+            ctx.translate(startX, startY);
+            ctx.rotate(angle);
+            const punchFlex = Math.sin(curFrame * 0.18 + (isLeft ? 0 : Math.PI)) * 4;
+
+            // Bicep / Forearm
+            ctx.beginPath();
+            ctx.moveTo(0, -12);
+            ctx.quadraticCurveTo(18 + punchFlex, -16, 32 + punchFlex, -9);
+            ctx.lineTo(34 + punchFlex, 9);
+            ctx.quadraticCurveTo(18 + punchFlex, 16, 0, 12);
+            ctx.closePath();
+            ctx.fillStyle = '#dc2626';
+            ctx.shadowColor = 'rgba(0,0,0,0.6)';
+            ctx.shadowBlur = 8;
+            ctx.fill();
+            ctx.lineWidth = 3.5;
+            ctx.strokeStyle = '#7f1d1d';
+            ctx.stroke();
+
+            // Muscular definition line
+            ctx.beginPath();
+            ctx.moveTo(6, 0);
+            ctx.lineTo(24 + punchFlex, 0);
+            ctx.strokeStyle = '#991b1b';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+
+            // Black wristband
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(30 + punchFlex, -11, 8, 22);
+            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = '#ffffff';
+            ctx.strokeRect(30 + punchFlex, -11, 8, 22);
+
+            // Red Clenched Fist
+            ctx.beginPath();
+            ctx.arc(46 + punchFlex, 0, 13, 0, Math.PI * 2);
+            ctx.fillStyle = '#b91c1c';
+            ctx.fill();
+            ctx.strokeStyle = '#7f1d1d';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // Knuckles
+            ctx.fillStyle = '#ef4444';
+            for (let kn = -6; kn <= 6; kn += 4.5) {
+              ctx.beginPath();
+              ctx.arc(52 + punchFlex, kn, 3, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            ctx.restore();
+          };
+
+          // 2 Arms on Left (Upper & Lower)
+          drawAlienArm(-half + 6, -half * 0.38, Math.PI * 0.85, true);
+          drawAlienArm(-half + 6, half * 0.38, Math.PI * 1.15, true);
+
+          // 2 Arms on Right (Upper & Lower)
+          drawAlienArm(half - 6, -half * 0.38, -Math.PI * 0.15, false);
+          drawAlienArm(half - 6, half * 0.38, Math.PI * 0.15, false);
+        }
+
+        // --- XLR8: HIGH-SPEED CYAN DASH TRAILS & SPEED LINES ---
+        else if (aType === 'xlr8') {
+          const spd = Math.hypot(f.vx, f.vy);
+          const moveAng = Math.atan2(f.vy, f.vx);
+          const trailLen = Math.min(100, spd * 6 + 30);
+          ctx.save();
+          // Ghost trail spheres trailing behind
+          for (let t = 1; t <= 3; t++) {
+            const offset = t * 0.32;
+            const tx = -Math.cos(moveAng) * trailLen * offset;
+            const ty = -Math.sin(moveAng) * trailLen * offset;
+            ctx.beginPath();
+            ctx.arc(tx, ty, half * (1 - t * 0.18), 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(2, 132, 199, ${0.4 - t * 0.1})`;
+            ctx.shadowColor = '#00f0ff';
+            ctx.shadowBlur = 15;
+            ctx.fill();
+          }
+          // Cyan speed dash lines
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 3;
+          for (let dl = -2; dl <= 2; dl++) {
+            const perpX = -Math.sin(moveAng) * dl * 18;
+            const perpY = Math.cos(moveAng) * dl * 18;
+            ctx.beginPath();
+            ctx.moveTo(perpX, perpY);
+            ctx.lineTo(
+              perpX - Math.cos(moveAng) * (trailLen * 0.85),
+              perpY - Math.sin(moveAng) * (trailLen * 0.85)
+            );
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+
+        // --- DIAMONDHEAD: SHARP CRYSTAL SPARK SHARDS AROUND PERIMETER ---
+        else if (aType === 'diamondhead') {
+          ctx.save();
+          const crystalShards = [
+            { angle: -Math.PI / 2, length: half * 0.65, width: 22 },
+            { angle: -Math.PI / 2 - 0.5, length: half * 0.55, width: 18 },
+            { angle: -Math.PI / 2 + 0.5, length: half * 0.55, width: 18 },
+            { angle: -Math.PI + 0.4, length: half * 0.45, width: 16 },
+            { angle: -0.4, length: half * 0.45, width: 16 },
+            { angle: -Math.PI + 0.9, length: half * 0.35, width: 14 },
+            { angle: -0.9, length: half * 0.35, width: 14 },
+            { angle: Math.PI / 2, length: half * 0.4, width: 15 },
+          ];
+          crystalShards.forEach((s) => {
+            ctx.save();
+            ctx.rotate(s.angle);
+            const tipX = half + s.length;
+            const baseX = half - 5;
+            const hw = s.width / 2;
+
+            // Left facet (mint highlight)
+            ctx.beginPath();
+            ctx.moveTo(baseX, -hw);
+            ctx.lineTo(tipX, 0);
+            ctx.lineTo(baseX, 0);
+            ctx.closePath();
+            ctx.fillStyle = '#6ee7b7';
+            ctx.shadowColor = '#10b981';
+            ctx.shadowBlur = 14;
+            ctx.fill();
+
+            // Right facet (deep emerald)
+            ctx.beginPath();
+            ctx.moveTo(baseX, 0);
+            ctx.lineTo(tipX, 0);
+            ctx.lineTo(baseX, hw);
+            ctx.closePath();
+            ctx.fillStyle = '#059669';
+            ctx.fill();
+
+            // Facet edge & ridge
+            ctx.beginPath();
+            ctx.moveTo(baseX, -hw);
+            ctx.lineTo(tipX, 0);
+            ctx.lineTo(baseX, hw);
+            ctx.strokeStyle = '#a7f3d0';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(baseX, 0);
+            ctx.lineTo(tipX, 0);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            ctx.restore();
+          });
+          ctx.restore();
+        }
+
+        // --- CANNONBOLT: JAGGED SHARP SILVER ARMOR SHELL ---
+        else if (aType === 'cannonbolt') {
+          ctx.save();
+          const numPlates = 14;
+          ctx.beginPath();
+          for (let i = 0; i <= numPlates; i++) {
+            const baseAngle = (i / numPlates) * Math.PI * 2;
+            const midAngle = baseAngle + Math.PI / numPlates;
+            const outerR = half + 16;
+            const innerR = half - 2;
+
+            const bx = Math.cos(baseAngle) * innerR;
+            const by = Math.sin(baseAngle) * innerR;
+            const mx = Math.cos(midAngle) * outerR;
+            const my = Math.sin(midAngle) * outerR;
+
+            if (i === 0) ctx.moveTo(bx, by);
+            else ctx.lineTo(bx, by);
+            ctx.lineTo(mx, my);
+          }
+          ctx.closePath();
+
+          const silverGrad = ctx.createLinearGradient(-half, -half, half, half);
+          silverGrad.addColorStop(0, '#ffffff');
+          silverGrad.addColorStop(0.3, '#cbd5e1');
+          silverGrad.addColorStop(0.7, '#64748b');
+          silverGrad.addColorStop(1, '#334155');
+          ctx.fillStyle = silverGrad;
+          ctx.shadowColor = '#94a3b8';
+          ctx.shadowBlur = 18;
+          ctx.fill();
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = '#f1f5f9';
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // --- RIPJAWS: ANIMATED WATER WAVES & BUBBLES ---
+        else if (aType === 'ripjaws') {
+          ctx.save();
+          const numWaves = 24;
+          ctx.beginPath();
+          for (let i = 0; i <= numWaves; i++) {
+            const th = (i / numWaves) * Math.PI * 2;
+            const wave =
+              Math.sin(th * 6 + curFrame * 0.22) * 8 +
+              Math.cos(th * 3 - curFrame * 0.15) * 5 +
+              14;
+            const wr = half + wave;
+            const wx = Math.cos(th) * wr;
+            const wy = Math.sin(th) * wr;
+            if (i === 0) ctx.moveTo(wx, wy);
+            else ctx.lineTo(wx, wy);
+          }
+          ctx.closePath();
+
+          const waterGrad = ctx.createRadialGradient(0, 0, half * 0.8, 0, 0, half + 26);
+          waterGrad.addColorStop(0, 'rgba(6, 182, 212, 0.85)');
+          waterGrad.addColorStop(0.5, 'rgba(14, 116, 144, 0.6)');
+          waterGrad.addColorStop(1, 'rgba(6, 182, 212, 0)');
+          ctx.fillStyle = waterGrad;
+          ctx.shadowColor = '#06b6d4';
+          ctx.shadowBlur = 24;
+          ctx.fill();
+          ctx.lineWidth = 2.5;
+          ctx.strokeStyle = 'rgba(165, 243, 252, 0.85)';
+          ctx.stroke();
+
+          // Swirling water bubbles
+          for (let b = 0; b < 6; b++) {
+            const bubbleAngle = (b / 6) * Math.PI * 2 + curFrame * 0.09;
+            const bubbleDist = half + 12 + Math.sin(curFrame * 0.12 + b * 2) * 8;
+            const bx = Math.cos(bubbleAngle) * bubbleDist;
+            const by = Math.sin(bubbleAngle) * bubbleDist;
+            ctx.beginPath();
+            ctx.arc(bx, by, 4, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(207, 250, 254, 0.9)';
+            ctx.fill();
+            ctx.strokeStyle = '#0891b2';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+
+        // --- GHOSTFREAK: GHOSTLY BODY WITH FLOWING WISPY TAIL ---
+        else if (aType === 'ghostfreak') {
+          ctx.save();
+          const spd = Math.hypot(f.vx, f.vy);
+          const tailAngle = spd > 0.5 ? Math.atan2(f.vy, f.vx) + Math.PI : Math.PI / 2;
+
+          ctx.save();
+          ctx.rotate(tailAngle);
+          const tailLength = half * 1.5;
+          const wave1 = Math.sin(curFrame * 0.2) * 12;
+          const wave2 = Math.cos(curFrame * 0.25) * 10;
+
+          ctx.beginPath();
+          ctx.moveTo(half * 0.2, -half * 0.7);
+          ctx.quadraticCurveTo(half * 0.8 + wave1, -half * 0.3, tailLength + wave1, wave2);
+          ctx.quadraticCurveTo(half * 0.8 - wave1, half * 0.3, half * 0.2, half * 0.7);
+          ctx.closePath();
+
+          const ghostGrad = ctx.createLinearGradient(0, 0, tailLength, 0);
+          ghostGrad.addColorStop(0, 'rgba(148, 163, 184, 0.85)');
+          ghostGrad.addColorStop(0.5, 'rgba(203, 213, 225, 0.55)');
+          ghostGrad.addColorStop(1, 'rgba(241, 245, 249, 0)');
+          ctx.fillStyle = ghostGrad;
+          ctx.shadowColor = '#cbd5e1';
+          ctx.shadowBlur = 25;
+          ctx.fill();
+          ctx.restore();
+
+          // Ghostly ethereal outer aura
+          ctx.beginPath();
+          ctx.arc(0, 0, half + 8, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(226, 232, 240, 0.18)';
+          ctx.shadowColor = '#94a3b8';
+          ctx.shadowBlur = 22;
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // --- WILDMUTT & UPGRADE: CLEAN NORMAL BALLS (PER USER INSTRUCTION) ---
+        // Normal spherical ball styling applied below
 
         // Charged Omnitrix Pulsing Ring
         if (isCharged) {
@@ -753,7 +1106,9 @@ export default function GamePage() {
           ctx.shadowBlur = 0;
         }
 
-        // Round Spherical Ball Body
+        // ==========================================
+        // 2. BALL INTERIOR (CLIPPED IMAGE / AVATAR)
+        // ==========================================
         ctx.beginPath();
         ctx.arc(0, 0, half, 0, Math.PI * 2);
         ctx.fillStyle = '#031408';
@@ -800,10 +1155,13 @@ export default function GamePage() {
         ctx.beginPath();
         ctx.arc(0, 0, half, 0, Math.PI * 2);
         ctx.lineWidth = 6;
-        ctx.strokeStyle = f.hitFlash > 0 ? '#ffffff' : isCharged ? '#00ff66' : f.color;
+        ctx.strokeStyle =
+          f.hitFlash > 0 ? '#ffffff' : isCharged ? '#00ff66' : f.color;
         ctx.stroke();
 
-        // LIVE HP NUMBER DISPLAYED DIRECTLY INSIDE CENTER OF BALL (Viral Video Style)
+        // ==========================================
+        // 3. LIVE HP NUMBER DIRECTLY INSIDE BALL
+        // ==========================================
         ctx.font = `900 ${Math.round(f.size * 0.38)}px "Montserrat", sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -813,7 +1171,9 @@ export default function GamePage() {
         ctx.strokeText(Math.round(f.health).toString(), 0, 2);
         ctx.fillText(Math.round(f.health).toString(), 0, 2);
 
-        // Distinct, Clearly Visible Name Badge directly below the ball
+        // ==========================================
+        // 4. DISTINCT NAME BADGE DIRECTLY BELOW BALL
+        // ==========================================
         ctx.save();
         ctx.fillStyle = 'rgba(3, 16, 8, 0.95)';
         ctx.strokeStyle = isCharged ? '#00ff66' : f.color;
@@ -831,22 +1191,24 @@ export default function GamePage() {
         ctx.fillText(f.name, 0, half + 22);
         ctx.restore();
 
-        // Active Item / Ability Badge Floating Above
+        // ==========================================
+        // 5. ACTIVE STATUS BADGE (NO EMOJIS)
+        // ==========================================
         let itemBadge = '';
-        if (f.bonusShield > 0 || f.hasShield) itemBadge += '🛡️';
-        if (f.hasDagger) itemBadge += '🗡️';
-        if (f.gunBullets > 0) itemBadge += `🔫x${f.gunBullets}`;
-        if (f.speedBoostTimer > 0) itemBadge += '⚡';
-        if (f.frozenTimer > 0) itemBadge += '❄️';
-        if (isCharged) itemBadge += '⚡ READY';
+        if (f.bonusShield > 0 || f.hasShield) itemBadge += 'SHIELD ';
+        if (f.hasDagger) itemBadge += '2X DMG ';
+        if (f.gunBullets > 0) itemBadge += `BLASTER x${f.gunBullets} `;
+        if (f.speedBoostTimer > 0) itemBadge += 'SPEED ';
+        if (f.frozenTimer > 0) itemBadge += 'FROZEN ';
+        if (isCharged) itemBadge += 'READY';
 
         if (itemBadge) {
-          ctx.font = 'bold 16px sans-serif';
+          ctx.font = 'bold 15px "Montserrat", sans-serif';
           ctx.textAlign = 'center';
           ctx.fillStyle = '#00ff66';
           ctx.shadowColor = '#000';
           ctx.shadowBlur = 6;
-          ctx.fillText(itemBadge, 0, -half - 12);
+          ctx.fillText(itemBadge.trim(), 0, -half - 12);
         }
 
         ctx.restore();
@@ -881,15 +1243,31 @@ export default function GamePage() {
         drawLiveHealthBars(ctx, fighters, width);
       }
 
-      // Victory Overlay: ONLY SHOWN WHEN frameWinner IS PRESENT!
+      // Victory Overlay: ONLY SHOWN WHEN frameWinner IS PRESENT! (NO EMOJIS)
       if (frameWinner) {
         ctx.save();
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
         ctx.fillRect(0, 0, width, height);
 
-        ctx.font = '100px sans-serif';
+        // Golden Victory Crest (NO EMOJIS)
+        const crownY = height / 2 - 130;
+        ctx.beginPath();
+        ctx.arc(width / 2, crownY, 40, 0, Math.PI * 2);
+        ctx.fillStyle = '#facc15';
+        ctx.shadowColor = '#eab308';
+        ctx.shadowBlur = 35;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(width / 2, crownY, 30, 0, Math.PI * 2);
+        ctx.fillStyle = '#031408';
+        ctx.fill();
+
+        ctx.font = '900 22px "Montserrat", sans-serif';
+        ctx.fillStyle = '#00ff66';
         ctx.textAlign = 'center';
-        ctx.fillText('👑', width / 2, height / 2 - 130);
+        ctx.textBaseline = 'middle';
+        ctx.fillText('WIN', width / 2, crownY);
 
         const winHalf = 80;
         ctx.beginPath();
@@ -1034,15 +1412,15 @@ export default function GamePage() {
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
 
-      const abIcon = f.specialAbility ? f.specialAbility.icon : '';
+      const abName = f.specialAbility ? f.specialAbility.name : '';
       let itemTag = '';
-      if (f.bonusShield > 0 || f.hasShield) itemTag += ' 🛡️';
-      if (f.hasDagger) itemTag += ' 🗡️';
-      if (f.gunBullets > 0) itemTag += ` 🔫x${f.gunBullets}`;
-      if (f.speedBoostTimer > 0) itemTag += ' ⚡';
-      if (f.frozenTimer > 0) itemTag += ' ❄️';
+      if (f.bonusShield > 0 || f.hasShield) itemTag += ' [SHIELD]';
+      if (f.hasDagger) itemTag += ' [2X DMG]';
+      if (f.gunBullets > 0) itemTag += ` [BLASTER x${f.gunBullets}]`;
+      if (f.speedBoostTimer > 0) itemTag += ' [SPEED]';
+      if (f.frozenTimer > 0) itemTag += ' [FROZEN]';
 
-      ctx.fillText(`${f.name} ${abIcon}${itemTag}`, textX, 10);
+      ctx.fillText(`${f.name}${itemTag}`, textX, 10);
 
       // HP text
       ctx.font = '900 20px "Montserrat", sans-serif';
@@ -1099,12 +1477,12 @@ export default function GamePage() {
         ctx.shadowBlur = 0;
       }
 
-      // Energy text
+      // Energy text (NO EMOJIS)
       ctx.font = '800 12px "Montserrat", sans-serif';
       ctx.fillStyle = isCharged ? '#00ff66' : '#94a3b8';
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
-      ctx.fillText(isCharged ? '⚡ READY!' : `${energy}%`, colWidth - 14, energyBarY + 4);
+      ctx.fillText(isCharged ? 'READY!' : `${energy}%`, colWidth - 14, energyBarY + 4);
 
       // 3. Ability Name Tag
       if (f.specialAbility) {

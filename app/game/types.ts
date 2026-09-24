@@ -6,13 +6,13 @@ export interface SpecialPowerDef {
 }
 
 export const SPECIAL_POWERS: SpecialPowerDef[] = [
-  { id: 'none', name: 'None', icon: '⚪', description: 'No passive special power.' },
-  { id: 'iron_shield', name: 'Iron Shield', icon: '🛡️', description: 'Takes 50% less damage when HP is ≤ 50%.' },
-  { id: 'berserker', name: 'Berserker Rage', icon: '⚡', description: 'Deals 2x damage when HP drops to ≤ 20%.' },
-  { id: 'vampiric', name: 'Vampiric Strike', icon: '🩸', description: 'Restores 20% of damage dealt back to health.' },
-  { id: 'thorns', name: 'Thorns Counter', icon: '🌵', description: 'Attacker takes 30% recoil damage on hit.' },
-  { id: 'speedster', name: 'Speedster Dash', icon: '💨', description: '+35% base movement speed & swift bounce.' },
-  { id: 'phoenix', name: 'Phoenix Rebirth', icon: '🦅', description: 'Survives lethal damage once with 20 HP!' },
+  { id: 'none', name: 'None', icon: '', description: 'No passive special power.' },
+  { id: 'iron_shield', name: 'Iron Shield', icon: 'SHIELD', description: 'Takes 50% less damage when HP is ≤ 50%.' },
+  { id: 'berserker', name: 'Berserker Rage', icon: 'RAGE', description: 'Deals 2x damage when HP drops to ≤ 20%.' },
+  { id: 'vampiric', name: 'Vampiric Strike', icon: 'DRAIN', description: 'Restores 20% of damage dealt back to health.' },
+  { id: 'thorns', name: 'Thorns Counter', icon: 'COUNTER', description: 'Attacker takes 30% recoil damage on hit.' },
+  { id: 'speedster', name: 'Speedster Dash', icon: 'SPEED', description: '+35% base movement speed & swift bounce.' },
+  { id: 'phoenix', name: 'Phoenix Rebirth', icon: 'REBIRTH', description: 'Survives lethal damage once with 20 HP!' },
 ];
 
 export const COLOR_SWATCHES = [
