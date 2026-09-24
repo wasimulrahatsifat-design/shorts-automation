@@ -413,11 +413,11 @@ export function generateArenaSimulation(
   let announcedOvertime = false;
 
   const itemTypes: { type: SimItem['type']; icon: string; name: string; color: string }[] = [
-    { type: 'health', icon: '💚', name: '+30 HP Medkit', color: '#22c55e' },
-    { type: 'dagger', icon: '🗡️', name: '2x DMG Dagger', color: '#f59e0b' },
-    { type: 'gun', icon: '🔫', name: 'Blaster (5 Shots)', color: '#38bdf8' },
-    { type: 'shield', icon: '🛡️', name: 'Energy Shield', color: '#a855f7' },
-    { type: 'speed', icon: '⚡', name: 'Hyper Speed', color: '#eab308' },
+    { type: 'health', icon: 'HP', name: '+30 HP Medkit', color: '#22c55e' },
+    { type: 'dagger', icon: 'DMG', name: '2x DMG Dagger', color: '#f59e0b' },
+    { type: 'gun', icon: 'GUN', name: 'Blaster (5 Shots)', color: '#38bdf8' },
+    { type: 'shield', icon: 'SHIELD', name: 'Energy Shield', color: '#a855f7' },
+    { type: 'speed', icon: 'SPEED', name: 'Hyper Speed', color: '#eab308' },
   ];
 
   // Interactive selection is handled on screen before battle, so physics simulation starts immediately at frame 0
@@ -495,7 +495,7 @@ export function generateArenaSimulation(
           id: `overtime_${frame}`,
           x: ARENA_CENTER.x,
           y: ARENA_CENTER.y - 120,
-          text: '⚡ OVERTIME: 2X DAMAGE! ⚡',
+          text: 'OVERTIME: 2X DAMAGE!',
           color: '#ef4444',
           alpha: 1,
           vy: -1,
@@ -917,16 +917,16 @@ export function generateArenaSimulation(
             f.hasDagger = true;
             f.daggerActivated = false;
             f.daggerTimer = 90;
-            floatingTexts.push({ id: `ft_${frame}_${i}`, x: f.x, y: f.y - 50, text: '🗡️ 2X DMG', color: '#f59e0b', alpha: 1, vy: -2.5, scale: 1.2 });
+            floatingTexts.push({ id: `ft_${frame}_${i}`, x: f.x, y: f.y - 50, text: '2X DMG', color: '#f59e0b', alpha: 1, vy: -2.5, scale: 1.2 });
           } else if (it.type === 'gun') {
             f.gunBullets = 5;
-            floatingTexts.push({ id: `ft_${frame}_${i}`, x: f.x, y: f.y - 50, text: '🔫 5 SHOTS', color: '#38bdf8', alpha: 1, vy: -2.5, scale: 1.2 });
+            floatingTexts.push({ id: `ft_${frame}_${i}`, x: f.x, y: f.y - 50, text: '5 SHOTS', color: '#38bdf8', alpha: 1, vy: -2.5, scale: 1.2 });
           } else if (it.type === 'shield') {
             f.hasShield = true;
-            floatingTexts.push({ id: `ft_${frame}_${i}`, x: f.x, y: f.y - 50, text: '🛡️ SHIELD', color: '#a855f7', alpha: 1, vy: -2.5, scale: 1.2 });
+            floatingTexts.push({ id: `ft_${frame}_${i}`, x: f.x, y: f.y - 50, text: 'SHIELD', color: '#a855f7', alpha: 1, vy: -2.5, scale: 1.2 });
           } else if (it.type === 'speed') {
             f.speedBoostTimer = 120;
-            floatingTexts.push({ id: `ft_${frame}_${i}`, x: f.x, y: f.y - 50, text: '⚡ SPEED', color: '#eab308', alpha: 1, vy: -2.5, scale: 1.2 });
+            floatingTexts.push({ id: `ft_${frame}_${i}`, x: f.x, y: f.y - 50, text: 'SPEED', color: '#eab308', alpha: 1, vy: -2.5, scale: 1.2 });
           }
 
           items.splice(i, 1);

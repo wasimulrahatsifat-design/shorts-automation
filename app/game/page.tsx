@@ -2095,7 +2095,9 @@ export default function GamePage() {
         {/* Minimalist Header */}
         <header className="flex flex-wrap justify-between items-center py-3 border-b border-slate-800/60 gap-4">
           <div className="flex items-center gap-2.5">
-            <span className="text-2xl">⚔️</span>
+            <div className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 font-black text-xs">
+              AC
+            </div>
             <div>
               <h1 className="text-xl font-black tracking-tight text-white flex items-center gap-2">
                 ARENA CLASH <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">PHYSICS BATTLE</span>
@@ -2111,10 +2113,10 @@ export default function GamePage() {
               Aesthetic
             </Link>
             <Link href="/admin?tab=youtube" className="px-3 py-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-900/50 transition flex items-center gap-1">
-              <span>🔴</span> YouTube
+              YouTube
             </Link>
             <Link href="/admin?tab=meta" className="px-3 py-1.5 rounded-lg bg-blue-950/40 hover:bg-blue-900/60 text-blue-300 border border-blue-900/50 transition flex items-center gap-1">
-              <span>🔵</span> FB & IG
+              FB & IG
             </Link>
           </nav>
         </header>
@@ -2129,7 +2131,7 @@ export default function GamePage() {
             }`}
           >
             <span>{queueMessage.text}</span>
-            <button onClick={() => setQueueMessage(null)} className="opacity-60 hover:opacity-100 text-sm">✕</button>
+            <button onClick={() => setQueueMessage(null)} className="opacity-60 hover:opacity-100 text-xs font-bold">X</button>
           </div>
         )}
 
@@ -2147,10 +2149,9 @@ export default function GamePage() {
                   <button
                     type="button"
                     onClick={handleLoadBen10}
-                    className="px-2.5 py-0.5 rounded-md bg-emerald-950 hover:bg-emerald-900 border border-emerald-500/60 text-[11px] font-bold text-emerald-300 transition flex items-center gap-1 shadow-sm"
+                    className="px-2.5 py-0.5 rounded-md bg-emerald-950 hover:bg-emerald-900 border border-emerald-500/60 text-[11px] font-bold text-emerald-300 transition shadow-sm"
                   >
-                    <span>⌛</span>
-                    <span>Ben 10 Aliens</span>
+                    Ben 10 Aliens
                   </button>
                   {PRESET_TOPICS.map((p, idx) => (
                     <button
@@ -2218,8 +2219,7 @@ export default function GamePage() {
                         className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition text-[9px] text-white font-bold"
                         title="Upload and crop image"
                       >
-                        <span className="text-base">📷</span>
-                        <span className="text-[8px]">Upload</span>
+                        <span className="text-[10px] uppercase font-bold tracking-wider">Photo</span>
                         <input type="file" accept="image/*" onChange={(e) => handleImageUpload(idx, e)} className="hidden" />
                       </label>
                     </div>
@@ -2230,10 +2230,9 @@ export default function GamePage() {
                           type="button"
                           onClick={() => openCropModal(idx, fighter.image_url!)}
                           title="Crop and position image"
-                          className="text-[9px] px-1.5 py-0.5 bg-cyan-950/90 hover:bg-cyan-900 text-cyan-300 rounded border border-cyan-700/60 font-bold transition flex items-center gap-0.5"
+                          className="text-[9px] px-1.5 py-0.5 bg-cyan-950/90 hover:bg-cyan-900 text-cyan-300 rounded border border-cyan-700/60 font-bold transition"
                         >
-                          <span>✂️</span>
-                          <span>Crop</span>
+                          Crop
                         </button>
                         <button
                           type="button"
@@ -2241,7 +2240,7 @@ export default function GamePage() {
                           title="Remove image"
                           className="text-[9px] px-1.5 py-0.5 bg-rose-950/90 hover:bg-rose-900 text-rose-300 rounded border border-rose-700/60 font-bold transition"
                         >
-                          ✕
+                          X
                         </button>
                       </div>
                     )}
@@ -2317,23 +2316,23 @@ export default function GamePage() {
                     {/* Special Ability Editor */}
                     <div className="bg-slate-950/70 p-2 rounded-xl border border-slate-800/80 space-y-1.5 mt-1">
                       <div className="flex items-center justify-between text-[11px] font-bold">
-                        <span className="text-cyan-400 flex items-center gap-1">
-                          <span>✨</span> SPECIAL ABILITY
+                        <span className="text-cyan-400">
+                          SPECIAL ABILITY
                         </span>
                         <div className="flex items-center gap-1">
-                          {['⚡', '💥', '🛡️', '❄️', '💚', '🩸', '☄️', '🌪️', '💣', '🗡️'].map((emoji) => (
+                          {['DMG', 'BURST', 'SHIELD', 'ICE', 'HEAL', 'RAGE', 'METEOR', 'WIND', 'BOMB', 'SLASH'].map((tag) => (
                             <button
-                              key={emoji}
+                              key={tag}
                               type="button"
                               onClick={() => {
-                                const cur = fighter.special_ability || { name: 'Power Strike', icon: '⚡', type: 'damage', cooldown_seconds: 5, power_value: 30 };
-                                updateContestant(idx, { special_ability: { ...cur, icon: emoji } });
+                                const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                                updateContestant(idx, { special_ability: { ...cur, icon: tag } });
                               }}
-                              className={`text-[12px] px-1 py-0.5 rounded hover:scale-125 transition ${
-                                fighter.special_ability?.icon === emoji ? 'bg-cyan-500/30 ring-1 ring-cyan-400' : 'opacity-70'
+                              className={`text-[9px] px-1.5 py-0.5 rounded font-black transition ${
+                                fighter.special_ability?.icon === tag ? 'bg-cyan-500/30 text-cyan-300 ring-1 ring-cyan-400' : 'text-slate-400 hover:text-white bg-slate-900'
                               }`}
                             >
-                              {emoji}
+                              {tag}
                             </button>
                           ))}
                         </div>
@@ -2345,7 +2344,7 @@ export default function GamePage() {
                           placeholder="Ability Name"
                           value={fighter.special_ability?.name || ''}
                           onChange={(e) => {
-                            const cur = fighter.special_ability || { name: '', icon: '⚡', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                            const cur = fighter.special_ability || { name: '', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30 };
                             updateContestant(idx, { special_ability: { ...cur, name: e.target.value } });
                           }}
                           className="px-2 py-1 bg-slate-900 border border-slate-800 rounded-lg text-white font-bold placeholder-slate-600 focus:outline-none focus:border-cyan-500"
@@ -2354,16 +2353,16 @@ export default function GamePage() {
                         <select
                           value={fighter.special_ability?.type || 'damage'}
                           onChange={(e) => {
-                            const cur = fighter.special_ability || { name: 'Power Strike', icon: '⚡', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                            const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30 };
                             updateContestant(idx, { special_ability: { ...cur, type: e.target.value as any } });
                           }}
                           className="px-1.5 py-1 bg-slate-900 border border-slate-800 rounded-lg text-cyan-300 font-bold focus:outline-none"
                         >
-                          <option value="damage">💥 Damage</option>
-                          <option value="shield">🛡️ Shield</option>
-                          <option value="heal">💚 Heal</option>
-                          <option value="freeze">❄️ Freeze</option>
-                          <option value="speed">⚡ Speed</option>
+                          <option value="damage">Damage</option>
+                          <option value="shield">Shield</option>
+                          <option value="heal">Heal</option>
+                          <option value="freeze">Freeze</option>
+                          <option value="speed">Speed</option>
                         </select>
 
                         <div className="flex items-center gap-1 bg-slate-900 px-2 py-1 rounded-lg border border-slate-800">
@@ -2375,7 +2374,7 @@ export default function GamePage() {
                             step="1"
                             value={fighter.special_ability?.cooldown_seconds || 5}
                             onChange={(e) => {
-                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '⚡', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30 };
                               updateContestant(idx, { special_ability: { ...cur, cooldown_seconds: Math.max(2, Number(e.target.value) || 2) } });
                             }}
                             className="w-8 bg-transparent text-amber-300 font-bold text-right focus:outline-none"
@@ -2391,7 +2390,7 @@ export default function GamePage() {
                             max="100"
                             value={fighter.special_ability?.power_value || 30}
                             onChange={(e) => {
-                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '⚡', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30 };
                               updateContestant(idx, { special_ability: { ...cur, power_value: Math.max(1, Number(e.target.value) || 1) } });
                             }}
                             className="w-10 bg-transparent text-pink-400 font-bold text-right focus:outline-none"
@@ -2402,40 +2401,40 @@ export default function GamePage() {
                       {/* Trigger Criteria & Weapon Selector */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] pt-1.5 border-t border-slate-900">
                         <div className="flex items-center gap-1.5 bg-slate-900/90 px-2 py-1 rounded-lg border border-slate-800">
-                          <span className="text-slate-400 font-semibold whitespace-nowrap text-[10px]">🎯 Trigger:</span>
+                          <span className="text-slate-400 font-semibold whitespace-nowrap text-[10px]">Trigger:</span>
                           <select
                             value={fighter.special_ability?.trigger_type || 'charge'}
                             onChange={(e) => {
-                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '⚡', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30 };
                               updateContestant(idx, { special_ability: { ...cur, trigger_type: e.target.value as any } });
                             }}
                             className="bg-transparent text-emerald-400 font-bold focus:outline-none flex-1 text-[10px]"
                           >
-                            <option value="charge" className="bg-slate-900 text-white">⚡ 100% Omnitrix Charge</option>
-                            <option value="hp_threshold" className="bg-slate-900 text-white">🩸 Low HP (&lt;50%) Rage</option>
-                            <option value="hit_combo" className="bg-slate-900 text-white">🥊 4x Hit Combo</option>
-                            <option value="cooldown" className="bg-slate-900 text-white">⏱️ Cooldown Timer</option>
+                            <option value="charge" className="bg-slate-900 text-white">100% Omnitrix Charge</option>
+                            <option value="hp_threshold" className="bg-slate-900 text-white">Low HP (&lt;50%) Rage</option>
+                            <option value="hit_combo" className="bg-slate-900 text-white">4x Hit Combo</option>
+                            <option value="cooldown" className="bg-slate-900 text-white">Cooldown Timer</option>
                           </select>
                         </div>
 
                         <div className="flex items-center gap-1.5 bg-slate-900/90 px-2 py-1 rounded-lg border border-slate-800">
-                          <span className="text-slate-400 font-semibold whitespace-nowrap text-[10px]">⚔️ Weapon:</span>
+                          <span className="text-slate-400 font-semibold whitespace-nowrap text-[10px]">Weapon:</span>
                           <select
-                            value={fighter.special_ability?.weapon_icon || '🥊'}
+                            value={fighter.special_ability?.weapon_icon || ''}
                             onChange={(e) => {
-                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '⚡', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30 };
                               updateContestant(idx, { special_ability: { ...cur, weapon_icon: e.target.value } });
                             }}
                             className="bg-transparent text-amber-300 font-bold focus:outline-none flex-1 text-[10px]"
                           >
-                            <option value="🥊" className="bg-slate-900 text-white">🥊 Fist / Sonic Blow</option>
-                            <option value="🔥" className="bg-slate-900 text-white">🔥 Fireball Orbit</option>
-                            <option value="💎" className="bg-slate-900 text-white">💎 Diamond Crystal</option>
-                            <option value="🗡️" className="bg-slate-900 text-white">🗡️ Plasma Blade</option>
-                            <option value="⚡" className="bg-slate-900 text-white">⚡ Electric Arc</option>
-                            <option value="🛡️" className="bg-slate-900 text-white">🛡️ Energy Shield</option>
-                            <option value="⚙️" className="bg-slate-900 text-white">⚙️ Galvanic Gear</option>
-                            <option value="🦈" className="bg-slate-900 text-white">🦈 Steel Jaws</option>
+                            <option value="fist" className="bg-slate-900 text-white">Fist / Sonic Blow</option>
+                            <option value="fire" className="bg-slate-900 text-white">Fireball Orbit</option>
+                            <option value="crystal" className="bg-slate-900 text-white">Diamond Crystal</option>
+                            <option value="blade" className="bg-slate-900 text-white">Plasma Blade</option>
+                            <option value="spark" className="bg-slate-900 text-white">Electric Arc</option>
+                            <option value="shield" className="bg-slate-900 text-white">Energy Shield</option>
+                            <option value="gear" className="bg-slate-900 text-white">Galvanic Gear</option>
+                            <option value="jaws" className="bg-slate-900 text-white">Steel Jaws</option>
                             <option value="" className="bg-slate-900 text-white">None</option>
                           </select>
                         </div>
@@ -2464,7 +2463,7 @@ export default function GamePage() {
                 onClick={() => setSoundEnabled(!soundEnabled)}
                 className={`font-bold transition ${soundEnabled ? 'text-emerald-400' : 'text-slate-500'}`}
               >
-                {soundEnabled ? '🔊 SFX ON' : '🔇 MUTED'}
+                {soundEnabled ? 'SFX ON' : 'MUTED'}
               </button>
             </div>
           </div>
@@ -2486,13 +2485,12 @@ export default function GamePage() {
                   {aliveCount} / {contestants.length} ALIVE
                 </span>
 
-                {/* FULLSCREEN BUTTON ⛶ */}
+                {/* FULLSCREEN BUTTON */}
                 <button
                   onClick={() => setIsFullscreen(true)}
                   title="Fullscreen Game Screen"
                   className="px-2.5 py-1 rounded-full bg-black/80 hover:bg-slate-800 backdrop-blur border border-slate-700 text-xs font-bold text-cyan-300 hover:text-white transition flex items-center gap-1 shadow-lg"
                 >
-                  <span>⛶</span>
                   <span className="text-[10px]">Fullscreen</span>
                 </button>
               </div>
@@ -2527,7 +2525,7 @@ export default function GamePage() {
                       : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
                   }`}
                 >
-                  <span>{isPlaying ? '⏸️ PAUSE' : '▶️ PLAY'}</span>
+                  <span>{isPlaying ? 'PAUSE' : 'PLAY'}</span>
                 </button>
 
                 <button
@@ -2535,7 +2533,7 @@ export default function GamePage() {
                   title="Reset Game"
                   className="px-3.5 py-3 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl font-bold text-xs text-slate-300 transition"
                 >
-                  🔄 RESET
+                  RESET
                 </button>
 
                 {/* Speed Toggle */}
@@ -2560,7 +2558,6 @@ export default function GamePage() {
                 disabled={queueLoading}
                 className="w-full py-2.5 bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 hover:opacity-95 text-white rounded-xl font-bold text-xs transition disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-md"
               >
-                <span>🚀</span>
                 <span>{queueLoading ? 'Queuing Video...' : 'Queue as YouTube Short (Render Full Game)'}</span>
               </button>
             </div>
@@ -2587,19 +2584,18 @@ export default function GamePage() {
                     isPlaying ? 'bg-amber-500 text-black' : 'bg-emerald-500 text-black'
                   }`}
                 >
-                  {isPlaying ? '⏸️ PAUSE' : '▶️ PLAY'}
+                  {isPlaying ? 'PAUSE' : 'PLAY'}
                 </button>
                 <button
                   onClick={resetSimulation}
                   className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg transition"
                 >
-                  🔄 RESET
+                  RESET
                 </button>
                 <button
                   onClick={() => setIsFullscreen(false)}
                   className="px-3.5 py-1 bg-rose-600/80 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1"
                 >
-                  <span>✕</span>
                   <span>Exit (ESC)</span>
                 </button>
               </div>
@@ -2632,9 +2628,8 @@ export default function GamePage() {
               {/* Header */}
               <div className="flex justify-between items-center border-b border-slate-800 pb-3">
                 <div>
-                  <h3 className="text-sm font-black text-white flex items-center gap-2">
-                    <span>✂️</span>
-                    <span>Adjust & Frame Image</span>
+                  <h3 className="text-sm font-black text-white">
+                    Adjust & Frame Image
                   </h3>
                   <p className="text-[11px] text-slate-400">Drag to reposition subject and adjust zoom slider</p>
                 </div>
@@ -2643,7 +2638,7 @@ export default function GamePage() {
                   onClick={() => setCropModalOpen(false)}
                   className="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-xs font-bold transition"
                 >
-                  ✕
+                  X
                 </button>
               </div>
 
@@ -2689,13 +2684,13 @@ export default function GamePage() {
                     <div />
                   </div>
                 </div>
-                <span className="text-[10px] text-slate-400 mt-2">👆 Click and drag image to adjust frame</span>
+                <span className="text-[10px] text-slate-400 mt-2">Click and drag image to adjust frame</span>
               </div>
 
               {/* Zoom & Framing Controls */}
               <div className="space-y-2 bg-slate-950 p-3.5 rounded-2xl border border-slate-800">
                 <div className="flex justify-between items-center text-xs font-bold text-slate-300">
-                  <span>🔍 Zoom</span>
+                  <span>Zoom</span>
                   <span className="text-cyan-400 font-mono text-[11px]">{Math.round(cropScale * 100)}%</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -2731,21 +2726,21 @@ export default function GamePage() {
                     onClick={handleFitCrop}
                     className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold rounded-lg transition"
                   >
-                    🔍 Fit
+                    Fit
                   </button>
                   <button
                     type="button"
                     onClick={handleFillCrop}
                     className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold rounded-lg transition"
                   >
-                    🖼️ Fill
+                    Fill
                   </button>
                   <button
                     type="button"
                     onClick={() => setCropPan({ x: 0, y: 0 })}
                     className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold rounded-lg transition"
                   >
-                    🔄 Center
+                    Center
                   </button>
                 </div>
               </div>
@@ -2764,7 +2759,6 @@ export default function GamePage() {
                   onClick={applyCrop}
                   className="flex-1 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-xl font-black text-xs transition shadow-lg shadow-cyan-500/25 flex items-center justify-center gap-1.5"
                 >
-                  <span>✓</span>
                   <span>Save & Apply</span>
                 </button>
               </div>
