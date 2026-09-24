@@ -777,93 +777,61 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
             )}
 
             {/* --- FOUR ARMS: 4 RED MUSCULAR ARMS (2 ON EACH SIDE) --- */}
+            {/* --- FOUR ARMS: 4 RED MUSCULAR TETRAMAND ARMS WITH BLACK WRISTBANDS & CLENCHED FISTS --- */}
             {aType === 'four_arms' && (
-              <>
+              <svg
+                style={{
+                  position: 'absolute',
+                  width: f.size + 90,
+                  height: f.size + 90,
+                  left: -45,
+                  top: -45,
+                  pointerEvents: 'none',
+                  zIndex: -1,
+                  overflow: 'visible',
+                }}
+                viewBox="0 0 200 200"
+              >
                 {/* Upper Left Arm */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    left: -28,
-                    top: '18%',
-                    width: 32,
-                    height: 18,
-                    backgroundColor: '#dc2626',
-                    borderRadius: '8px 4px 4px 8px',
-                    border: '3px solid #7f1d1d',
-                    boxShadow: '0 0 12px rgba(220, 38, 38, 0.8)',
-                    zIndex: -1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'flex-start',
-                  }}
-                >
-                  <div style={{ width: 6, height: '100%', backgroundColor: '#0f172a' }} />
-                  <div style={{ width: 14, height: 14, borderRadius: '50%', backgroundColor: '#b91c1c' }} />
-                </div>
+                <path
+                  d="M 65 75 Q 35 45 25 65 L 35 85 Q 55 85 70 85 Z"
+                  fill="#dc2626"
+                  stroke="#7f1d1d"
+                  strokeWidth="3.5"
+                />
+                <rect x="23" y="65" width="8" height="16" fill="#0f172a" stroke="#fff" strokeWidth="1" transform="rotate(-20 27 73)" />
+                <circle cx="20" cy="73" r="11" fill="#b91c1c" stroke="#7f1d1d" strokeWidth="2.5" />
+
                 {/* Lower Left Arm */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    left: -28,
-                    bottom: '18%',
-                    width: 32,
-                    height: 18,
-                    backgroundColor: '#dc2626',
-                    borderRadius: '8px 4px 4px 8px',
-                    border: '3px solid #7f1d1d',
-                    boxShadow: '0 0 12px rgba(220, 38, 38, 0.8)',
-                    zIndex: -1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'flex-start',
-                  }}
-                >
-                  <div style={{ width: 6, height: '100%', backgroundColor: '#0f172a' }} />
-                  <div style={{ width: 14, height: 14, borderRadius: '50%', backgroundColor: '#b91c1c' }} />
-                </div>
+                <path
+                  d="M 60 120 Q 30 145 22 125 L 32 105 Q 50 110 65 115 Z"
+                  fill="#dc2626"
+                  stroke="#7f1d1d"
+                  strokeWidth="3.5"
+                />
+                <rect x="23" y="115" width="8" height="16" fill="#0f172a" stroke="#fff" strokeWidth="1" transform="rotate(20 27 123)" />
+                <circle cx="20" cy="123" r="11" fill="#b91c1c" stroke="#7f1d1d" strokeWidth="2.5" />
+
                 {/* Upper Right Arm */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    right: -28,
-                    top: '18%',
-                    width: 32,
-                    height: 18,
-                    backgroundColor: '#dc2626',
-                    borderRadius: '4px 8px 8px 4px',
-                    border: '3px solid #7f1d1d',
-                    boxShadow: '0 0 12px rgba(220, 38, 38, 0.8)',
-                    zIndex: -1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'flex-end',
-                  }}
-                >
-                  <div style={{ width: 14, height: 14, borderRadius: '50%', backgroundColor: '#b91c1c' }} />
-                  <div style={{ width: 6, height: '100%', backgroundColor: '#0f172a' }} />
-                </div>
+                <path
+                  d="M 135 75 Q 165 45 175 65 L 165 85 Q 145 85 130 85 Z"
+                  fill="#dc2626"
+                  stroke="#7f1d1d"
+                  strokeWidth="3.5"
+                />
+                <rect x="169" y="65" width="8" height="16" fill="#0f172a" stroke="#fff" strokeWidth="1" transform="rotate(20 173 73)" />
+                <circle cx="180" cy="73" r="11" fill="#b91c1c" stroke="#7f1d1d" strokeWidth="2.5" />
+
                 {/* Lower Right Arm */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    right: -28,
-                    bottom: '18%',
-                    width: 32,
-                    height: 18,
-                    backgroundColor: '#dc2626',
-                    borderRadius: '4px 8px 8px 4px',
-                    border: '3px solid #7f1d1d',
-                    boxShadow: '0 0 12px rgba(220, 38, 38, 0.8)',
-                    zIndex: -1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'flex-end',
-                  }}
-                >
-                  <div style={{ width: 14, height: 14, borderRadius: '50%', backgroundColor: '#b91c1c' }} />
-                  <div style={{ width: 6, height: '100%', backgroundColor: '#0f172a' }} />
-                </div>
-              </>
+                <path
+                  d="M 140 120 Q 170 145 178 125 L 168 105 Q 150 110 135 115 Z"
+                  fill="#dc2626"
+                  stroke="#7f1d1d"
+                  strokeWidth="3.5"
+                />
+                <rect x="169" y="115" width="8" height="16" fill="#0f172a" stroke="#fff" strokeWidth="1" transform="rotate(-20 173 123)" />
+                <circle cx="180" cy="123" r="11" fill="#b91c1c" stroke="#7f1d1d" strokeWidth="2.5" />
+              </svg>
             )}
 
             {/* --- XLR8: HIGH SPEED CYAN DASH BLUR & ELECTRIC TRAILS --- */}
@@ -944,6 +912,41 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                   borderRadius: '0 0 50% 50%',
                   filter: 'blur(2px)',
                   boxShadow: '0 10px 25px rgba(203, 213, 225, 0.5)',
+                  zIndex: -1,
+                }}
+              />
+            )}
+
+            {/* --- GREY MATTER: GALVAN INTELLECT PULSE --- */}
+            {aType === 'grey_matter' && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: -10,
+                  borderRadius: '50%',
+                  border: '2px dashed #facc15',
+                  boxShadow: '0 0 20px #eab308',
+                  pointerEvents: 'none',
+                  zIndex: -1,
+                }}
+              />
+            )}
+
+            {/* --- STINKFLY: INSECT WINGS --- */}
+            {aType === 'stinkfly' && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: -24,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: f.size * 0.9,
+                  height: 24,
+                  borderRadius: '50%',
+                  background: 'rgba(217, 249, 157, 0.65)',
+                  border: '2px solid #84cc16',
+                  boxShadow: '0 0 16px #84cc16',
+                  pointerEvents: 'none',
                   zIndex: -1,
                 }}
               />

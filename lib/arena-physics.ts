@@ -10,6 +10,8 @@ export type AlienType =
   | 'ripjaws'
   | 'upgrade'
   | 'ghostfreak'
+  | 'grey_matter'
+  | 'stinkfly'
   | 'normal';
 
 export function getAlienType(f?: { id?: string; name?: string; special_power?: string; specialPower?: string } | null): AlienType {
@@ -24,6 +26,8 @@ export function getAlienType(f?: { id?: string; name?: string; special_power?: s
   if (str.includes('ripjaws') || str.includes('ripjaw')) return 'ripjaws';
   if (str.includes('upgrade')) return 'upgrade';
   if (str.includes('ghostfreak') || str.includes('ghost')) return 'ghostfreak';
+  if (str.includes('greymatter') || str.includes('graymatter') || str.includes('galvan')) return 'grey_matter';
+  if (str.includes('stinkfly') || str.includes('stink')) return 'stinkfly';
   return 'normal';
 }
 
@@ -196,103 +200,125 @@ export const BOX_SIZE = 120; // Default fallback for backwards compatibility
 // Authentic Ben 10 Alien Presets & Abilities
 export const BEN10_DEFAULT_ABILITIES: Record<string, SpecialAbility> = {
   four_arms: {
-    name: 'Sonic Clap',
+    name: 'Sonic Shockwave',
     icon: 'SONIC CLAP',
     type: 'damage',
     cooldown_seconds: 5,
-    power_value: 40,
+    power_value: 30,
     trigger_type: 'charge',
     trigger_value: 100,
     weapon_type: 'none',
-    description: 'Deals massive shockwave blast and knocks opponents back!',
+    description: 'Claps four muscular hands to unleash a devastating physical shockwave!',
   },
   heatblast: {
-    name: 'Supernova Inferno',
-    icon: 'SUPERNOVA',
-    type: 'damage',
-    cooldown_seconds: 6,
-    power_value: 45,
-    trigger_type: 'hp_threshold',
-    trigger_value: 50,
-    weapon_type: 'none',
-    description: 'Ignites when HP < 50%, unleashing blazing firestorm beams!',
-  },
-  xlr8: {
-    name: 'Turbo Blitz',
-    icon: 'TURBO BLITZ',
-    type: 'speed',
-    cooldown_seconds: 4,
-    power_value: 2.2,
-    trigger_type: 'charge',
-    trigger_value: 100,
-    weapon_type: 'none',
-    description: 'Lightspeed acceleration bouncing across the square arena!',
-  },
-  diamondhead: {
-    name: 'Crystal Spike',
-    icon: 'CRYSTAL SPIKE',
-    type: 'shield',
-    cooldown_seconds: 6,
-    power_value: 50,
-    trigger_type: 'charge',
-    trigger_value: 100,
-    weapon_type: 'none',
-    description: 'Erupts indestructible crystal barriers absorbing hits!',
-  },
-  cannonbolt: {
-    name: 'Wrecking Roll',
-    icon: 'WRECKING ROLL',
+    name: 'Fire Wave Dash',
+    icon: 'FIRE WAVE',
     type: 'damage',
     cooldown_seconds: 5,
-    power_value: 38,
+    power_value: 28,
     trigger_type: 'charge',
     trigger_value: 100,
     weapon_type: 'none',
-    description: 'Indestructible rolling ball crushing opponents!',
+    description: 'Propels forward on a wave of heat and fire, dealing burning impact damage!',
   },
-  upgrade: {
-    name: 'Circuit Overload',
-    icon: 'CIRCUIT OVERLOAD',
+  xlr8: {
+    name: 'Wind Funnel',
+    icon: 'WIND FUNNEL',
+    type: 'speed',
+    cooldown_seconds: 4,
+    power_value: 2.5,
+    trigger_type: 'charge',
+    trigger_value: 100,
+    weapon_type: 'none',
+    description: 'Spins at ultra speed generating a wind tornado that flings opponents outward!',
+  },
+  diamondhead: {
+    name: 'Crystal Wall Eruption',
+    icon: 'CRYSTAL WALL',
+    type: 'shield',
+    cooldown_seconds: 6,
+    power_value: 45,
+    trigger_type: 'charge',
+    trigger_value: 100,
+    weapon_type: 'none',
+    description: 'Erupts impenetrable Taydenite crystal armor reflecting incoming damage!',
+  },
+  cannonbolt: {
+    name: 'Armored Roll Slam',
+    icon: 'ARMORED ROLL',
+    type: 'damage',
+    cooldown_seconds: 5,
+    power_value: 32,
+    trigger_type: 'charge',
+    trigger_value: 100,
+    weapon_type: 'none',
+    description: 'Tucks into an invulnerable sphere, rebounding off walls with crushing kinetic force!',
+  },
+  wildmutt: {
+    name: 'Predator Sense Pounce',
+    icon: 'PREDATOR POUNCE',
+    type: 'damage',
+    cooldown_seconds: 5,
+    power_value: 26,
+    trigger_type: 'charge',
+    trigger_value: 100,
+    weapon_type: 'none',
+    description: 'Uses sensory neck gills to lock-on, lunging into a steel-crushing bite and drool slow!',
+  },
+  ripjaws: {
+    name: 'Steel Jaw Bite',
+    icon: 'STEEL BITE',
     type: 'damage',
     cooldown_seconds: 5,
     power_value: 36,
+    trigger_type: 'hit_combo',
+    trigger_value: 4,
+    weapon_type: 'none',
+    description: 'Snaps giant steel-piercing jaws on collision, shredding shields and dealing critical damage!',
+  },
+  upgrade: {
+    name: 'Optic Plasma Laser',
+    icon: 'PLASMA BEAM',
+    type: 'damage',
+    cooldown_seconds: 5,
+    power_value: 26,
     trigger_type: 'charge',
     trigger_value: 100,
     weapon_type: 'none',
-    description: 'Electrifies the square arena walls with green laser sparks!',
+    description: 'Fires an optic plasma laser beam and upgrades combat stats on wall rebound!',
   },
   ghostfreak: {
-    name: 'Shadow Phase',
-    icon: 'SHADOW PHASE',
+    name: 'Intangible Phase',
+    icon: 'INTANGIBLE',
     type: 'freeze',
     cooldown_seconds: 7,
     power_value: 2.5,
     trigger_type: 'hp_threshold',
-    trigger_value: 40,
+    trigger_value: 50,
     weapon_type: 'none',
-    description: 'Phases through reality and telekinetically freezes opponents!',
+    description: 'Becomes intangible to physical attacks and haunts passing opponents with confusion!',
   },
-  ripjaws: {
-    name: 'Steel Jaw Bite',
-    icon: 'STEEL JAW BITE',
+  grey_matter: {
+    name: 'Sun Gun Beam',
+    icon: 'SUN GUN',
     type: 'damage',
     cooldown_seconds: 5,
-    power_value: 42,
-    trigger_type: 'hit_combo',
-    trigger_value: 4,
-    weapon_type: 'none',
-    description: 'After 4 hit combo, chomps down with ferocious crushing jaws!',
-  },
-  wildmutt: {
-    name: 'Feral Pounce',
-    icon: 'FERAL POUNCE',
-    type: 'damage',
-    cooldown_seconds: 5,
-    power_value: 36,
+    power_value: 30,
     trigger_type: 'charge',
     trigger_value: 100,
     weapon_type: 'none',
-    description: 'Unleashes a beastly pounce with animalistic razor senses!',
+    description: 'Galvan genius fires a concentrated solar laser beam from an engineered device!',
+  },
+  stinkfly: {
+    name: 'Acid Goop Spray',
+    icon: 'ACID GOOP',
+    type: 'damage',
+    cooldown_seconds: 5,
+    power_value: 22,
+    trigger_type: 'charge',
+    trigger_value: 100,
+    weapon_type: 'none',
+    description: 'Sprays sticky corrosive acid slime that slows down enemy balls and corrodes armor!',
   },
   // Generic fallbacks
   iron_shield: { name: 'Iron Bastion', icon: 'IRON SHIELD', type: 'shield', cooldown_seconds: 6, power_value: 40, trigger_type: 'charge', trigger_value: 100 },
@@ -595,143 +621,161 @@ export function generateArenaSimulation(
             ? Math.round(f.abilityCooldownMax * 0.6)
             : f.abilityCooldownMax;
 
-          // Execute Alien Signature Move
-          if (ab.type === 'damage') {
-            const baseDmg = ab.power_value || 38;
-            const finalDmg = isOvertime ? baseDmg * 2 : baseDmg;
+          // Execute Alien-Specific Signature Move (PHYSICAL ONLY - NO REMOTE DAMAGE)
+          const aType = getAlienType(f);
 
-            // Damage nearest opponent
-            nearestOpp.hitFlash = 16;
-            nearestOpp.health = Math.max(0, nearestOpp.health - finalDmg);
+          if (aType === 'four_arms') {
+            // FOUR ARMS: SONIC SHOCKWAVE CLAP!
+            // Radiates physical shockwave circle from Four Arms. Only targets in proximity are hit!
             soundEvents.push({ frame, sound: 'ability', abilityType: 'damage', volume: 1.0 });
-
-            // Push nearest opponent violently back (knockback)
-            const knockAngle = Math.atan2(nearestOpp.y - f.y, nearestOpp.x - f.x);
-            nearestOpp.vx = Math.cos(knockAngle) * 18;
-            nearestOpp.vy = Math.sin(knockAngle) * 18;
-
-            floatingTexts.push({
-              id: `ab_dmg_${frame}_${nearestOpp.id}`,
-              x: nearestOpp.x,
-              y: nearestOpp.y - 45,
-              text: `-${finalDmg}`,
-              color: '#ef4444',
-              alpha: 1,
-              vy: -2.5,
-              scale: 1.3,
-            });
-
-            // Omnitrix Green Shockwave particles
+            const shockRadius = (f.size / 2) + 120;
+            for (const opp of otherFighters) {
+              const d = Math.hypot(opp.x - f.x, opp.y - f.y);
+              if (d <= shockRadius + opp.size / 2) {
+                const kx = (opp.x - f.x) / (d || 1);
+                const ky = (opp.y - f.y) / (d || 1);
+                opp.vx += kx * 20;
+                opp.vy += ky * 20;
+                opp.hitFlash = 14;
+                opp.health = Math.max(0, opp.health - 25);
+                floatingTexts.push({ id: `clap_${frame}_${opp.id}`, x: opp.x, y: opp.y - 40, text: '-25 SHOCKWAVE', color: '#dc2626', alpha: 1, vy: -2.5, scale: 1.25 });
+                if (opp.health <= 0 && !opp.isDead) {
+                  opp.isDead = true;
+                  soundEvents.push({ frame, sound: 'explosion', volume: 1.0 });
+                }
+              }
+            }
+            // Expanding sonic shockwave rings
+            for (let k = 0; k < 18; k++) {
+              const ang = (k / 18) * Math.PI * 2;
+              particles.push({
+                x: f.x + Math.cos(ang) * (f.size / 2 + 10),
+                y: f.y + Math.sin(ang) * (f.size / 2 + 10),
+                vx: Math.cos(ang) * 12,
+                vy: Math.sin(ang) * 12,
+                color: '#dc2626',
+                radius: 4,
+                alpha: 1,
+              });
+            }
+          } else if (aType === 'heatblast') {
+            // HEATBLAST: FIRE WAVE DASH!
+            // Surges forward at high speed and activates blazing fire charge
+            const curSpd = Math.hypot(f.vx, f.vy) || 5;
+            f.vx = (f.vx / curSpd) * 18;
+            f.vy = (f.vy / curSpd) * 18;
+            f.abilityAuraTimer = 70;
+            f.abilityAuraColor = '#ea580c';
+            soundEvents.push({ frame, sound: 'ability', abilityType: 'damage', volume: 1.0 });
             for (let k = 0; k < 16; k++) {
               particles.push({
-                x: nearestOpp.x + (rng() - 0.5) * 40,
-                y: nearestOpp.y + (rng() - 0.5) * 40,
-                vx: (rng() - 0.5) * 12,
-                vy: (rng() - 0.5) * 12,
-                color: '#00ff66',
-                radius: rng() * 6 + 3,
+                x: f.x + (rng() - 0.5) * f.size,
+                y: f.y + (rng() - 0.5) * f.size,
+                vx: (rng() - 0.5) * 8 - f.vx * 0.2,
+                vy: (rng() - 0.5) * 8 - f.vy * 0.2,
+                color: rng() > 0.5 ? '#ea580c' : '#facc15',
+                radius: rng() * 5 + 3,
                 alpha: 1,
               });
             }
-
-            if (nearestOpp.health <= 0 && !nearestOpp.isDead) {
-              nearestOpp.isDead = true;
-              soundEvents.push({ frame, sound: 'explosion', volume: 1.0 });
+          } else if (aType === 'xlr8') {
+            // XLR8: WIND FUNNEL TORNADO!
+            // Spins at lightspeed, pushing away any opponent within 130px
+            f.speedBoostTimer = 90;
+            soundEvents.push({ frame, sound: 'ability', abilityType: 'speed', volume: 1.0 });
+            const vortexRange = f.size / 2 + 110;
+            for (const opp of otherFighters) {
+              const d = Math.hypot(opp.x - f.x, opp.y - f.y);
+              if (d <= vortexRange + opp.size / 2) {
+                const kx = (opp.x - f.x) / (d || 1);
+                const ky = (opp.y - f.y) / (d || 1);
+                opp.vx += kx * 16 - ky * 10;
+                opp.vy += ky * 16 + kx * 10;
+                floatingTexts.push({ id: `tornado_${frame}_${opp.id}`, x: opp.x, y: opp.y - 35, text: 'WIND TORNADO!', color: '#0284c7', alpha: 1, vy: -2, scale: 1.1 });
+              }
             }
-          } else if (ab.type === 'shield') {
-            f.hasShield = true;
-            f.bonusShield = ab.power_value || 50;
+          } else if (aType === 'diamondhead') {
+            // DIAMONDHEAD: CRYSTAL WALL ARMOR & REFLECTION
+            f.bonusShield = 45;
+            f.abilityAuraTimer = 80;
+            f.abilityAuraColor = '#10b981';
             soundEvents.push({ frame, sound: 'ability', abilityType: 'shield', volume: 0.9 });
-
-            floatingTexts.push({
-              id: `ab_shd_${frame}_${f.id}`,
-              x: f.x,
-              y: f.y - 40,
-              text: `CRYSTAL SHIELD +${f.bonusShield}`,
-              color: '#10b981',
-              alpha: 1,
-              vy: -2.2,
-              scale: 1.25,
-            });
-
-            for (let k = 0; k < 12; k++) {
-              particles.push({
-                x: f.x + (rng() - 0.5) * (f.size + 20),
-                y: f.y + (rng() - 0.5) * (f.size + 20),
-                vx: (rng() - 0.5) * 4,
-                vy: (rng() - 0.5) * 4,
-                color: '#10b981',
-                radius: rng() * 4 + 2,
-                alpha: 1,
-              });
-            }
-          } else if (ab.type === 'heal') {
-            const healAmt = Math.min(f.maxHealth - f.health, ab.power_value || 35);
-            f.health += healAmt;
-            soundEvents.push({ frame, sound: 'ability', abilityType: 'heal', volume: 0.9 });
-
-            floatingTexts.push({
-              id: `ab_heal_${frame}_${f.id}`,
-              x: f.x,
-              y: f.y - 40,
-              text: `+${healAmt} HP`,
+            floatingTexts.push({ id: `shd_${frame}_${f.id}`, x: f.x, y: f.y - 40, text: 'CRYSTAL WALL +45', color: '#10b981', alpha: 1, vy: -2.2, scale: 1.25 });
+          } else if (aType === 'cannonbolt') {
+            // CANNONBOLT: ARMORED ROLL SLAM
+            f.invulnerableTimer = 65;
+            f.abilityAuraTimer = 65;
+            f.abilityAuraColor = '#f59e0b';
+            f.vx *= 1.6;
+            f.vy *= 1.6;
+            soundEvents.push({ frame, sound: 'ability', abilityType: 'damage', volume: 0.9 });
+          } else if (aType === 'wildmutt') {
+            // WILDMUTT: PREDATOR SENSE POUNCE
+            const oppAngle = Math.atan2(nearestOpp.y - f.y, nearestOpp.x - f.x);
+            f.vx = Math.cos(oppAngle) * 16;
+            f.vy = Math.sin(oppAngle) * 16;
+            f.abilityAuraTimer = 50;
+            f.abilityAuraColor = '#f97316';
+            soundEvents.push({ frame, sound: 'ability', abilityType: 'damage', volume: 0.9 });
+          } else if (aType === 'ripjaws') {
+            // RIPJAWS: STEEL JAW BITE READY
+            f.abilityAuraTimer = 70;
+            f.abilityAuraColor = '#06b6d4';
+            soundEvents.push({ frame, sound: 'ability', abilityType: 'damage', volume: 0.9 });
+          } else if (aType === 'upgrade') {
+            // UPGRADE: OPTIC PLASMA LASER
+            soundEvents.push({ frame, sound: 'gun', volume: 0.8 });
+            const beamAngle = Math.atan2(f.vy, f.vx) || 0;
+            bullets.push({
+              x: f.x + Math.cos(beamAngle) * (f.size / 2 + 10),
+              y: f.y + Math.sin(beamAngle) * (f.size / 2 + 10),
+              vx: Math.cos(beamAngle) * 20,
+              vy: Math.sin(beamAngle) * 20,
+              ownerId: f.id,
               color: '#22c55e',
-              alpha: 1,
-              vy: -2.2,
-              scale: 1.25,
+              damage: 26,
+              life: 45,
             });
-
-            for (let k = 0; k < 10; k++) {
-              particles.push({
-                x: f.x + (rng() - 0.5) * 40,
-                y: f.y + (rng() - 0.5) * 40,
-                vx: (rng() - 0.5) * 4,
-                vy: -rng() * 4 - 1,
-                color: '#22c55e',
-                radius: rng() * 4 + 2,
-                alpha: 1,
+          } else if (aType === 'grey_matter') {
+            // GREY MATTER: SUN GUN BEAM
+            soundEvents.push({ frame, sound: 'gun', volume: 0.9 });
+            const beamAngle = Math.atan2(f.vy, f.vx) || 0;
+            bullets.push({
+              x: f.x + Math.cos(beamAngle) * (f.size / 2 + 12),
+              y: f.y + Math.sin(beamAngle) * (f.size / 2 + 12),
+              vx: Math.cos(beamAngle) * 22,
+              vy: Math.sin(beamAngle) * 22,
+              ownerId: f.id,
+              color: '#facc15',
+              damage: 28,
+              life: 45,
+            });
+          } else if (aType === 'stinkfly') {
+            // STINKFLY: ACID GOOP SPRAY (3 Blobs)
+            soundEvents.push({ frame, sound: 'gun', volume: 0.8 });
+            const baseAngle = Math.atan2(f.vy, f.vx) || 0;
+            for (const spread of [-0.22, 0, 0.22]) {
+              bullets.push({
+                x: f.x + Math.cos(baseAngle + spread) * (f.size / 2 + 10),
+                y: f.y + Math.sin(baseAngle + spread) * (f.size / 2 + 10),
+                vx: Math.cos(baseAngle + spread) * 14,
+                vy: Math.sin(baseAngle + spread) * 14,
+                ownerId: f.id,
+                color: '#84cc16',
+                damage: 16,
+                life: 45,
               });
             }
-          } else if (ab.type === 'freeze') {
-            nearestOpp.frozenTimer = Math.round((ab.power_value || 2.5) * 30);
-            soundEvents.push({ frame, sound: 'ability', abilityType: 'freeze', volume: 1.0 });
-
-            floatingTexts.push({
-              id: `ab_frz_${frame}_${nearestOpp.id}`,
-              x: nearestOpp.x,
-              y: nearestOpp.y - 40,
-              text: `FROZEN (${ab.power_value}s)`,
-              color: '#38bdf8',
-              alpha: 1,
-              vy: -2,
-              scale: 1.25,
-            });
-
-            for (let k = 0; k < 12; k++) {
-              particles.push({
-                x: nearestOpp.x + (rng() - 0.5) * 45,
-                y: nearestOpp.y + (rng() - 0.5) * 45,
-                vx: (rng() - 0.5) * 4,
-                vy: (rng() - 0.5) * 4,
-                color: '#38bdf8',
-                radius: rng() * 4 + 3,
-                alpha: 1,
-              });
-            }
-          } else if (ab.type === 'speed') {
-            f.speedBoostTimer = Math.round((ab.power_value || 2.8) * 30);
-            soundEvents.push({ frame, sound: 'ability', abilityType: 'speed', volume: 0.9 });
-
-            floatingTexts.push({
-              id: `ab_spd_${frame}_${f.id}`,
-              x: f.x,
-              y: f.y - 40,
-              text: `XLR8 TURBO!`,
-              color: '#00ff66',
-              alpha: 1,
-              vy: -2.5,
-              scale: 1.35,
-            });
+          } else if (aType === 'ghostfreak') {
+            // GHOSTFREAK: INTANGIBILITY (Cannot be hit by anything while phased)
+            f.invulnerableTimer = 75;
+            f.abilityAuraTimer = 75;
+            f.abilityAuraColor = '#cbd5e1';
+            soundEvents.push({ frame, sound: 'ability', abilityType: 'freeze', volume: 0.9 });
+          } else {
+            // Generic Fallback
+            f.abilityAuraTimer = 45;
+            f.abilityAuraColor = f.color;
           }
         }
       });
@@ -1019,8 +1063,64 @@ export function generateArenaSimulation(
             A.hitCombo = (A.hitCombo || 0) + 1;
             B.hitCombo = (B.hitCombo || 0) + 1;
 
+            const aAlien = getAlienType(A);
+            const bAlien = getAlienType(B);
+
             let dmgA = A.damage;
-            if (isOvertime) dmgA *= 2;
+            let dmgB = B.damage;
+
+            // Alien specific physical collision buffs
+            if (A.abilityAuraTimer > 0) {
+              if (aAlien === 'heatblast') {
+                dmgA += 20; // Burning impact
+                floatingTexts.push({ id: `fire_${frame}_${B.id}`, x: B.x, y: B.y - 45, text: 'FIRE BLAST!', color: '#ea580c', alpha: 1, vy: -2, scale: 1.1 });
+              } else if (aAlien === 'cannonbolt') {
+                dmgA += 25; // Armored kinetic impact
+                B.vx += nx * 14; B.vy += ny * 14;
+                floatingTexts.push({ id: `slam_${frame}_${B.id}`, x: B.x, y: B.y - 45, text: 'KINETIC SLAM!', color: '#f59e0b', alpha: 1, vy: -2, scale: 1.1 });
+              } else if (aAlien === 'wildmutt') {
+                dmgA += 20; // Steel bite
+                B.speedBoostTimer = -45; // Slow down
+                floatingTexts.push({ id: `bite_${frame}_${B.id}`, x: B.x, y: B.y - 45, text: 'STEEL BITE!', color: '#f97316', alpha: 1, vy: -2, scale: 1.1 });
+              } else if (aAlien === 'ripjaws') {
+                dmgA += 30; // Pierce jaws
+                B.bonusShield = 0; B.hasShield = false; // shred shield
+                floatingTexts.push({ id: `jaw_${frame}_${B.id}`, x: B.x, y: B.y - 45, text: 'PIERCE CRUSH!', color: '#06b6d4', alpha: 1, vy: -2, scale: 1.2 });
+              }
+            }
+
+            if (B.abilityAuraTimer > 0) {
+              if (bAlien === 'heatblast') {
+                dmgB += 20;
+                floatingTexts.push({ id: `fire_${frame}_${A.id}`, x: A.x, y: A.y - 45, text: 'FIRE BLAST!', color: '#ea580c', alpha: 1, vy: -2, scale: 1.1 });
+              } else if (bAlien === 'cannonbolt') {
+                dmgB += 25;
+                A.vx -= nx * 14; A.vy -= ny * 14;
+                floatingTexts.push({ id: `slam_${frame}_${A.id}`, x: A.x, y: A.y - 45, text: 'KINETIC SLAM!', color: '#f59e0b', alpha: 1, vy: -2, scale: 1.1 });
+              } else if (bAlien === 'wildmutt') {
+                dmgB += 20;
+                A.speedBoostTimer = -45;
+                floatingTexts.push({ id: `bite_${frame}_${A.id}`, x: A.x, y: A.y - 45, text: 'STEEL BITE!', color: '#f97316', alpha: 1, vy: -2, scale: 1.1 });
+              } else if (bAlien === 'ripjaws') {
+                dmgB += 30;
+                A.bonusShield = 0; A.hasShield = false;
+                floatingTexts.push({ id: `jaw_${frame}_${A.id}`, x: A.x, y: A.y - 45, text: 'PIERCE CRUSH!', color: '#06b6d4', alpha: 1, vy: -2, scale: 1.2 });
+              }
+            }
+
+            // Diamondhead reflection
+            if (B.abilityAuraTimer > 0 && bAlien === 'diamondhead') {
+              const reflect = Math.round(dmgA * 0.35);
+              A.health = Math.max(0, A.health - reflect);
+              floatingTexts.push({ id: `refA_${frame}`, x: A.x, y: A.y - 30, text: `REFLECT -${reflect}`, color: '#10b981', alpha: 1, vy: -2, scale: 1 });
+            }
+            if (A.abilityAuraTimer > 0 && aAlien === 'diamondhead') {
+              const reflect = Math.round(dmgB * 0.35);
+              B.health = Math.max(0, B.health - reflect);
+              floatingTexts.push({ id: `refB_${frame}`, x: B.x, y: B.y - 30, text: `REFLECT -${reflect}`, color: '#10b981', alpha: 1, vy: -2, scale: 1 });
+            }
+
+            if (isOvertime) { dmgA *= 1.5; dmgB *= 1.5; }
             if (A.hasDagger) { dmgA *= 2; A.daggerActivated = true; }
             if (A.specialPower === 'berserker' && A.health / A.maxHealth <= 0.2) dmgA *= 2;
 
@@ -1037,8 +1137,6 @@ export function generateArenaSimulation(
               dmgA = Math.round(dmgA * 0.5);
             }
 
-            let dmgB = B.damage;
-            if (isOvertime) dmgB *= 2;
             if (B.hasDagger) { dmgB *= 2; B.daggerActivated = true; }
             if (B.specialPower === 'berserker' && B.health / B.maxHealth <= 0.2) dmgB *= 2;
 

@@ -129,6 +129,28 @@ const BEN10_ALIEN_PRESETS: ContestantConfig[] = [
     special_power: 'none',
     special_ability: BEN10_DEFAULT_ABILITIES['wildmutt'],
   },
+  {
+    id: 'grey_matter',
+    name: 'Grey Matter',
+    color: '#94a3b8',
+    image_url: null,
+    starting_health: 80,
+    damage: 20,
+    speed: 7.5,
+    special_power: 'none',
+    special_ability: BEN10_DEFAULT_ABILITIES['grey_matter'],
+  },
+  {
+    id: 'stinkfly',
+    name: 'Stinkfly',
+    color: '#84cc16',
+    image_url: null,
+    starting_health: 90,
+    damage: 24,
+    speed: 7.8,
+    special_power: 'none',
+    special_ability: BEN10_DEFAULT_ABILITIES['stinkfly'],
+  },
 ];
 
 const PRESET_ABILITIES = [
@@ -141,6 +163,8 @@ const PRESET_ABILITIES = [
   BEN10_DEFAULT_ABILITIES['ghostfreak'],
   BEN10_DEFAULT_ABILITIES['ripjaws'],
   BEN10_DEFAULT_ABILITIES['wildmutt'],
+  BEN10_DEFAULT_ABILITIES['grey_matter'],
+  BEN10_DEFAULT_ABILITIES['stinkfly'],
 ];
 
 const PRESET_TOPICS = [
@@ -745,10 +769,9 @@ export default function GamePage() {
         // 1. CHARACTER-SPECIFIC VISUAL EFFECTS (BEHIND / AROUND BALL)
         // ==========================================
 
-        // --- HEATBLAST: ROARING FLAMES & EMBERS AROUND THE BALL ---
+        // --- HEATBLAST: ROARING PYRONITE FIRE & SOLAR EMBERS ---
         if (aType === 'heatblast') {
           ctx.save();
-          // Fiery roaring flame perimeter
           const numFlames = 24;
           ctx.beginPath();
           for (let i = 0; i <= numFlames; i++) {
@@ -806,77 +829,168 @@ export default function GamePage() {
           ctx.restore();
         }
 
-        // --- FOUR ARMS: 4 RED MUSCULAR ARMS (2 ON EACH SIDE) ---
+        // --- FOUR ARMS: 4 RED MUSCULAR TETRAMAND ARMS WITH BLACK WRISTBANDS & FISTS ---
         else if (aType === 'four_arms') {
-          const drawAlienArm = (startX: number, startY: number, angle: number, isLeft: boolean) => {
+          ctx.save();
+          const isAttacking = f.abilityAuraTimer > 0;
+          // Clap animation: when active, arms slam inward towards center; otherwise subtle breathing flex
+          const clapOffset = isAttacking ? Math.sin(curFrame * 0.5) * 16 : 0;
+          const flexWave = Math.sin(curFrame * 0.14) * 3;
+
+          const renderMuscularArm = (
+            rootX: number,
+            rootY: number,
+            elbowX: number,
+            elbowY: number,
+            wristX: number,
+            wristY: number,
+            fistDirAngle: number
+          ) => {
             ctx.save();
-            ctx.translate(startX, startY);
-            ctx.rotate(angle);
-            const punchFlex = Math.sin(curFrame * 0.18 + (isLeft ? 0 : Math.PI)) * 4;
 
-            // Bicep / Forearm
+            // Broad shoulder deltoid pad connecting arm to ball
             ctx.beginPath();
-            ctx.moveTo(0, -12);
-            ctx.quadraticCurveTo(18 + punchFlex, -16, 32 + punchFlex, -9);
-            ctx.lineTo(34 + punchFlex, 9);
-            ctx.quadraticCurveTo(18 + punchFlex, 16, 0, 12);
-            ctx.closePath();
-            ctx.fillStyle = '#dc2626';
-            ctx.shadowColor = 'rgba(0,0,0,0.6)';
-            ctx.shadowBlur = 8;
-            ctx.fill();
-            ctx.lineWidth = 3.5;
-            ctx.strokeStyle = '#7f1d1d';
-            ctx.stroke();
-
-            // Muscular definition line
-            ctx.beginPath();
-            ctx.moveTo(6, 0);
-            ctx.lineTo(24 + punchFlex, 0);
-            ctx.strokeStyle = '#991b1b';
-            ctx.lineWidth = 2.5;
-            ctx.stroke();
-
-            // Black wristband
-            ctx.fillStyle = '#0f172a';
-            ctx.fillRect(30 + punchFlex, -11, 8, 22);
-            ctx.lineWidth = 1.5;
-            ctx.strokeStyle = '#ffffff';
-            ctx.strokeRect(30 + punchFlex, -11, 8, 22);
-
-            // Red Clenched Fist
-            ctx.beginPath();
-            ctx.arc(46 + punchFlex, 0, 13, 0, Math.PI * 2);
+            ctx.arc(rootX, rootY, 14, 0, Math.PI * 2);
             ctx.fillStyle = '#b91c1c';
+            ctx.shadowColor = 'rgba(0,0,0,0.7)';
+            ctx.shadowBlur = 10;
             ctx.fill();
             ctx.strokeStyle = '#7f1d1d';
             ctx.lineWidth = 3;
             ctx.stroke();
 
-            // Knuckles
+            // Thick muscular Bicep & Forearm path
+            ctx.beginPath();
+            ctx.moveTo(rootX, rootY - 10);
+            ctx.quadraticCurveTo(
+              (rootX + elbowX) / 2,
+              elbowY - 14,
+              elbowX,
+              elbowY - 8
+            );
+            ctx.lineTo(wristX, wristY - 6);
+            ctx.lineTo(wristX, wristY + 6);
+            ctx.lineTo(elbowX, elbowY + 8);
+            ctx.quadraticCurveTo(
+              (rootX + elbowX) / 2,
+              elbowY + 14,
+              rootX,
+              rootY + 10
+            );
+            ctx.closePath();
+
+            const armGrad = ctx.createLinearGradient(rootX, rootY, wristX, wristY);
+            armGrad.addColorStop(0, '#dc2626');
+            armGrad.addColorStop(0.6, '#b91c1c');
+            armGrad.addColorStop(1, '#991b1b');
+            ctx.fillStyle = armGrad;
+            ctx.fill();
+            ctx.strokeStyle = '#7f1d1d';
+            ctx.lineWidth = 3.5;
+            ctx.stroke();
+
+            // Muscle definition crease line
+            ctx.beginPath();
+            ctx.moveTo(rootX + (elbowX - rootX) * 0.3, rootY + (elbowY - rootY) * 0.3);
+            ctx.lineTo(elbowX, elbowY);
+            ctx.strokeStyle = '#7f1d1d';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+
+            // Black Tetramand Wristband
+            ctx.save();
+            ctx.translate(wristX, wristY);
+            ctx.rotate(fistDirAngle);
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(-5, -9, 10, 18);
+            ctx.strokeStyle = '#f8fafc';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(-5, -9, 10, 18);
+
+            // Crimson Clenched Fist
+            ctx.beginPath();
+            ctx.arc(8, 0, 12, 0, Math.PI * 2);
+            ctx.fillStyle = '#dc2626';
+            ctx.fill();
+            ctx.strokeStyle = '#7f1d1d';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // 4 Distinct Knuckles
             ctx.fillStyle = '#ef4444';
-            for (let kn = -6; kn <= 6; kn += 4.5) {
+            for (let kn = -6; kn <= 6; kn += 4) {
               ctx.beginPath();
-              ctx.arc(52 + punchFlex, kn, 3, 0, Math.PI * 2);
+              ctx.arc(15, kn, 3, 0, Math.PI * 2);
               ctx.fill();
             }
             ctx.restore();
+
+            ctx.restore();
           };
 
-          // 2 Arms on Left (Upper & Lower)
-          drawAlienArm(-half + 6, -half * 0.38, Math.PI * 0.85, true);
-          drawAlienArm(-half + 6, half * 0.38, Math.PI * 1.15, true);
+          // 1. Upper Left Arm (Shoulder top-left, curves UP and OUTWARD)
+          renderMuscularArm(
+            -half * 0.65,
+            -half * 0.45,
+            -half * 1.35 - flexWave + (isAttacking ? 20 : 0),
+            -half * 0.85 + clapOffset,
+            -half * 1.15 + (isAttacking ? 25 : 0),
+            -half * 0.45 + clapOffset,
+            Math.PI * 0.2
+          );
 
-          // 2 Arms on Right (Upper & Lower)
-          drawAlienArm(half - 6, -half * 0.38, -Math.PI * 0.15, false);
-          drawAlienArm(half - 6, half * 0.38, Math.PI * 0.15, false);
+          // 2. Lower Left Arm (Shoulder mid/lower-left, curves DOWN and OUTWARD)
+          renderMuscularArm(
+            -half * 0.8,
+            half * 0.25,
+            -half * 1.4 - flexWave + (isAttacking ? 20 : 0),
+            half * 0.65 - clapOffset,
+            -half * 1.15 + (isAttacking ? 25 : 0),
+            half * 0.85 - clapOffset,
+            -Math.PI * 0.2
+          );
+
+          // 3. Upper Right Arm (Shoulder top-right, curves UP and OUTWARD)
+          renderMuscularArm(
+            half * 0.65,
+            -half * 0.45,
+            half * 1.35 + flexWave - (isAttacking ? 20 : 0),
+            -half * 0.85 + clapOffset,
+            half * 1.15 - (isAttacking ? 25 : 0),
+            -half * 0.45 + clapOffset,
+            Math.PI * 0.8
+          );
+
+          // 4. Lower Right Arm (Shoulder mid/lower-right, curves DOWN and OUTWARD)
+          renderMuscularArm(
+            half * 0.8,
+            half * 0.25,
+            half * 1.4 + flexWave - (isAttacking ? 20 : 0),
+            half * 0.65 - clapOffset,
+            half * 1.15 - (isAttacking ? 25 : 0),
+            half * 0.85 - clapOffset,
+            -Math.PI * 0.8
+          );
+
+          // Sonic Shockwave effect rings when Four Arms is clapping
+          if (isAttacking) {
+            ctx.beginPath();
+            ctx.arc(0, 0, half + 30 + (curFrame % 20) * 3, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(220, 38, 38, ${1 - (curFrame % 20) / 20})`;
+            ctx.lineWidth = 4;
+            ctx.shadowColor = '#dc2626';
+            ctx.shadowBlur = 18;
+            ctx.stroke();
+          }
+
+          ctx.restore();
         }
 
-        // --- XLR8: HIGH-SPEED CYAN DASH TRAILS & SPEED LINES ---
+        // --- XLR8: HIGH-SPEED CYAN DASH TRAILS & WIND FUNNEL ---
         else if (aType === 'xlr8') {
           const spd = Math.hypot(f.vx, f.vy);
           const moveAng = Math.atan2(f.vy, f.vx);
-          const trailLen = Math.min(100, spd * 6 + 30);
+          const trailLen = Math.min(110, spd * 7 + 35);
           ctx.save();
           // Ghost trail spheres trailing behind
           for (let t = 1; t <= 3; t++) {
@@ -904,21 +1018,32 @@ export default function GamePage() {
             );
             ctx.stroke();
           }
+
+          // Wind Funnel Tornado swirl rings when active
+          if (f.speedBoostTimer > 0) {
+            ctx.beginPath();
+            ctx.arc(0, 0, half + 22, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.7)';
+            ctx.lineWidth = 4;
+            ctx.setLineDash([12, 8]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
           ctx.restore();
         }
 
-        // --- DIAMONDHEAD: SHARP CRYSTAL SPARK SHARDS AROUND PERIMETER ---
+        // --- DIAMONDHEAD: SHARP TAYDENITE CRYSTAL SPIRES & FACETS ---
         else if (aType === 'diamondhead') {
           ctx.save();
           const crystalShards = [
-            { angle: -Math.PI / 2, length: half * 0.65, width: 22 },
-            { angle: -Math.PI / 2 - 0.5, length: half * 0.55, width: 18 },
-            { angle: -Math.PI / 2 + 0.5, length: half * 0.55, width: 18 },
-            { angle: -Math.PI + 0.4, length: half * 0.45, width: 16 },
-            { angle: -0.4, length: half * 0.45, width: 16 },
-            { angle: -Math.PI + 0.9, length: half * 0.35, width: 14 },
-            { angle: -0.9, length: half * 0.35, width: 14 },
-            { angle: Math.PI / 2, length: half * 0.4, width: 15 },
+            { angle: -Math.PI / 2, length: half * 0.7, width: 22 },
+            { angle: -Math.PI / 2 - 0.45, length: half * 0.58, width: 18 },
+            { angle: -Math.PI / 2 + 0.45, length: half * 0.58, width: 18 },
+            { angle: -Math.PI + 0.35, length: half * 0.48, width: 16 },
+            { angle: -0.35, length: half * 0.48, width: 16 },
+            { angle: -Math.PI + 0.85, length: half * 0.38, width: 14 },
+            { angle: -0.85, length: half * 0.38, width: 14 },
+            { angle: Math.PI / 2, length: half * 0.45, width: 16 },
           ];
           crystalShards.forEach((s) => {
             ctx.save();
@@ -968,7 +1093,7 @@ export default function GamePage() {
           ctx.restore();
         }
 
-        // --- CANNONBOLT: JAGGED SHARP SILVER ARMOR SHELL ---
+        // --- CANNONBOLT: JAGGED SHARP SILVER & YELLOW ARMOR SHELL ---
         else if (aType === 'cannonbolt') {
           ctx.save();
           const numPlates = 14;
@@ -976,7 +1101,7 @@ export default function GamePage() {
           for (let i = 0; i <= numPlates; i++) {
             const baseAngle = (i / numPlates) * Math.PI * 2;
             const midAngle = baseAngle + Math.PI / numPlates;
-            const outerR = half + 16;
+            const outerR = half + 18;
             const innerR = half - 2;
 
             const bx = Math.cos(baseAngle) * innerR;
@@ -992,68 +1117,140 @@ export default function GamePage() {
 
           const silverGrad = ctx.createLinearGradient(-half, -half, half, half);
           silverGrad.addColorStop(0, '#ffffff');
-          silverGrad.addColorStop(0.3, '#cbd5e1');
+          silverGrad.addColorStop(0.35, '#cbd5e1');
           silverGrad.addColorStop(0.7, '#64748b');
           silverGrad.addColorStop(1, '#334155');
           ctx.fillStyle = silverGrad;
-          ctx.shadowColor = '#94a3b8';
+          ctx.shadowColor = '#f59e0b';
           ctx.shadowBlur = 18;
           ctx.fill();
           ctx.lineWidth = 3;
-          ctx.strokeStyle = '#f1f5f9';
+          ctx.strokeStyle = '#fef08a';
           ctx.stroke();
+
+          // Shell rivet studs
+          for (let i = 0; i < numPlates; i++) {
+            const rAng = (i / numPlates) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.arc(Math.cos(rAng) * (half + 6), Math.sin(rAng) * (half + 6), 3, 0, Math.PI * 2);
+            ctx.fillStyle = '#f59e0b';
+            ctx.fill();
+          }
           ctx.restore();
         }
 
-        // --- RIPJAWS: ANIMATED WATER WAVES & BUBBLES ---
-        else if (aType === 'ripjaws') {
+        // --- WILDMUTT: VULPIMANCER GILLS & SALIVA DROOL ---
+        else if (aType === 'wildmutt') {
           ctx.save();
-          const numWaves = 24;
-          ctx.beginPath();
-          for (let i = 0; i <= numWaves; i++) {
-            const th = (i / numWaves) * Math.PI * 2;
-            const wave =
-              Math.sin(th * 6 + curFrame * 0.22) * 8 +
-              Math.cos(th * 3 - curFrame * 0.15) * 5 +
-              14;
-            const wr = half + wave;
-            const wx = Math.cos(th) * wr;
-            const wy = Math.sin(th) * wr;
-            if (i === 0) ctx.moveTo(wx, wy);
-            else ctx.lineTo(wx, wy);
+          // Neck Sensory Gills (3 on left, 3 on right)
+          for (let side of [-1, 1]) {
+            for (let g = 0; g < 3; g++) {
+              const gy = (g - 1) * 10;
+              ctx.beginPath();
+              ctx.ellipse(side * (half - 8), gy, 4, 8, side * 0.2, 0, Math.PI * 2);
+              ctx.fillStyle = f.abilityAuraTimer > 0 ? '#ef4444' : '#c2410c';
+              ctx.shadowColor = '#ea580c';
+              ctx.shadowBlur = f.abilityAuraTimer > 0 ? 12 : 4;
+              ctx.fill();
+            }
           }
-          ctx.closePath();
 
-          const waterGrad = ctx.createRadialGradient(0, 0, half * 0.8, 0, 0, half + 26);
-          waterGrad.addColorStop(0, 'rgba(6, 182, 212, 0.85)');
-          waterGrad.addColorStop(0.5, 'rgba(14, 116, 144, 0.6)');
-          waterGrad.addColorStop(1, 'rgba(6, 182, 212, 0)');
-          ctx.fillStyle = waterGrad;
-          ctx.shadowColor = '#06b6d4';
-          ctx.shadowBlur = 24;
+          // Saliva drool droplets trailing from lower jaw
+          const droolY = half + 4 + Math.sin(curFrame * 0.2) * 6;
+          ctx.beginPath();
+          ctx.arc(0, droolY, 3, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(254, 215, 170, 0.8)';
           ctx.fill();
-          ctx.lineWidth = 2.5;
-          ctx.strokeStyle = 'rgba(165, 243, 252, 0.85)';
-          ctx.stroke();
 
-          // Swirling water bubbles
-          for (let b = 0; b < 6; b++) {
-            const bubbleAngle = (b / 6) * Math.PI * 2 + curFrame * 0.09;
-            const bubbleDist = half + 12 + Math.sin(curFrame * 0.12 + b * 2) * 8;
-            const bx = Math.cos(bubbleAngle) * bubbleDist;
-            const by = Math.sin(bubbleAngle) * bubbleDist;
+          // Sensory radar pulses if hunting
+          if (f.abilityAuraTimer > 0) {
             ctx.beginPath();
-            ctx.arc(bx, by, 4, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(207, 250, 254, 0.9)';
-            ctx.fill();
-            ctx.strokeStyle = '#0891b2';
-            ctx.lineWidth = 1.5;
+            ctx.arc(0, 0, half + 20, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(249, 115, 22, 0.6)';
+            ctx.lineWidth = 3;
             ctx.stroke();
           }
           ctx.restore();
         }
 
-        // --- GHOSTFREAK: GHOSTLY BODY WITH FLOWING WISPY TAIL ---
+        // --- RIPJAWS: LUMINESCENT ANGLER LURE & RAZOR STEEL JAWS ---
+        else if (aType === 'ripjaws') {
+          ctx.save();
+          // Luminescent Angler Antenna & Glowing Orb
+          const lureWave = Math.sin(curFrame * 0.15) * 8;
+          ctx.beginPath();
+          ctx.moveTo(0, -half);
+          ctx.quadraticCurveTo(lureWave * 1.5, -half - 24, lureWave, -half - 38);
+          ctx.strokeStyle = '#06b6d4';
+          ctx.lineWidth = 3.5;
+          ctx.stroke();
+
+          // Glowing Angler Light Orb
+          ctx.beginPath();
+          ctx.arc(lureWave, -half - 38, 7, 0, Math.PI * 2);
+          ctx.fillStyle = '#67e8f9';
+          ctx.shadowColor = '#06b6d4';
+          ctx.shadowBlur = 20;
+          ctx.fill();
+
+          // Lower Razor-Sharp Steel Jaws
+          const numTeeth = 7;
+          ctx.beginPath();
+          for (let i = 0; i <= numTeeth; i++) {
+            const tAngle = Math.PI * 0.25 + (i / numTeeth) * (Math.PI * 0.5);
+            const tx = Math.cos(tAngle) * (half + 8);
+            const ty = Math.sin(tAngle) * (half + 8);
+            if (i === 0) ctx.moveTo(tx, ty);
+            else ctx.lineTo(tx, ty);
+            const innerX = Math.cos(tAngle + 0.05) * half;
+            const innerY = Math.sin(tAngle + 0.05) * half;
+            ctx.lineTo(innerX, innerY);
+          }
+          ctx.fillStyle = '#f8fafc';
+          ctx.shadowColor = '#0891b2';
+          ctx.shadowBlur = 8;
+          ctx.fill();
+          ctx.strokeStyle = '#0e7490';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // --- UPGRADE: GALVANIC MECHAMORPH CIRCUIT LINES & OPTIC EYE ---
+        else if (aType === 'upgrade') {
+          ctx.save();
+          // Neon Green Circuit Traces radiating outward
+          ctx.strokeStyle = '#22c55e';
+          ctx.lineWidth = 2.5;
+          ctx.shadowColor = '#22c55e';
+          ctx.shadowBlur = 10;
+          for (let i = 0; i < 6; i++) {
+            const cAng = (i / 6) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(cAng) * (half * 0.3), Math.sin(cAng) * (half * 0.3));
+            ctx.lineTo(Math.cos(cAng) * (half * 0.7), Math.sin(cAng) * (half * 0.7));
+            ctx.lineTo(Math.cos(cAng + 0.2) * (half + 6), Math.sin(cAng + 0.2) * (half + 6));
+            ctx.stroke();
+          }
+
+          // Central Optic Mechamorph Eye
+          const eyePulse = Math.sin(curFrame * 0.18) * 3;
+          ctx.beginPath();
+          ctx.arc(0, 0, 14 + eyePulse, 0, Math.PI * 2);
+          ctx.strokeStyle = '#22c55e';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.arc(0, 0, 8, 0, Math.PI * 2);
+          ctx.fillStyle = '#4ade80';
+          ctx.shadowColor = '#22c55e';
+          ctx.shadowBlur = 16;
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // --- GHOSTFREAK: GHOSTLY WISPY TAIL, AZMUTH CHAINS & INTANGIBILITY ---
         else if (aType === 'ghostfreak') {
           ctx.save();
           const spd = Math.hypot(f.vx, f.vy);
@@ -1061,7 +1258,7 @@ export default function GamePage() {
 
           ctx.save();
           ctx.rotate(tailAngle);
-          const tailLength = half * 1.5;
+          const tailLength = half * 1.6;
           const wave1 = Math.sin(curFrame * 0.2) * 12;
           const wave2 = Math.cos(curFrame * 0.25) * 10;
 
@@ -1081,13 +1278,77 @@ export default function GamePage() {
           ctx.fill();
           ctx.restore();
 
-          // Ghostly ethereal outer aura
+          // Azmuth Containment Chains
+          ctx.strokeStyle = '#64748b';
+          ctx.lineWidth = 3;
           ctx.beginPath();
-          ctx.arc(0, 0, half + 8, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(226, 232, 240, 0.18)';
-          ctx.shadowColor = '#94a3b8';
-          ctx.shadowBlur = 22;
+          ctx.arc(0, 0, half - 4, Math.PI * 0.2, Math.PI * 0.8);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(0, 0, half - 4, Math.PI * 1.2, Math.PI * 1.8);
+          ctx.stroke();
+
+          // Intangible aura if active
+          if (f.invulnerableTimer > 0) {
+            ctx.beginPath();
+            ctx.arc(0, 0, half + 14, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(226, 232, 240, 0.25)';
+            ctx.shadowColor = '#94a3b8';
+            ctx.shadowBlur = 25;
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+
+        // --- GREY MATTER: GALVAN INTELLECT CIRCLING PULSES & SUN GUN ---
+        else if (aType === 'grey_matter') {
+          ctx.save();
+          // Miniature Galvan scale and neural brainwaves
+          ctx.beginPath();
+          ctx.arc(0, 0, half + 10, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(250, 204, 21, 0.7)';
+          ctx.lineWidth = 2.5;
+          ctx.setLineDash([8, 6]);
+          ctx.shadowColor = '#eab308';
+          ctx.shadowBlur = 12;
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+
+        // --- STINKFLY: BUG WINGS, EYE DUCTS & TAIL BLADE ---
+        else if (aType === 'stinkfly') {
+          ctx.save();
+          const wingFlap = Math.sin(curFrame * 0.6) * 14;
+
+          // 2 Translucent Upper Bug Wings
+          ctx.beginPath();
+          ctx.ellipse(-half * 0.45, -half * 0.8 - wingFlap * 0.4, 24, 10, -Math.PI * 0.25, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(217, 249, 157, 0.65)';
+          ctx.strokeStyle = '#84cc16';
+          ctx.lineWidth = 1.5;
           ctx.fill();
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.ellipse(half * 0.45, -half * 0.8 - wingFlap * 0.4, 24, 10, Math.PI * 0.25, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(217, 249, 157, 0.65)';
+          ctx.strokeStyle = '#84cc16';
+          ctx.lineWidth = 1.5;
+          ctx.fill();
+          ctx.stroke();
+
+          // Tail Blade Stinger at the bottom
+          ctx.beginPath();
+          ctx.moveTo(-6, half - 2);
+          ctx.lineTo(0, half + 22);
+          ctx.lineTo(6, half - 2);
+          ctx.closePath();
+          ctx.fillStyle = '#65a30d';
+          ctx.fill();
+          ctx.strokeStyle = '#365314';
+          ctx.lineWidth = 2;
+          ctx.stroke();
           ctx.restore();
         }
 
