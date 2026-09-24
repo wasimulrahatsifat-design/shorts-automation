@@ -666,23 +666,108 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
       ))}
 
       {/* Bullets */}
-      {bullets.map((b, idx) => (
-        <div
-          key={idx}
-          style={{
-            position: 'absolute',
-            left: b.x,
-            top: b.y,
-            width: 14,
-            height: 14,
-            borderRadius: '50%',
-            backgroundColor: b.color,
-            boxShadow: `0 0 18px ${b.color}`,
-            transform: 'translate(-50%, -50%)',
-            zIndex: 15,
-          }}
-        />
-      ))}
+      {/* Bullets (Custom Visual Projectiles for Ben 10 Attacks) */}
+      {bullets.map((b, idx) => {
+        const bType = (b as any).bulletType || 'normal';
+        const bAngle = Math.atan2(b.vy, b.vx);
+        return (
+          <div
+            key={idx}
+            style={{
+              position: 'absolute',
+              left: b.x,
+              top: b.y,
+              transform: `translate(-50%, -50%) rotate(${bAngle}rad)`,
+              zIndex: 15,
+              pointerEvents: 'none',
+            }}
+          >
+            {bType === 'fireball' ? (
+              <div
+                style={{
+                  width: 36,
+                  height: 18,
+                  borderRadius: '50% 10% 10% 50%',
+                  background: 'linear-gradient(90deg, #ea580c, #facc15, #ffffff)',
+                  boxShadow: '0 0 25px #ea580c, 0 0 10px #facc15',
+                }}
+              />
+            ) : bType === 'shockwave' ? (
+              <div
+                style={{
+                  width: 44,
+                  height: 24,
+                  borderRadius: '50%',
+                  border: `4px solid ${b.color}`,
+                  boxShadow: `0 0 20px ${b.color}`,
+                  backgroundColor: 'transparent',
+                }}
+              />
+            ) : bType === 'laser' ? (
+              <div
+                style={{
+                  width: 46,
+                  height: 14,
+                  borderRadius: 7,
+                  backgroundColor: '#22c55e',
+                  boxShadow: '0 0 22px #22c55e',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <div style={{ width: 34, height: 4, borderRadius: 2, backgroundColor: '#ffffff' }} />
+              </div>
+            ) : bType === 'beam' ? (
+              <div
+                style={{
+                  width: 52,
+                  height: 16,
+                  borderRadius: 8,
+                  backgroundColor: '#facc15',
+                  boxShadow: '0 0 28px #eab308',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <div style={{ width: 40, height: 6, borderRadius: 3, backgroundColor: '#ffffff' }} />
+              </div>
+            ) : bType === 'shard' ? (
+              <div
+                style={{
+                  width: 32,
+                  height: 14,
+                  backgroundColor: '#10b981',
+                  clipPath: 'polygon(0% 50%, 50% 0%, 100% 50%, 50% 100%)',
+                  boxShadow: '0 0 18px #10b981',
+                }}
+              />
+            ) : bType === 'acid' ? (
+              <div
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: '50%',
+                  backgroundColor: '#84cc16',
+                  boxShadow: '0 0 20px #84cc16',
+                  border: '2px solid #bef264',
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: '50%',
+                  backgroundColor: b.color,
+                  boxShadow: `0 0 18px ${b.color}`,
+                }}
+              />
+            )}
+          </div>
+        );
+      })}
 
       {/* Particles */}
       {particles.map((p, idx) => (

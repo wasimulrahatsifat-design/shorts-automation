@@ -718,15 +718,126 @@ export default function GamePage() {
         ctx.restore();
       });
 
-      // Bullets
+      // Bullets (Custom Visual Projectiles for Ben 10 Attacks - Highly Visible & Vibrant)
       bullets.forEach((b) => {
         ctx.save();
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, 7, 0, Math.PI * 2);
-        ctx.fillStyle = b.color;
-        ctx.shadowColor = b.color;
-        ctx.shadowBlur = 18;
-        ctx.fill();
+        const bType = (b as any).bulletType || 'normal';
+        const bAngle = Math.atan2(b.vy, b.vx);
+        ctx.translate(b.x, b.y);
+        ctx.rotate(bAngle);
+
+        if (bType === 'fireball') {
+          // Heatblast Blazing Fireball
+          ctx.beginPath();
+          ctx.moveTo(-35, 0);
+          ctx.quadraticCurveTo(-15, -12, 10, -8);
+          ctx.lineTo(16, 0);
+          ctx.lineTo(10, 8);
+          ctx.quadraticCurveTo(-15, 12, -35, 0);
+          const fGrad = ctx.createLinearGradient(-35, 0, 16, 0);
+          fGrad.addColorStop(0, 'rgba(234, 88, 12, 0)');
+          fGrad.addColorStop(0.5, '#ea580c');
+          fGrad.addColorStop(0.85, '#facc15');
+          fGrad.addColorStop(1, '#ffffff');
+          ctx.fillStyle = fGrad;
+          ctx.shadowColor = '#ea580c';
+          ctx.shadowBlur = 25;
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.arc(6, 0, 10, 0, Math.PI * 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+        } else if (bType === 'shockwave') {
+          // Four Arms / Ghostfreak Sonic Shockwave Blast
+          ctx.beginPath();
+          ctx.arc(0, 0, 24, -Math.PI * 0.45, Math.PI * 0.45);
+          ctx.strokeStyle = b.color;
+          ctx.lineWidth = 8;
+          ctx.shadowColor = b.color;
+          ctx.shadowBlur = 24;
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.arc(-6, 0, 16, -Math.PI * 0.4, Math.PI * 0.4);
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 4;
+          ctx.stroke();
+        } else if (bType === 'laser') {
+          // Upgrade Optic Plasma Laser Bolt
+          ctx.beginPath();
+          ctx.roundRect(-24, -7, 48, 14, 7);
+          ctx.fillStyle = '#22c55e';
+          ctx.shadowColor = '#22c55e';
+          ctx.shadowBlur = 22;
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.roundRect(-18, -3, 36, 6, 3);
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+        } else if (bType === 'beam') {
+          // Grey Matter Solar Focus Ray
+          ctx.beginPath();
+          ctx.roundRect(-28, -8, 56, 16, 8);
+          ctx.fillStyle = '#facc15';
+          ctx.shadowColor = '#eab308';
+          ctx.shadowBlur = 28;
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.roundRect(-20, -3.5, 40, 7, 3.5);
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+        } else if (bType === 'shard') {
+          // Diamondhead Crystal Taydenite Shard
+          ctx.beginPath();
+          ctx.moveTo(18, 0);
+          ctx.lineTo(0, -9);
+          ctx.lineTo(-18, 0);
+          ctx.lineTo(0, 9);
+          ctx.closePath();
+          ctx.fillStyle = '#10b981';
+          ctx.shadowColor = '#10b981';
+          ctx.shadowBlur = 20;
+          ctx.fill();
+          ctx.strokeStyle = '#a7f3d0';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(-12, 0);
+          ctx.lineTo(12, 0);
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        } else if (bType === 'acid') {
+          // Stinkfly Toxic Acid Slime Glob
+          ctx.beginPath();
+          ctx.arc(0, 0, 14, 0, Math.PI * 2);
+          ctx.fillStyle = '#84cc16';
+          ctx.shadowColor = '#84cc16';
+          ctx.shadowBlur = 20;
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.arc(-4, -4, 5, 0, Math.PI * 2);
+          ctx.fillStyle = '#bef264';
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(4, 3, 3, 0, Math.PI * 2);
+          ctx.fillStyle = '#4d7c0f';
+          ctx.fill();
+        } else {
+          // Standard projectile
+          ctx.beginPath();
+          ctx.arc(0, 0, 10, 0, Math.PI * 2);
+          ctx.fillStyle = b.color;
+          ctx.shadowColor = b.color;
+          ctx.shadowBlur = 18;
+          ctx.fill();
+        }
+
         ctx.restore();
       });
 
@@ -825,6 +936,29 @@ export default function GamePage() {
             ctx.shadowColor = '#ff6600';
             ctx.shadowBlur = 10;
             ctx.fill();
+          }
+
+          // Forward Roaring Flamethrower Jet Cone when active!
+          if (f.abilityAuraTimer > 0) {
+            const moveAng = Math.atan2(f.vy, f.vx) || 0;
+            ctx.save();
+            ctx.rotate(moveAng);
+            const flameLen = 220;
+            ctx.beginPath();
+            ctx.moveTo(half, -15);
+            ctx.quadraticCurveTo(half + flameLen * 0.5, -50, half + flameLen, 0);
+            ctx.quadraticCurveTo(half + flameLen * 0.5, 50, half, 15);
+            ctx.closePath();
+            const jetGrad = ctx.createLinearGradient(half, 0, half + flameLen, 0);
+            jetGrad.addColorStop(0, 'rgba(255, 255, 220, 0.95)');
+            jetGrad.addColorStop(0.35, 'rgba(250, 204, 21, 0.9)');
+            jetGrad.addColorStop(0.7, 'rgba(234, 88, 12, 0.7)');
+            jetGrad.addColorStop(1, 'rgba(220, 38, 38, 0)');
+            ctx.fillStyle = jetGrad;
+            ctx.shadowColor = '#ea580c';
+            ctx.shadowBlur = 35;
+            ctx.fill();
+            ctx.restore();
           }
           ctx.restore();
         }
@@ -974,12 +1108,21 @@ export default function GamePage() {
 
           // Sonic Shockwave effect rings when Four Arms is clapping
           if (isAttacking) {
+            const shockProgress = (60 - f.abilityAuraTimer) / 60;
+            const shockR = half + Math.max(10, shockProgress * 240);
             ctx.beginPath();
-            ctx.arc(0, 0, half + 30 + (curFrame % 20) * 3, 0, Math.PI * 2);
-            ctx.strokeStyle = `rgba(220, 38, 38, ${1 - (curFrame % 20) / 20})`;
-            ctx.lineWidth = 4;
+            ctx.arc(0, 0, shockR, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(220, 38, 38, ${Math.max(0, 1 - shockProgress)})`;
+            ctx.lineWidth = 10;
             ctx.shadowColor = '#dc2626';
-            ctx.shadowBlur = 18;
+            ctx.shadowBlur = 35;
+            ctx.stroke();
+
+            // Inner bright white sonic shockwave
+            ctx.beginPath();
+            ctx.arc(0, 0, Math.max(0, shockR - 16), 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(255, 255, 255, ${Math.max(0, 0.9 * (1 - shockProgress))})`;
+            ctx.lineWidth = 5;
             ctx.stroke();
           }
 
@@ -1019,15 +1162,21 @@ export default function GamePage() {
             ctx.stroke();
           }
 
-          // Wind Funnel Tornado swirl rings when active
-          if (f.speedBoostTimer > 0) {
-            ctx.beginPath();
-            ctx.arc(0, 0, half + 22, 0, Math.PI * 2);
-            ctx.strokeStyle = 'rgba(56, 189, 248, 0.7)';
-            ctx.lineWidth = 4;
-            ctx.setLineDash([12, 8]);
-            ctx.stroke();
-            ctx.setLineDash([]);
+          // Wind Funnel Tornado cyclone vortex when active!
+          if (f.abilityAuraTimer > 0 || f.speedBoostTimer > 0) {
+            ctx.save();
+            const spin = curFrame * 0.45;
+            for (let w = 0; w < 4; w++) {
+              const wAngle = spin + (w * Math.PI * 2) / 4;
+              ctx.beginPath();
+              ctx.arc(0, 0, half + 18 + w * 14, wAngle, wAngle + Math.PI * 0.75);
+              ctx.strokeStyle = '#38bdf8';
+              ctx.lineWidth = 6;
+              ctx.shadowColor = '#00f0ff';
+              ctx.shadowBlur = 24;
+              ctx.stroke();
+            }
+            ctx.restore();
           }
           ctx.restore();
         }
@@ -1088,8 +1237,31 @@ export default function GamePage() {
             ctx.lineWidth = 1.5;
             ctx.stroke();
 
-            ctx.restore();
           });
+
+          // Rotating Hexagonal Taydenite Crystal Prism Shield when active!
+          if (f.abilityAuraTimer > 0 || f.bonusShield > 0) {
+            ctx.save();
+            const shieldSpin = curFrame * 0.04;
+            const shieldR = half + 26;
+            ctx.beginPath();
+            for (let i = 0; i <= 6; i++) {
+              const ang = shieldSpin + (i / 6) * Math.PI * 2;
+              const px = Math.cos(ang) * shieldR;
+              const py = Math.sin(ang) * shieldR;
+              if (i === 0) ctx.moveTo(px, py);
+              else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.strokeStyle = '#6ee7b7';
+            ctx.lineWidth = 5;
+            ctx.shadowColor = '#10b981';
+            ctx.shadowBlur = 25;
+            ctx.fillStyle = 'rgba(16, 185, 129, 0.25)';
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+          }
           ctx.restore();
         }
 
@@ -1136,10 +1308,24 @@ export default function GamePage() {
             ctx.fillStyle = '#f59e0b';
             ctx.fill();
           }
+
+          // Heavy Kinetic Impact Forcefield when active!
+          if (f.abilityAuraTimer > 0 || f.invulnerableTimer > 0) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(0, 0, half + 24, 0, Math.PI * 2);
+            ctx.strokeStyle = '#f59e0b';
+            ctx.lineWidth = 7;
+            ctx.shadowColor = '#f59e0b';
+            ctx.shadowBlur = 30;
+            ctx.setLineDash([18, 12]);
+            ctx.stroke();
+            ctx.restore();
+          }
           ctx.restore();
         }
 
-        // --- WILDMUTT: VULPIMANCER GILLS & SALIVA DROOL ---
+        // --- WILDMUTT: VULPIMANCER GILLS, SALIVA DROOL & SONAR PULSE ---
         else if (aType === 'wildmutt') {
           ctx.save();
           // Neck Sensory Gills (3 on left, 3 on right)
@@ -1150,7 +1336,7 @@ export default function GamePage() {
               ctx.ellipse(side * (half - 8), gy, 4, 8, side * 0.2, 0, Math.PI * 2);
               ctx.fillStyle = f.abilityAuraTimer > 0 ? '#ef4444' : '#c2410c';
               ctx.shadowColor = '#ea580c';
-              ctx.shadowBlur = f.abilityAuraTimer > 0 ? 12 : 4;
+              ctx.shadowBlur = f.abilityAuraTimer > 0 ? 14 : 4;
               ctx.fill();
             }
           }
@@ -1162,13 +1348,20 @@ export default function GamePage() {
           ctx.fillStyle = 'rgba(254, 215, 170, 0.8)';
           ctx.fill();
 
-          // Sensory radar pulses if hunting
+          // Expanding Sonar Radar Detection Pulses & Razor Claw arcs when hunting
           if (f.abilityAuraTimer > 0) {
-            ctx.beginPath();
-            ctx.arc(0, 0, half + 20, 0, Math.PI * 2);
-            ctx.strokeStyle = 'rgba(249, 115, 22, 0.6)';
-            ctx.lineWidth = 3;
-            ctx.stroke();
+            ctx.save();
+            for (let p = 0; p < 2; p++) {
+              const pulseR = half + ((curFrame + p * 12) % 24) * 5;
+              ctx.beginPath();
+              ctx.arc(0, 0, pulseR, 0, Math.PI * 2);
+              ctx.strokeStyle = `rgba(249, 115, 22, ${1 - (((curFrame + p * 12) % 24) / 24)})`;
+              ctx.lineWidth = 5;
+              ctx.shadowColor = '#ea580c';
+              ctx.shadowBlur = 20;
+              ctx.stroke();
+            }
+            ctx.restore();
           }
           ctx.restore();
         }
@@ -1213,6 +1406,26 @@ export default function GamePage() {
           ctx.strokeStyle = '#0e7490';
           ctx.lineWidth = 2;
           ctx.stroke();
+
+          // Active Giant Snapping Steel Jaws when attacking!
+          if (f.abilityAuraTimer > 0) {
+            ctx.save();
+            const biteCycle = Math.abs(Math.sin(curFrame * 0.45)) * 24;
+            ctx.beginPath();
+            ctx.arc(0, -biteCycle, half + 14, Math.PI * 1.1, Math.PI * 1.9);
+            ctx.strokeStyle = '#67e8f9';
+            ctx.lineWidth = 6;
+            ctx.shadowColor = '#06b6d4';
+            ctx.shadowBlur = 22;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(0, biteCycle, half + 14, Math.PI * 0.1, Math.PI * 0.9);
+            ctx.strokeStyle = '#67e8f9';
+            ctx.lineWidth = 6;
+            ctx.stroke();
+            ctx.restore();
+          }
           ctx.restore();
         }
 
@@ -1247,6 +1460,29 @@ export default function GamePage() {
           ctx.shadowColor = '#22c55e';
           ctx.shadowBlur = 16;
           ctx.fill();
+
+          // Optic targeting plasma laser beam when active!
+          if (f.abilityAuraTimer > 0) {
+            ctx.save();
+            const moveAng = Math.atan2(f.vy, f.vx) || 0;
+            ctx.rotate(moveAng);
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(260, 0);
+            ctx.strokeStyle = '#00ff66';
+            ctx.lineWidth = 9;
+            ctx.shadowColor = '#00ff66';
+            ctx.shadowBlur = 28;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(260, 0);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3.5;
+            ctx.stroke();
+            ctx.restore();
+          }
           ctx.restore();
         }
 
@@ -1288,14 +1524,16 @@ export default function GamePage() {
           ctx.arc(0, 0, half - 4, Math.PI * 1.2, Math.PI * 1.8);
           ctx.stroke();
 
-          // Intangible aura if active
-          if (f.invulnerableTimer > 0) {
+          // Spectral Phasing & Intangible Ectoplasm when active!
+          if (f.invulnerableTimer > 0 || f.abilityAuraTimer > 0) {
+            ctx.save();
             ctx.beginPath();
-            ctx.arc(0, 0, half + 14, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(226, 232, 240, 0.25)';
-            ctx.shadowColor = '#94a3b8';
-            ctx.shadowBlur = 25;
+            ctx.arc(0, 0, half + 22, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(168, 85, 247, 0.35)';
+            ctx.shadowColor = '#a855f7';
+            ctx.shadowBlur = 32;
             ctx.fill();
+            ctx.restore();
           }
           ctx.restore();
         }
@@ -1313,6 +1551,19 @@ export default function GamePage() {
           ctx.shadowBlur = 12;
           ctx.stroke();
           ctx.setLineDash([]);
+
+          // Solar focus death ray halo when active!
+          if (f.abilityAuraTimer > 0) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(0, 0, half + 26, 0, Math.PI * 2);
+            ctx.strokeStyle = '#facc15';
+            ctx.lineWidth = 6;
+            ctx.shadowColor = '#eab308';
+            ctx.shadowBlur = 30;
+            ctx.stroke();
+            ctx.restore();
+          }
           ctx.restore();
         }
 
@@ -1349,6 +1600,22 @@ export default function GamePage() {
           ctx.strokeStyle = '#365314';
           ctx.lineWidth = 2;
           ctx.stroke();
+
+          // Bubbling Toxic Acid slime spray when active!
+          if (f.abilityAuraTimer > 0) {
+            ctx.save();
+            for (let b = 0; b < 6; b++) {
+              const bAngle = (b / 6) * Math.PI * 2 + curFrame * 0.18;
+              const bDist = half + 14 + (b % 3) * 8;
+              ctx.beginPath();
+              ctx.arc(Math.cos(bAngle) * bDist, Math.sin(bAngle) * bDist, 6, 0, Math.PI * 2);
+              ctx.fillStyle = '#bef264';
+              ctx.shadowColor = '#84cc16';
+              ctx.shadowBlur = 16;
+              ctx.fill();
+            }
+            ctx.restore();
+          }
           ctx.restore();
         }
 
@@ -1376,6 +1643,9 @@ export default function GamePage() {
         ctx.fill();
 
         ctx.save();
+        if (aType === 'ghostfreak' && (f.invulnerableTimer > 0 || f.abilityAuraTimer > 0)) {
+          ctx.globalAlpha = 0.38;
+        }
         ctx.clip(); // Circular image clip
 
         let img = f.image_url ? loadedImagesRef.current.get(f.image_url) : null;
@@ -1824,7 +2094,7 @@ export default function GamePage() {
   const handleRotateAlien = (direction: 'next' | 'prev', e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     playSound('bounce');
-    const roster = contestants.length > 0 ? contestants : BEN10_ALIEN_PRESETS;
+    const roster = BEN10_ALIEN_PRESETS;
     const rosterLen = roster.length;
     if (selectionPhase === 'select_p1') {
       setP1Index((prev) => (direction === 'next' ? (prev + 1) % rosterLen : (prev - 1 + rosterLen) % rosterLen));
@@ -1841,7 +2111,7 @@ export default function GamePage() {
     playSound('item');
     setGreenFlash(true);
 
-    const roster = contestants.length > 0 ? contestants : BEN10_ALIEN_PRESETS;
+    const roster = BEN10_ALIEN_PRESETS;
 
     if (selectionPhase === 'select_p1') {
       const chosen1 = roster[p1Index % roster.length];
@@ -1971,7 +2241,7 @@ export default function GamePage() {
     }
   };
 
-  const availableRoster = contestants.length > 0 ? contestants : BEN10_ALIEN_PRESETS;
+  const availableRoster = BEN10_ALIEN_PRESETS;
   const currentDialAlien = selectionPhase === 'select_p1'
     ? availableRoster[p1Index % availableRoster.length]
     : availableRoster[p2Index % availableRoster.length];
@@ -2438,7 +2708,7 @@ export default function GamePage() {
               <div className="flex items-center justify-between pt-1">
                 <span className="text-xs font-semibold text-slate-400">Fighter Count:</span>
                 <div className="flex gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
-                  {[2, 3, 4, 5, 6, 7, 8].map((num) => (
+                  {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((num) => (
                     <button
                       key={num}
                       onClick={() => setContestantCount(num)}
