@@ -70,6 +70,98 @@ const resolveSoundUrl = (sound: string, abilityType?: string) => {
   }
 };
 
+export const OmnitrixDial: React.FC<{ size?: number; opacity?: number }> = ({ size = 280, opacity = 1 }) => {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: '50%',
+        top: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: size,
+        height: size,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity,
+        pointerEvents: 'none',
+      }}
+    >
+      {/* Outer Intense Green Aura Glow like the user's reference photo */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: -24,
+          borderRadius: '50%',
+          background:
+            'radial-gradient(circle, rgba(0, 255, 102, 0.6) 20%, rgba(0, 255, 102, 0.25) 55%, transparent 75%)',
+          filter: 'blur(20px)',
+        }}
+      />
+
+      <svg
+        viewBox="0 0 300 300"
+        width={size}
+        height={size}
+        style={{
+          filter: 'drop-shadow(0 0 35px rgba(0, 255, 102, 0.95))',
+          overflow: 'visible',
+        }}
+      >
+        <defs>
+          {/* Ben 10 Alien Green 3D Radial Glow Gradient */}
+          <radialGradient id="omniGreenGrad" cx="50%" cy="50%" r="50%" fx="50%" fy="32%">
+            <stop offset="0%" stopColor="#8aff7b" />
+            <stop offset="30%" stopColor="#39ff14" />
+            <stop offset="70%" stopColor="#00cc44" />
+            <stop offset="100%" stopColor="#006622" />
+          </radialGradient>
+
+          {/* Outer Bezel Dark Metallic Gradient */}
+          <radialGradient id="omniBezelGrad" cx="50%" cy="40%" r="55%">
+            <stop offset="0%" stopColor="#1a3b22" />
+            <stop offset="60%" stopColor="#07170a" />
+            <stop offset="100%" stopColor="#020803" />
+          </radialGradient>
+        </defs>
+
+        {/* Outer Glowing Edge Ring */}
+        <circle cx="150" cy="150" r="145" fill="none" stroke="#00ff66" strokeWidth="5" opacity="0.95" />
+
+        {/* Outer Metallic Bezel */}
+        <circle cx="150" cy="150" r="141" fill="url(#omniBezelGrad)" stroke="#021c08" strokeWidth="6" />
+
+        {/* Inner Black Base Disc */}
+        <circle cx="150" cy="150" r="132" fill="#000000" stroke="#00ff66" strokeWidth="2" opacity="0.9" />
+
+        {/* Top Green Hourglass Sector */}
+        <path
+          d="M 146 147 L 72 43 A 132 132 0 0 1 228 43 L 154 147 Z"
+          fill="url(#omniGreenGrad)"
+          stroke="#003810"
+          strokeWidth="3.5"
+          strokeLinejoin="round"
+        />
+
+        {/* Bottom Green Hourglass Sector */}
+        <path
+          d="M 146 153 L 72 257 A 132 132 0 0 0 228 257 L 154 153 Z"
+          fill="url(#omniGreenGrad)"
+          stroke="#003810"
+          strokeWidth="3.5"
+          strokeLinejoin="round"
+        />
+
+        {/* Center Waist Bridge */}
+        <rect x="145" y="146" width="10" height="8" rx="2" fill="#39ff14" />
+
+        {/* Subtle Glass Sheen / Highlight Rim */}
+        <circle cx="150" cy="150" r="132" fill="none" stroke="rgba(255, 255, 255, 0.22)" strokeWidth="1.5" />
+      </svg>
+    </div>
+  );
+};
+
 export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> = ({
   data_json,
   topic,
@@ -102,13 +194,13 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
 
   // Render Ben 10 Omnitrix Alien Dossier Status Cards below the Arena Box
   const renderHealthBars = () => {
-    const startY = ARENA_BOX.bottom + 25; // 1175
+    const startY = ARENA_BOX.bottom + 25; // 1305
     const count = fighters.length;
     const colWidth = 470;
     const leftX = 45;
     const rightX = width - colWidth - 45;
     const rows = Math.ceil(count / 2);
-    const rowHeight = Math.min(135, 690 / Math.max(rows, 2));
+    const rowHeight = Math.min(125, 570 / Math.max(rows, 2));
 
     return fighters.map((f, idx) => {
       let x = leftX;
@@ -356,7 +448,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
       <div
         style={{
           position: 'absolute',
-          top: 65,
+          top: 110,
           left: 0,
           right: 0,
           textAlign: 'center',
@@ -436,27 +528,8 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
           }}
         />
 
-        {/* Omnitrix Hourglass Center Emblem */}
-        <div
-          style={{
-            position: 'absolute',
-            left: '50%',
-            top: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: 220,
-            height: 220,
-            borderRadius: '50%',
-            border: '3px dashed rgba(0, 255, 102, 0.15)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 90,
-            color: 'rgba(0, 255, 102, 0.1)',
-            pointerEvents: 'none',
-          }}
-        >
-          ⌛
-        </div>
+        {/* Authentic Ben 10 Omnitrix Center Dial */}
+        <OmnitrixDial size={280} opacity={0.92} />
       </div>
 
       {/* Arena Spawned Items */}

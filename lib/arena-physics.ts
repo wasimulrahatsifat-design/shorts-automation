@@ -152,14 +152,14 @@ export function getFighterSize(count: number): number {
 // High-tech Square Arena dimensions (Centered in 1080x1920 Shorts canvas)
 export const ARENA_BOX = {
   left: 90,
-  top: 250,
+  top: 380,
   right: 990,
-  bottom: 1150,
+  bottom: 1280,
   width: 900,
   height: 900,
 };
 export const ARENA_RADIUS = 450; // Kept for backwards compatibility
-export const ARENA_CENTER = { x: 540, y: 700 };
+export const ARENA_CENTER = { x: 540, y: 830 };
 export const BOX_SIZE = 120; // Default fallback for backwards compatibility
 
 // Authentic Ben 10 Alien Presets & Abilities

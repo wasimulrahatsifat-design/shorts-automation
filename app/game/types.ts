@@ -126,12 +126,12 @@ export interface LiveFighter {
 
 export const ARENA_BOX = {
   left: 90,
-  top: 250,
+  top: 380,
   right: 990,
-  bottom: 1150,
+  bottom: 1280,
   width: 900,
   height: 900,
 };
 export const ARENA_RADIUS = 430;
-export const ARENA_CENTER = { x: 540, y: 700 };
+export const ARENA_CENTER = { x: 540, y: 830 };
 export const BOX_SIZE = 120;

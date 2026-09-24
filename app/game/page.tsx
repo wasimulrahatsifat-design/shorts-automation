@@ -482,12 +482,87 @@ export default function GamePage() {
         ctx.stroke();
       }
 
-      // Center Omnitrix Hourglass Emblem
-      ctx.font = '100px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'rgba(0, 255, 102, 0.1)';
-      ctx.fillText('⌛', cx, cy);
+      // Authentic Ben 10 Omnitrix Center Dial (Matching Official Design)
+      ctx.save();
+      const dialRadius = 135;
+
+      // 1. Intense Outer Neon Green Aura Glow
+      ctx.shadowColor = '#00ff66';
+      ctx.shadowBlur = 35;
+      ctx.beginPath();
+      ctx.arc(cx, cy, dialRadius + 8, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0, 255, 102, 0.2)';
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#00ff66';
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // 2. Outer Bezel / Rim
+      ctx.beginPath();
+      ctx.arc(cx, cy, dialRadius + 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#020b05';
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#062d12';
+      ctx.stroke();
+
+      // 3. Dial Face Jet Black Base Disc
+      ctx.beginPath();
+      ctx.arc(cx, cy, dialRadius, 0, Math.PI * 2);
+      ctx.fillStyle = '#000000';
+      ctx.fill();
+
+      // 4. Ben 10 Alien Lime Green Radial Gradient
+      const omniGrad = ctx.createRadialGradient(cx, cy - dialRadius * 0.25, dialRadius * 0.1, cx, cy, dialRadius);
+      omniGrad.addColorStop(0, '#8aff7b');
+      omniGrad.addColorStop(0.3, '#39ff14');
+      omniGrad.addColorStop(0.7, '#00cc44');
+      omniGrad.addColorStop(1, '#006622');
+
+      const spreadAngle = 36 * (Math.PI / 180); // 36 degrees from vertical
+      const halfWaist = 6;
+
+      // 5. Top Green Sector
+      const topStartAngle = -Math.PI / 2 - spreadAngle;
+      const topEndAngle = -Math.PI / 2 + spreadAngle;
+      ctx.beginPath();
+      ctx.moveTo(cx - halfWaist, cy - 3);
+      ctx.arc(cx, cy, dialRadius - 2, topStartAngle, topEndAngle, false);
+      ctx.lineTo(cx + halfWaist, cy - 3);
+      ctx.closePath();
+      ctx.fillStyle = omniGrad;
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#003810';
+      ctx.stroke();
+
+      // 6. Bottom Green Sector
+      const botStartAngle = Math.PI / 2 - spreadAngle;
+      const botEndAngle = Math.PI / 2 + spreadAngle;
+      ctx.beginPath();
+      ctx.moveTo(cx + halfWaist, cy + 3);
+      ctx.arc(cx, cy, dialRadius - 2, botStartAngle, botEndAngle, false);
+      ctx.lineTo(cx - halfWaist, cy + 3);
+      ctx.closePath();
+      ctx.fillStyle = omniGrad;
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#003810';
+      ctx.stroke();
+
+      // 7. Center Waist Bridge
+      ctx.fillStyle = '#39ff14';
+      ctx.fillRect(cx - halfWaist, cy - 3, halfWaist * 2, 6);
+
+      // 8. Subtle Inner Metallic Highlight
+      ctx.beginPath();
+      ctx.arc(cx, cy, dialRadius - 2, 0, Math.PI * 2);
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+      ctx.stroke();
+
+      ctx.restore();
 
       // Glowing Neon Omnitrix Square Wall
       ctx.beginPath();
@@ -733,7 +808,7 @@ export default function GamePage() {
       ctx.fillStyle = '#ffffff';
       ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
       ctx.shadowBlur = 20;
-      ctx.fillText(topic.toUpperCase() || 'ARENA CLASH', width / 2, 100);
+      ctx.fillText(topic.toUpperCase() || 'ARENA CLASH', width / 2, 170);
       ctx.restore();
 
       // Dual Sided Healthbars below arena
@@ -795,13 +870,13 @@ export default function GamePage() {
 
   // Helper: Live Health Bars below arena
   const drawLiveHealthBars = (ctx: CanvasRenderingContext2D, fighters: SimFighter[], width: number) => {
-    const startY = 1175; // Right below ARENA_BOX.bottom (1150)
+    const startY = ARENA_BOX.bottom + 25; // 1305
     const count = fighters.length;
     const colWidth = 460;
     const leftX = 50;
     const rightX = width - colWidth - 50;
     const rows = Math.ceil(count / 2);
-    const rowHeight = Math.min(130, 680 / Math.max(rows, 2));
+    const rowHeight = Math.min(125, 570 / Math.max(rows, 2));
 
     fighters.forEach((f, idx) => {
       let x = leftX;
@@ -809,7 +884,7 @@ export default function GamePage() {
 
       if (count === 2) {
         x = idx === 0 ? leftX : rightX;
-        y = startY + 60;
+        y = startY + 30;
       } else if (count === 3) {
         if (idx === 0) {
           x = leftX;
