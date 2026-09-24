@@ -122,6 +122,10 @@ export interface SimFrameState {
   winner: SimFighter | null;
   aliveCount: number;
   isOvertime?: boolean;
+  isSelectionIntro?: boolean;
+  selectionDialScale?: number;
+  selectedAlienName?: string;
+  selectedAlienColor?: string;
 }
 
 export interface SimulationResult {
@@ -368,48 +372,126 @@ export function generateArenaSimulation(
     { type: 'speed', icon: '⚡', name: 'Hyper Speed', color: '#eab308' },
   ];
 
+  const SELECTION_INTRO_FRAMES = 90;
+
   for (let frame = 0; frame < maxFrames; frame++) {
     const aliveFighters = fighters.filter((f) => !f.isDead);
+    const isSelectionIntro = frame < SELECTION_INTRO_FRAMES;
+    let selectionDialScale = 1.0;
+    let selectedAlienName = '';
+    let selectedAlienColor = '#00ff66';
+    const isOvertime = !isSelectionIntro && frame >= 1050 && aliveFighters.length > 1;
 
-    // Sudden death / overtime after 35s (frame 1050) if match is still ongoing
-    const isOvertime = frame >= 1050 && aliveFighters.length > 1;
-    if (isOvertime && !announcedOvertime) {
-      announcedOvertime = true;
-      floatingTexts.push({
-        id: `overtime_${frame}`,
-        x: ARENA_CENTER.x,
-        y: ARENA_CENTER.y - 120,
-        text: '⚡ OVERTIME: 2X DAMAGE! ⚡',
-        color: '#ef4444',
-        alpha: 1,
-        vy: -1,
-        scale: 1.6,
-      });
-      soundEvents.push({ frame, sound: 'ability', abilityType: 'damage', volume: 1.0 });
-    }
+    if (isSelectionIntro) {
+      if (frame === 0) {
+        soundEvents.push({ frame: 0, sound: 'ability', abilityType: 'speed', volume: 0.8 });
+      }
 
-    // Check winner: Battle runs until last fighter standing!
-    if (aliveFighters.length === 1 && !winner && fighters.length > 1) {
-      winner = { ...aliveFighters[0] };
-      winnerAnnouncedFrame = frame;
-      soundEvents.push({ frame, sound: 'winner', volume: 1.0 });
-    } else if (aliveFighters.length === 0 && !winner && fighters.length > 1) {
-      // Mutual elimination fallback: resurrect fighter with highest maxHealth
-      const survivor = fighters[0];
-      survivor.isDead = false;
-      survivor.health = 15;
-      winner = { ...survivor };
-      winnerAnnouncedFrame = frame;
-      soundEvents.push({ frame, sound: 'winner', volume: 1.0 });
-    }
+      // 1. Dial Scale Expansion & Slam-down
+      if (frame < 18) {
+        // Zoom in from 1.0 to 2.14
+        const p = frame / 18;
+        selectionDialScale = 1.0 + (1 - Math.pow(1 - p, 3)) * 1.14;
+      } else if (frame < 72) {
+        // Hold large during alien dial cycling
+        selectionDialScale = 2.14;
+      } else if (frame < 85) {
+        // Slam down rapidly back to 1.0
+        const p = (frame - 72) / 13;
+        selectionDialScale = 2.14 - Math.pow(p, 2) * 1.14;
+      } else {
+        // Flush with floor
+        selectionDialScale = 1.0;
+      }
 
-    // Stop simulation exactly 120 frames (4 seconds) after winner is declared
-    if (winner && winnerAnnouncedFrame > 0 && frame >= winnerAnnouncedFrame + 120) {
-      break;
-    }
+      // 2. Selection cycle text & sound
+      if (frame < 15) {
+        selectedAlienName = 'DIALING OMNITRIX...';
+      } else if (frame < 72) {
+        const cycleProgress = (frame - 15) / 57;
+        const alienIdx = Math.floor(cycleProgress * count) % count;
+        const curAlien = contestants[alienIdx];
+        selectedAlienName = curAlien?.name?.toUpperCase() || 'OMNITRIX';
+        selectedAlienColor = curAlien?.color || '#00ff66';
 
-    // Item Spawner: 8 seconds (240 frames) AFTER an item is picked up (or initial spawn) inside ARENA_BOX
-    if (items.length === 0 && !winner) {
+        // Periodic dial sound click every 14 frames
+        if (frame % 14 === 0) {
+          soundEvents.push({ frame, sound: 'ability', abilityType: 'speed', volume: 0.5 });
+        }
+      } else if (frame < 85) {
+        selectedAlienName = 'MATCH LOCKED IN! ⚡';
+        selectedAlienColor = '#facc15';
+      } else {
+        selectedAlienName = "IT'S HERO TIME! 💥";
+        selectedAlienColor = '#00ff66';
+      }
+
+      // Slam down impact at frame 85: Shockwave particle burst + slam sound!
+      if (frame === 85) {
+        soundEvents.push({ frame: 85, sound: 'hit', volume: 1.0 });
+        for (let pIdx = 0; pIdx < 28; pIdx++) {
+          const pAngle = (pIdx / 28) * Math.PI * 2;
+          const pSpeed = 6 + rng() * 9;
+          particles.push({
+            x: ARENA_CENTER.x,
+            y: ARENA_CENTER.y,
+            vx: Math.cos(pAngle) * pSpeed,
+            vy: Math.sin(pAngle) * pSpeed,
+            color: pIdx % 2 === 0 ? '#00ff66' : '#ffffff',
+            radius: 4 + rng() * 5,
+            alpha: 1,
+          });
+        }
+        floatingTexts.push({
+          id: 'hero_time_text',
+          x: ARENA_CENTER.x,
+          y: ARENA_CENTER.y - 150,
+          text: "IT'S HERO TIME! 💥",
+          color: '#00ff66',
+          alpha: 1,
+          vy: -1.2,
+          scale: 1.8,
+        });
+      }
+    } else {
+      // Sudden death / overtime after 35s (frame 1050) if match is still ongoing
+      if (isOvertime && !announcedOvertime) {
+        announcedOvertime = true;
+        floatingTexts.push({
+          id: `overtime_${frame}`,
+          x: ARENA_CENTER.x,
+          y: ARENA_CENTER.y - 120,
+          text: '⚡ OVERTIME: 2X DAMAGE! ⚡',
+          color: '#ef4444',
+          alpha: 1,
+          vy: -1,
+          scale: 1.6,
+        });
+        soundEvents.push({ frame, sound: 'ability', abilityType: 'damage', volume: 1.0 });
+      }
+
+      // Check winner: Battle runs until last fighter standing!
+      if (aliveFighters.length === 1 && !winner && fighters.length > 1) {
+        winner = { ...aliveFighters[0] };
+        winnerAnnouncedFrame = frame;
+        soundEvents.push({ frame, sound: 'winner', volume: 1.0 });
+      } else if (aliveFighters.length === 0 && !winner && fighters.length > 1) {
+        // Mutual elimination fallback: resurrect fighter with highest maxHealth
+        const survivor = fighters[0];
+        survivor.isDead = false;
+        survivor.health = 15;
+        winner = { ...survivor };
+        winnerAnnouncedFrame = frame;
+        soundEvents.push({ frame, sound: 'winner', volume: 1.0 });
+      }
+
+      // Stop simulation exactly 120 frames (4 seconds) after winner is declared
+      if (winner && winnerAnnouncedFrame > 0 && frame >= winnerAnnouncedFrame + 120) {
+        break;
+      }
+
+      // Item Spawner: 8 seconds (240 frames) AFTER an item is picked up (or initial spawn) inside ARENA_BOX
+      if (items.length === 0 && !winner) {
       if (nextItemSpawnCooldown > 0) {
         nextItemSpawnCooldown--;
       } else {
@@ -1021,6 +1103,7 @@ export function generateArenaSimulation(
         }
       }
     }
+  }
 
     // Decay Particles & Floating Texts
     for (let i = particles.length - 1; i >= 0; i--) {
@@ -1046,6 +1129,10 @@ export function generateArenaSimulation(
       winner: winner ? { ...winner } : null,
       aliveCount: aliveFighters.length,
       isOvertime,
+      isSelectionIntro,
+      selectionDialScale,
+      selectedAlienName,
+      selectedAlienColor,
     });
   }
 

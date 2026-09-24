@@ -166,6 +166,22 @@ export default function GamePage() {
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
+  const [selectionOverlay, setSelectionOverlay] = useState<{ active: boolean; scale: number; name: string; color: string }>({
+    active: false,
+    scale: 1,
+    name: '',
+    color: '#00ff66',
+  });
+
+  // Preload Omnitrix rotation animation GIF
+  useEffect(() => {
+    const rotImg = new Image();
+    rotImg.src = '/images/omnitrix_rotation.gif';
+    rotImg.onload = () => {
+      loadedImagesRef.current.set('/images/omnitrix_rotation.gif', rotImg);
+    };
+  }, []);
+
   // Canvas & Engine Refs
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fullscreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -419,12 +435,105 @@ export default function GamePage() {
 
     if (sim.frames.length > 0) {
       drawFrame(sim.frames[0]);
+      if (sim.frames[0].isSelectionIntro) {
+        setSelectionOverlay({
+          active: true,
+          scale: sim.frames[0].selectionDialScale || 1,
+          name: sim.frames[0].selectedAlienName || '',
+          color: sim.frames[0].selectedAlienColor || '#00ff66',
+        });
+      } else {
+        setSelectionOverlay({ active: false, scale: 1, name: '', color: '#00ff66' });
+      }
     }
   };
 
   useEffect(() => {
     initSimulation(false);
   }, [contestants, topic]);
+
+  // Helper: Draw authentic Ben 10 Omnitrix dial on floor
+  const drawOmnitrixDial = (ctx: CanvasRenderingContext2D, cx: number, cy: number, dialRadius: number) => {
+    ctx.save();
+
+    // 1. Intense Outer Neon Green Aura Glow
+    ctx.shadowColor = '#00ff66';
+    ctx.shadowBlur = 35;
+    ctx.beginPath();
+    ctx.arc(cx, cy, dialRadius + 8, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0, 255, 102, 0.2)';
+    ctx.fill();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#00ff66';
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // 2. Outer Bezel / Rim
+    ctx.beginPath();
+    ctx.arc(cx, cy, dialRadius + 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#020b05';
+    ctx.fill();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#062d12';
+    ctx.stroke();
+
+    // 3. Dial Face Jet Black Base Disc
+    ctx.beginPath();
+    ctx.arc(cx, cy, dialRadius, 0, Math.PI * 2);
+    ctx.fillStyle = '#000000';
+    ctx.fill();
+
+    // 4. Ben 10 Alien Lime Green Radial Gradient
+    const omniGrad = ctx.createRadialGradient(cx, cy - dialRadius * 0.25, dialRadius * 0.1, cx, cy, dialRadius);
+    omniGrad.addColorStop(0, '#8aff7b');
+    omniGrad.addColorStop(0.3, '#39ff14');
+    omniGrad.addColorStop(0.7, '#00cc44');
+    omniGrad.addColorStop(1, '#006622');
+
+    const spreadAngle = 36 * (Math.PI / 180); // 36 degrees from vertical
+    const halfWaist = 6;
+
+    // 5. Top Green Sector
+    const topStartAngle = -Math.PI / 2 - spreadAngle;
+    const topEndAngle = -Math.PI / 2 + spreadAngle;
+    ctx.beginPath();
+    ctx.moveTo(cx - halfWaist, cy - 3);
+    ctx.arc(cx, cy, dialRadius - 2, topStartAngle, topEndAngle, false);
+    ctx.lineTo(cx + halfWaist, cy - 3);
+    ctx.closePath();
+    ctx.fillStyle = omniGrad;
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#003810';
+    ctx.stroke();
+
+    // 6. Bottom Green Sector
+    const botStartAngle = Math.PI / 2 - spreadAngle;
+    const botEndAngle = Math.PI / 2 + spreadAngle;
+    ctx.beginPath();
+    ctx.moveTo(cx + halfWaist, cy + 3);
+    ctx.arc(cx, cy, dialRadius - 2, botStartAngle, botEndAngle, false);
+    ctx.lineTo(cx - halfWaist, cy + 3);
+    ctx.closePath();
+    ctx.fillStyle = omniGrad;
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#003810';
+    ctx.stroke();
+
+    // 7. Center Waist Bridge
+    ctx.fillStyle = '#39ff14';
+    ctx.fillRect(cx - halfWaist, cy - 3, halfWaist * 2, 6);
+
+    // 8. Subtle Inner Metallic Highlight
+    ctx.beginPath();
+    ctx.arc(cx, cy, dialRadius - 2, 0, Math.PI * 2);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.stroke();
+
+    ctx.restore();
+  };
 
   // 4. Draw Frame on Canvas (Uses SimFrameState)
   const drawFrame = (frameState?: SimFrameState | null) => {
@@ -482,87 +591,76 @@ export default function GamePage() {
         ctx.stroke();
       }
 
-      // Authentic Ben 10 Omnitrix Center Dial (Matching Official Design)
-      ctx.save();
+      // Ben 10 Omnitrix Center Dial & Selection Animation
       const dialRadius = 135;
+      const isSelectionIntro = current.isSelectionIntro ?? false;
+      const dialScale = current.selectionDialScale ?? 1.0;
+      const selectedAlien = current.selectedAlienName;
+      const selectedColor = current.selectedAlienColor || '#00ff66';
 
-      // 1. Intense Outer Neon Green Aura Glow
-      ctx.shadowColor = '#00ff66';
-      ctx.shadowBlur = 35;
-      ctx.beginPath();
-      ctx.arc(cx, cy, dialRadius + 8, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0, 255, 102, 0.2)';
-      ctx.fill();
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = '#00ff66';
-      ctx.stroke();
-      ctx.shadowBlur = 0;
+      const rotImg = loadedImagesRef.current.get('/images/omnitrix_rotation.gif');
 
-      // 2. Outer Bezel / Rim
-      ctx.beginPath();
-      ctx.arc(cx, cy, dialRadius + 4, 0, Math.PI * 2);
-      ctx.fillStyle = '#020b05';
-      ctx.fill();
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = '#062d12';
-      ctx.stroke();
+      if (isSelectionIntro && rotImg && rotImg.complete && rotImg.naturalWidth > 0 && dialScale > 1.05) {
+        ctx.save();
+        const scaledR = dialRadius * dialScale;
 
-      // 3. Dial Face Jet Black Base Disc
-      ctx.beginPath();
-      ctx.arc(cx, cy, dialRadius, 0, Math.PI * 2);
-      ctx.fillStyle = '#000000';
-      ctx.fill();
+        // 1. Intense Outer Pulsing Neon Green Aura
+        ctx.shadowColor = '#00ff66';
+        ctx.shadowBlur = 45;
+        ctx.beginPath();
+        ctx.arc(cx, cy, scaledR + 8, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0, 255, 102, 0.25)';
+        ctx.fill();
+        ctx.shadowBlur = 0;
 
-      // 4. Ben 10 Alien Lime Green Radial Gradient
-      const omniGrad = ctx.createRadialGradient(cx, cy - dialRadius * 0.25, dialRadius * 0.1, cx, cy, dialRadius);
-      omniGrad.addColorStop(0, '#8aff7b');
-      omniGrad.addColorStop(0.3, '#39ff14');
-      omniGrad.addColorStop(0.7, '#00cc44');
-      omniGrad.addColorStop(1, '#006622');
+        // 2. Render user rotation GIF
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, scaledR, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.drawImage(rotImg, cx - scaledR, cy - scaledR, scaledR * 2, scaledR * 2);
+        ctx.restore();
 
-      const spreadAngle = 36 * (Math.PI / 180); // 36 degrees from vertical
-      const halfWaist = 6;
+        // 3. Glowing Green Outer Bezel Ring
+        ctx.beginPath();
+        ctx.arc(cx, cy, scaledR, 0, Math.PI * 2);
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = '#00ff66';
+        ctx.shadowColor = '#00ff66';
+        ctx.shadowBlur = 30;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
 
-      // 5. Top Green Sector
-      const topStartAngle = -Math.PI / 2 - spreadAngle;
-      const topEndAngle = -Math.PI / 2 + spreadAngle;
-      ctx.beginPath();
-      ctx.moveTo(cx - halfWaist, cy - 3);
-      ctx.arc(cx, cy, dialRadius - 2, topStartAngle, topEndAngle, false);
-      ctx.lineTo(cx + halfWaist, cy - 3);
-      ctx.closePath();
-      ctx.fillStyle = omniGrad;
-      ctx.fill();
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = '#003810';
-      ctx.stroke();
+        // 4. Holographic Selection Alien Badge
+        if (selectedAlien) {
+          ctx.font = '900 32px "Montserrat", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          const textW = ctx.measureText(selectedAlien).width;
+          const badgeW = textW + 60;
+          const badgeH = 50;
+          const badgeY = cy + scaledR + 42;
 
-      // 6. Bottom Green Sector
-      const botStartAngle = Math.PI / 2 - spreadAngle;
-      const botEndAngle = Math.PI / 2 + spreadAngle;
-      ctx.beginPath();
-      ctx.moveTo(cx + halfWaist, cy + 3);
-      ctx.arc(cx, cy, dialRadius - 2, botStartAngle, botEndAngle, false);
-      ctx.lineTo(cx - halfWaist, cy + 3);
-      ctx.closePath();
-      ctx.fillStyle = omniGrad;
-      ctx.fill();
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = '#003810';
-      ctx.stroke();
+          ctx.beginPath();
+          ctx.roundRect(cx - badgeW / 2, badgeY - badgeH / 2, badgeW, badgeH, 16);
+          ctx.fillStyle = 'rgba(2, 9, 4, 0.95)';
+          ctx.fill();
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = selectedColor;
+          ctx.shadowColor = selectedColor;
+          ctx.shadowBlur = 20;
+          ctx.stroke();
 
-      // 7. Center Waist Bridge
-      ctx.fillStyle = '#39ff14';
-      ctx.fillRect(cx - halfWaist, cy - 3, halfWaist * 2, 6);
+          ctx.fillStyle = '#ffffff';
+          ctx.shadowBlur = 0;
+          ctx.fillText(`⚡ ${selectedAlien} ⚡`, cx, badgeY);
+        }
 
-      // 8. Subtle Inner Metallic Highlight
-      ctx.beginPath();
-      ctx.arc(cx, cy, dialRadius - 2, 0, Math.PI * 2);
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-      ctx.stroke();
-
-      ctx.restore();
+        ctx.restore();
+      } else {
+        // Authentic static vector Omnitrix dial on floor
+        drawOmnitrixDial(ctx, cx, cy, dialRadius);
+      }
 
       // Glowing Neon Omnitrix Square Wall
       ctx.beginPath();
@@ -1077,6 +1175,16 @@ export default function GamePage() {
           if (curFrameState.winner && !winner) {
             setWinner(curFrameState.winner as any);
           }
+          if (curFrameState.isSelectionIntro) {
+            setSelectionOverlay({
+              active: true,
+              scale: curFrameState.selectionDialScale || 1,
+              name: curFrameState.selectedAlienName || '',
+              color: curFrameState.selectedAlienColor || '#00ff66',
+            });
+          } else {
+            setSelectionOverlay((prev) => (prev.active ? { active: false, scale: 1, name: '', color: '#00ff66' } : prev));
+          }
         }
 
         if (nextFrame >= sim.frames.length - 1) {
@@ -1099,6 +1207,7 @@ export default function GamePage() {
   // 8. Handlers & Simulation Controls
   const resetSimulation = () => {
     setIsPlaying(false);
+    setSelectionOverlay({ active: false, scale: 1, name: '', color: '#00ff66' });
     initSimulation(true);
   };
 
@@ -1744,6 +1853,41 @@ export default function GamePage() {
                   height={1920}
                   className="w-full h-full object-cover"
                 />
+
+                {/* Pre-Battle Omnitrix Alien Selection Overlay */}
+                {selectionOverlay.active && (
+                  <div
+                    className="absolute pointer-events-none flex flex-col items-center justify-center z-20"
+                    style={{
+                      left: '50%',
+                      top: `${(830 / 1920) * 100}%`,
+                      transform: `translate(-50%, -50%) scale(${selectionOverlay.scale})`,
+                      width: '26%',
+                      aspectRatio: '1/1',
+                      transition: 'transform 0.05s linear',
+                    }}
+                  >
+                    <div className="absolute -inset-6 rounded-full bg-emerald-500/35 blur-xl animate-pulse" />
+                    <img
+                      src="/images/omnitrix_rotation.gif"
+                      alt="Omnitrix Dial"
+                      className="w-full h-full object-contain rounded-full shadow-[0_0_35px_rgba(0,255,102,0.9)] border-2 border-emerald-400"
+                    />
+                    {selectionOverlay.name && (
+                      <div
+                        className="absolute top-[108%] px-3 py-1 rounded-xl bg-black/90 border-2 font-black text-white text-[11px] tracking-wider whitespace-nowrap shadow-2xl flex items-center gap-1.5"
+                        style={{
+                          borderColor: selectionOverlay.color || '#00ff66',
+                          boxShadow: `0 0 16px ${selectionOverlay.color || '#00ff66'}80`,
+                        }}
+                      >
+                        <span className="text-emerald-400">⚡</span>
+                        <span>{selectionOverlay.name}</span>
+                        <span className="text-emerald-400">⚡</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1844,6 +1988,41 @@ export default function GamePage() {
                 height={1920}
                 className="w-full h-full object-cover"
               />
+
+              {/* Pre-Battle Omnitrix Alien Selection Overlay */}
+              {selectionOverlay.active && (
+                <div
+                  className="absolute pointer-events-none flex flex-col items-center justify-center z-20"
+                  style={{
+                    left: '50%',
+                    top: `${(830 / 1920) * 100}%`,
+                    transform: `translate(-50%, -50%) scale(${selectionOverlay.scale})`,
+                    width: '26%',
+                    aspectRatio: '1/1',
+                    transition: 'transform 0.05s linear',
+                  }}
+                >
+                  <div className="absolute -inset-6 rounded-full bg-emerald-500/35 blur-xl animate-pulse" />
+                  <img
+                    src="/images/omnitrix_rotation.gif"
+                    alt="Omnitrix Dial"
+                    className="w-full h-full object-contain rounded-full shadow-[0_0_35px_rgba(0,255,102,0.9)] border-2 border-emerald-400"
+                  />
+                  {selectionOverlay.name && (
+                    <div
+                      className="absolute top-[108%] px-3.5 py-1 rounded-xl bg-black/90 border-2 font-black text-white text-xs tracking-wider whitespace-nowrap shadow-2xl flex items-center gap-1.5"
+                      style={{
+                        borderColor: selectionOverlay.color || '#00ff66',
+                        boxShadow: `0 0 16px ${selectionOverlay.color || '#00ff66'}80`,
+                      }}
+                    >
+                      <span className="text-emerald-400">⚡</span>
+                      <span>{selectionOverlay.name}</span>
+                      <span className="text-emerald-400">⚡</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -489,7 +489,11 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
             textTransform: 'uppercase',
           }}
         >
-          {current.isOvertime ? '⚠️ OVERTIME: 2X DAMAGE' : `${current.aliveCount} ALIENS BATTLING`}
+          {current.isOvertime
+            ? '⚠️ OVERTIME: 2X DAMAGE'
+            : current.isSelectionIntro
+            ? '⌛ SELECTING COMBATANTS'
+            : `${current.aliveCount} ALIENS BATTLING`}
         </div>
       </div>
 
@@ -528,8 +532,92 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
           }}
         />
 
-        {/* Authentic Ben 10 Omnitrix Center Dial */}
-        <OmnitrixDial size={280} opacity={0.92} />
+        {/* Ben 10 Omnitrix Center Dial with Pre-Battle Alien Selection Rotation Animation */}
+        {current.isSelectionIntro ? (
+          <div
+            style={{
+              position: 'absolute',
+              left: '50%',
+              top: '50%',
+              transform: `translate(-50%, -50%) scale(${current.selectionDialScale || 1.0})`,
+              width: 280,
+              height: 280,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 30,
+              pointerEvents: 'none',
+              transformOrigin: 'center center',
+            }}
+          >
+            {/* Outer Giant Glowing Alien Aura */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: -35,
+                borderRadius: '50%',
+                background:
+                  'radial-gradient(circle, rgba(0, 255, 102, 0.75) 20%, rgba(0, 255, 102, 0.3) 55%, transparent 75%)',
+                filter: 'blur(25px)',
+              }}
+            />
+
+            {/* Rotation Animation GIF provided by user */}
+            <div
+              style={{
+                width: '100%',
+                height: '100%',
+                borderRadius: '50%',
+                overflow: 'hidden',
+                border: '6px solid #00ff66',
+                boxShadow: '0 0 50px #00ff66, inset 0 0 30px rgba(0,0,0,0.9)',
+                backgroundColor: '#000000',
+                position: 'relative',
+              }}
+            >
+              <img
+                src={staticFile('images/omnitrix_rotation.gif')}
+                alt="Omnitrix Dialing"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  display: 'block',
+                }}
+              />
+            </div>
+
+            {/* Holographic Selection Alien Badge */}
+            {current.selectedAlienName && (
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: -50,
+                  backgroundColor: 'rgba(2, 9, 4, 0.95)',
+                  border: `2px solid ${current.selectedAlienColor || '#00ff66'}`,
+                  boxShadow: `0 0 25px ${current.selectedAlienColor || '#00ff66'}`,
+                  borderRadius: 14,
+                  padding: '5px 18px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontSize: 16,
+                  fontWeight: 900,
+                  color: '#ffffff',
+                  whiteSpace: 'nowrap',
+                  letterSpacing: '1px',
+                }}
+              >
+                <span style={{ color: current.selectedAlienColor || '#00ff66' }}>⚡</span>
+                <span>{current.selectedAlienName}</span>
+                <span style={{ color: current.selectedAlienColor || '#00ff66' }}>⚡</span>
+              </div>
+            )}
+          </div>
+        ) : (
+          <OmnitrixDial size={280} opacity={0.92} />
+        )}
       </div>
 
       {/* Arena Spawned Items */}
