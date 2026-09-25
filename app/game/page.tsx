@@ -222,7 +222,9 @@ export default function GamePage() {
   const [greenFlash, setGreenFlash] = useState<boolean>(false);
   const [heroTimeBanner, setHeroTimeBanner] = useState<boolean>(false);
 
-  // Alien Selection 1.5s Splash Screen State
+  // Alien Selection 1.5s Splash Screen State (Per Alien and Global)
+  const [alienSplashMap, setAlienSplashMap] = useState<Record<string, string>>({});
+  const [selectedSplashAlienId, setSelectedSplashAlienId] = useState<string>('four_arms');
   const [selectionSplashUrl, setSelectionSplashUrl] = useState<string | null>(null);
   const [selectionSplashName, setSelectionSplashName] = useState<string | null>(null);
   const [alienSplashActive, setAlienSplashActive] = useState<boolean>(false);
@@ -247,6 +249,13 @@ export default function GamePage() {
   // Restore saved splash image & BGM settings
   useEffect(() => {
     try {
+      const savedMap = localStorage.getItem('arena_alien_splash_map');
+      if (savedMap) {
+        try {
+          setAlienSplashMap(JSON.parse(savedMap));
+        } catch {}
+      }
+
       const savedSplash = localStorage.getItem('arena_selection_splash_url');
       const savedSplashName = localStorage.getItem('arena_selection_splash_name');
       if (savedSplash) {
@@ -428,9 +437,78 @@ export default function GamePage() {
     localStorage.removeItem('arena_selection_splash_name');
   };
 
+  const handleAlienSplashUpload = async (alienId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = reader.result as string;
+      setAlienSplashMap((prev) => {
+        const updated = { ...prev, [alienId]: dataUrl };
+        safeSaveLocalStorage('arena_alien_splash_map', JSON.stringify(updated));
+        return updated;
+      });
+
+      setContestants((prev) =>
+        prev.map((c) => (c.id === alienId || c.name.toLowerCase() === alienId.toLowerCase() ? { ...c, splash_image_url: dataUrl } : c))
+      );
+    };
+    reader.readAsDataURL(file);
+
+    try {
+      const fileExt = file.name.split('.').pop() || 'png';
+      const fileName = `arena_splash_${alienId}_${Date.now()}.${fileExt}`;
+      const { data, error } = await supabase.storage.from('shorts').upload(fileName, file, {
+        contentType: file.type || 'image/png',
+        upsert: true,
+      });
+      if (!error && data) {
+        const { data: publicData } = supabase.storage.from('shorts').getPublicUrl(fileName);
+        if (publicData?.publicUrl) {
+          setAlienSplashMap((prev) => {
+            const updated = { ...prev, [alienId]: publicData.publicUrl };
+            safeSaveLocalStorage('arena_alien_splash_map', JSON.stringify(updated));
+            return updated;
+          });
+        }
+      }
+    } catch {}
+
+    e.target.value = '';
+  };
+
+  const handleRemoveAlienSplash = (alienId: string) => {
+    setAlienSplashMap((prev) => {
+      const updated = { ...prev };
+      delete updated[alienId];
+      safeSaveLocalStorage('arena_alien_splash_map', JSON.stringify(updated));
+      return updated;
+    });
+    setContestants((prev) =>
+      prev.map((c) => (c.id === alienId || c.name.toLowerCase() === alienId.toLowerCase() ? { ...c, splash_image_url: null } : c))
+    );
+  };
+
+  const triggerAlienSplashPreview = (alienId: string) => {
+    const target =
+      BEN10_ALIEN_PRESETS.find((a) => a.id === alienId) ||
+      contestants.find((c) => c.id === alienId) ||
+      contestants[0] ||
+      BEN10_ALIEN_PRESETS[0];
+
+    const splash = alienSplashMap[target.id] || target.splash_image_url || target.image_url;
+    setAlienSplashTargetAlien({ ...target, splash_image_url: splash });
+    setAlienSplashActive(true);
+    setTimeout(() => {
+      setAlienSplashActive(false);
+    }, 1500);
+  };
+
   const triggerSplashPreview = () => {
     const target = selectedP1 || contestants[0] || BEN10_ALIEN_PRESETS[0];
-    setAlienSplashTargetAlien(target);
+    const splash = alienSplashMap[target.id] || target.splash_image_url || selectionSplashUrl || target.image_url;
+    setAlienSplashTargetAlien({ ...target, splash_image_url: splash });
     setAlienSplashActive(true);
     setTimeout(() => {
       setAlienSplashActive(false);
@@ -590,6 +668,16 @@ export default function GamePage() {
       | 'omnitrix_turn'
       | 'omnitrix_slam'
       | 'hero_time'
+      | 'sonic_clap'
+      | 'fireblast'
+      | 'wind_tornado'
+      | 'crystal_shatter'
+      | 'laser_beam'
+      | 'cannon_roll'
+      | 'steel_bite'
+      | 'predator_roar'
+      | 'ghost_wail'
+      | 'acid_splatter'
   ) => {
     if (!soundEnabled) return;
 
@@ -810,20 +898,190 @@ export default function GamePage() {
           osc.start(ctx.currentTime + i * 0.1);
           osc.stop(ctx.currentTime + i * 0.1 + 0.35);
         });
-      } else if (type === 'ability') {
-        [587.33, 880, 1174.66].forEach((freq, idx) => {
+      } else if (type === 'sonic_clap') {
+        // FOUR ARMS: SONIC CLAP & VIOLENT ARENA SHAKE
+        screenShakeRef.current = 32;
+
+        const oscCrack = ctx.createOscillator();
+        const gainCrack = ctx.createGain();
+        oscCrack.type = 'sawtooth';
+        oscCrack.frequency.setValueAtTime(1400, ctx.currentTime);
+        oscCrack.frequency.exponentialRampToValueAtTime(70, ctx.currentTime + 0.05);
+        gainCrack.gain.setValueAtTime(0.85 * soundVolume, ctx.currentTime);
+        gainCrack.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+        oscCrack.connect(gainCrack);
+        gainCrack.connect(ctx.destination);
+        oscCrack.start();
+        oscCrack.stop(ctx.currentTime + 0.05);
+
+        const oscBoom = ctx.createOscillator();
+        const gainBoom = ctx.createGain();
+        oscBoom.type = 'triangle';
+        oscBoom.frequency.setValueAtTime(130, ctx.currentTime);
+        oscBoom.frequency.exponentialRampToValueAtTime(26, ctx.currentTime + 0.55);
+        gainBoom.gain.setValueAtTime(1.0 * soundVolume, ctx.currentTime);
+        gainBoom.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55);
+        oscBoom.connect(gainBoom);
+        gainBoom.connect(ctx.destination);
+        oscBoom.start();
+        oscBoom.stop(ctx.currentTime + 0.55);
+      } else if (type === 'fireblast') {
+        // HEATBLAST: ROARING FIREBLAST WHOOSH
+        const bufferSize = Math.round(ctx.sampleRate * 0.65);
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.22));
+        }
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(320, ctx.currentTime);
+        filter.frequency.linearRampToValueAtTime(780, ctx.currentTime + 0.15);
+        filter.frequency.exponentialRampToValueAtTime(140, ctx.currentTime + 0.65);
+        filter.Q.value = 2.4;
+
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.9 * soundVolume, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.65);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+        noise.start();
+        noise.stop(ctx.currentTime + 0.65);
+
+        const oscWhoosh = ctx.createOscillator();
+        const gainWhoosh = ctx.createGain();
+        oscWhoosh.type = 'sine';
+        oscWhoosh.frequency.setValueAtTime(160, ctx.currentTime);
+        oscWhoosh.frequency.exponentialRampToValueAtTime(45, ctx.currentTime + 0.5);
+        gainWhoosh.gain.setValueAtTime(0.65 * soundVolume, ctx.currentTime);
+        gainWhoosh.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+        oscWhoosh.connect(gainWhoosh);
+        gainWhoosh.connect(ctx.destination);
+        oscWhoosh.start();
+        oscWhoosh.stop(ctx.currentTime + 0.5);
+      } else if (type === 'wind_tornado') {
+        // XLR8: CYCLONE WIND VORTEX
+        const oscWind = ctx.createOscillator();
+        const gainWind = ctx.createGain();
+        oscWind.type = 'sine';
+        oscWind.frequency.setValueAtTime(450, ctx.currentTime);
+        oscWind.frequency.linearRampToValueAtTime(1200, ctx.currentTime + 0.2);
+        oscWind.frequency.exponentialRampToValueAtTime(280, ctx.currentTime + 0.55);
+        gainWind.gain.setValueAtTime(0.7 * soundVolume, ctx.currentTime);
+        gainWind.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55);
+        oscWind.connect(gainWind);
+        gainWind.connect(ctx.destination);
+        oscWind.start();
+        oscWind.stop(ctx.currentTime + 0.55);
+      } else if (type === 'crystal_shatter') {
+        // DIAMONDHEAD: CRYSTAL SHATTER & BELL HARMONICS
+        [1760, 2640, 3520].forEach((freq, idx) => {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
-          osc.type = 'sawtooth';
-          osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.04);
-          osc.frequency.exponentialRampToValueAtTime(freq * 1.5, ctx.currentTime + idx * 0.04 + 0.15);
-          gain.gain.setValueAtTime(0.35 * soundVolume, ctx.currentTime + idx * 0.04);
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.04 + 0.2);
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.02);
+          gain.gain.setValueAtTime(0.5 * soundVolume, ctx.currentTime + idx * 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.02 + 0.35);
           osc.connect(gain);
           gain.connect(ctx.destination);
-          osc.start(ctx.currentTime + idx * 0.04);
-          osc.stop(ctx.currentTime + idx * 0.04 + 0.2);
+          osc.start(ctx.currentTime + idx * 0.02);
+          osc.stop(ctx.currentTime + idx * 0.02 + 0.35);
         });
+      } else if (type === 'laser_beam') {
+        // UPGRADE / GREY MATTER: HIGH-TECH OPTIC LASER ZAP
+        const oscLaser = ctx.createOscillator();
+        const gainLaser = ctx.createGain();
+        oscLaser.type = 'sawtooth';
+        oscLaser.frequency.setValueAtTime(2600, ctx.currentTime);
+        oscLaser.frequency.exponentialRampToValueAtTime(180, ctx.currentTime + 0.16);
+        gainLaser.gain.setValueAtTime(0.6 * soundVolume, ctx.currentTime);
+        gainLaser.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.16);
+        oscLaser.connect(gainLaser);
+        gainLaser.connect(ctx.destination);
+        oscLaser.start();
+        oscLaser.stop(ctx.currentTime + 0.16);
+      } else if (type === 'cannon_roll') {
+        // CANNONBOLT: HEAVY ARMORED RUMBLE & CRASH
+        const oscRoll = ctx.createOscillator();
+        const gainRoll = ctx.createGain();
+        oscRoll.type = 'triangle';
+        oscRoll.frequency.setValueAtTime(90, ctx.currentTime);
+        oscRoll.frequency.exponentialRampToValueAtTime(32, ctx.currentTime + 0.45);
+        gainRoll.gain.setValueAtTime(0.8 * soundVolume, ctx.currentTime);
+        gainRoll.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+        oscRoll.connect(gainRoll);
+        gainRoll.connect(ctx.destination);
+        oscRoll.start();
+        oscRoll.stop(ctx.currentTime + 0.45);
+      } else if (type === 'steel_bite') {
+        // RIPJAWS: STEEL JAW CLAMP & CRUNCH
+        const oscClamp = ctx.createOscillator();
+        const gainClamp = ctx.createGain();
+        oscClamp.type = 'sawtooth';
+        oscClamp.frequency.setValueAtTime(1250, ctx.currentTime);
+        oscClamp.frequency.exponentialRampToValueAtTime(160, ctx.currentTime + 0.09);
+        gainClamp.gain.setValueAtTime(0.75 * soundVolume, ctx.currentTime);
+        gainClamp.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.09);
+        oscClamp.connect(gainClamp);
+        gainClamp.connect(ctx.destination);
+        oscClamp.start();
+        oscClamp.stop(ctx.currentTime + 0.09);
+      } else if (type === 'predator_roar') {
+        // WILDMUTT: PREDATOR BEAST GROWL
+        const oscRoar = ctx.createOscillator();
+        const gainRoar = ctx.createGain();
+        oscRoar.type = 'sawtooth';
+        oscRoar.frequency.setValueAtTime(165, ctx.currentTime);
+        oscRoar.frequency.linearRampToValueAtTime(90, ctx.currentTime + 0.35);
+        gainRoar.gain.setValueAtTime(0.7 * soundVolume, ctx.currentTime);
+        gainRoar.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+        oscRoar.connect(gainRoar);
+        gainRoar.connect(ctx.destination);
+        oscRoar.start();
+        oscRoar.stop(ctx.currentTime + 0.35);
+      } else if (type === 'ghost_wail') {
+        // GHOSTFREAK: SPECTRAL PHANTOM WAIL
+        const oscGhost = ctx.createOscillator();
+        const gainGhost = ctx.createGain();
+        oscGhost.type = 'sine';
+        oscGhost.frequency.setValueAtTime(840, ctx.currentTime);
+        oscGhost.frequency.exponentialRampToValueAtTime(220, ctx.currentTime + 0.5);
+        gainGhost.gain.setValueAtTime(0.55 * soundVolume, ctx.currentTime);
+        gainGhost.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+        oscGhost.connect(gainGhost);
+        gainGhost.connect(ctx.destination);
+        oscGhost.start();
+        oscGhost.stop(ctx.currentTime + 0.5);
+      } else if (type === 'acid_splatter') {
+        // STINKFLY: ACID GOOP SPLATTER
+        const oscAcid = ctx.createOscillator();
+        const gainAcid = ctx.createGain();
+        oscAcid.type = 'square';
+        oscAcid.frequency.setValueAtTime(950, ctx.currentTime);
+        oscAcid.frequency.exponentialRampToValueAtTime(260, ctx.currentTime + 0.15);
+        gainAcid.gain.setValueAtTime(0.45 * soundVolume, ctx.currentTime);
+        gainAcid.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+        oscAcid.connect(gainAcid);
+        gainAcid.connect(ctx.destination);
+        oscAcid.start();
+        oscAcid.stop(ctx.currentTime + 0.15);
+      } else if (type === 'ability') {
+        const oscPwr = ctx.createOscillator();
+        const gainPwr = ctx.createGain();
+        oscPwr.type = 'triangle';
+        oscPwr.frequency.setValueAtTime(220, ctx.currentTime);
+        oscPwr.frequency.exponentialRampToValueAtTime(60, ctx.currentTime + 0.3);
+        gainPwr.gain.setValueAtTime(0.6 * soundVolume, ctx.currentTime);
+        gainPwr.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+        oscPwr.connect(gainPwr);
+        gainPwr.connect(ctx.destination);
+        oscPwr.start();
+        oscPwr.stop(ctx.currentTime + 0.3);
       }
     } catch (e) {}
   };
@@ -978,6 +1236,7 @@ export default function GamePage() {
     const sim = simResultRef.current;
     const current = frameState || (sim ? sim.frames[Math.min(sim.frames.length - 1, Math.floor(currentFrameRef.current))] : null);
     if (!current) return;
+    const curFrame = currentFrameRef.current || 0;
 
     const { fighters, items, bullets, particles, floatingTexts, winner: frameWinner } = current;
 
@@ -990,6 +1249,18 @@ export default function GamePage() {
       const { x: cx, y: cy } = ARENA_CENTER;
 
       ctx.save();
+
+      // Screen Shake from Four Arms Sonic Clap or heavy hits
+      if (current.screenShake) {
+        screenShakeRef.current = Math.max(screenShakeRef.current, current.screenShake);
+      }
+      if (screenShakeRef.current > 0) {
+        const shake = screenShakeRef.current;
+        const ox = (Math.random() - 0.5) * shake;
+        const oy = (Math.random() - 0.5) * shake;
+        ctx.translate(ox, oy);
+        screenShakeRef.current = Math.max(0, screenShakeRef.current - 1.2);
+      }
 
       // Minimalist deep black background
       ctx.fillStyle = '#05070c';
@@ -1029,6 +1300,92 @@ export default function GamePage() {
       // Ben 10 Omnitrix Center Dial on floor
       const dialRadius = 135;
       drawOmnitrixDial(ctx, cx, cy, dialRadius);
+
+      // Render Active Arena Ground Hazards (Heatblast 3s Arena Fire, etc.)
+      if (current.hazardZones && current.hazardZones.length > 0) {
+        current.hazardZones.forEach((hz) => {
+          const lifePct = hz.remainingFrames / hz.maxFrames;
+          const alpha = Math.min(1, lifePct * 1.3);
+
+          if (hz.type === 'fire') {
+            ctx.save();
+            // 1. Fiery scorched ground glow aura
+            const fireGrad = ctx.createRadialGradient(hz.x, hz.y, 0, hz.x, hz.y, hz.radius);
+            fireGrad.addColorStop(0, `rgba(254, 240, 138, ${0.95 * alpha})`);
+            fireGrad.addColorStop(0.35, `rgba(249, 115, 22, ${0.8 * alpha})`);
+            fireGrad.addColorStop(0.7, `rgba(220, 38, 38, ${0.5 * alpha})`);
+            fireGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = fireGrad;
+            ctx.beginPath();
+            ctx.arc(hz.x, hz.y, hz.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 2. Animated dancing flame tongues licking upward
+            const flameCount = 14;
+            for (let i = 0; i < flameCount; i++) {
+              const fAng = (i / flameCount) * Math.PI * 2 + Math.sin(curFrame * 0.15 + i) * 0.2;
+              const fDist = (hz.radius * 0.6) + Math.cos(curFrame * 0.25 + i * 2) * (hz.radius * 0.3);
+              const fx = hz.x + Math.cos(fAng) * fDist;
+              const fy = hz.y + Math.sin(fAng) * fDist;
+              const fSize = 12 + Math.sin(curFrame * 0.3 + i) * 6;
+
+              ctx.beginPath();
+              ctx.arc(fx, fy - (fSize * 0.8), fSize, 0, Math.PI * 2);
+              ctx.fillStyle = i % 2 === 0 ? `rgba(250, 204, 21, ${0.85 * alpha})` : `rgba(239, 68, 68, ${0.85 * alpha})`;
+              ctx.shadowColor = '#ea580c';
+              ctx.shadowBlur = 18;
+              ctx.fill();
+            }
+
+            // 3. Fiery perimeter boundary ring
+            ctx.beginPath();
+            ctx.arc(hz.x, hz.y, hz.radius, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(249, 115, 22, ${0.7 * alpha})`;
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+            ctx.restore();
+          } else if (hz.type === 'crystals') {
+            ctx.save();
+            for (let i = 0; i < 7; i++) {
+              const cAng = (i / 7) * Math.PI * 2;
+              const cx = hz.x + Math.cos(cAng) * (hz.radius * 0.5);
+              const cy = hz.y + Math.sin(cAng) * (hz.radius * 0.5);
+              ctx.beginPath();
+              ctx.moveTo(cx, cy - 24);
+              ctx.lineTo(cx + 10, cy + 12);
+              ctx.lineTo(cx - 10, cy + 12);
+              ctx.closePath();
+              ctx.fillStyle = `rgba(16, 185, 129, ${0.8 * alpha})`;
+              ctx.shadowColor = '#10b981';
+              ctx.shadowBlur = 15;
+              ctx.fill();
+            }
+            ctx.restore();
+          } else if (hz.type === 'vortex') {
+            ctx.save();
+            ctx.translate(hz.x, hz.y);
+            ctx.rotate(curFrame * 0.2);
+            ctx.strokeStyle = `rgba(56, 189, 248, ${0.7 * alpha})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            for (let a = 0; a < Math.PI * 4; a += 0.2) {
+              const r = (a / (Math.PI * 4)) * hz.radius;
+              ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+            }
+            ctx.stroke();
+            ctx.restore();
+          } else if (hz.type === 'acid') {
+            ctx.save();
+            ctx.fillStyle = `rgba(132, 204, 22, ${0.6 * alpha})`;
+            ctx.shadowColor = '#84cc16';
+            ctx.shadowBlur = 18;
+            ctx.beginPath();
+            ctx.arc(hz.x, hz.y, hz.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          }
+        });
+      }
 
       // Glowing Neon Omnitrix Square Wall
       ctx.beginPath();
@@ -2563,8 +2920,9 @@ export default function GamePage() {
         });
       }
 
-      // Show 1.5-Second Fullscreen Alien Splash Screen
-      setAlienSplashTargetAlien(chosen1);
+      // Show 1.5-Second Fullscreen Alien Splash Screen (per alien)
+      const splash1 = alienSplashMap[chosen1.id] || chosen1.splash_image_url || chosen1.image_url;
+      setAlienSplashTargetAlien({ ...chosen1, splash_image_url: splash1 });
       setAlienSplashActive(true);
 
       setTimeout(() => {
@@ -2591,8 +2949,9 @@ export default function GamePage() {
         }
       }
 
-      // Show 1.5-Second Fullscreen Alien Splash Screen
-      setAlienSplashTargetAlien(chosen2);
+      // Show 1.5-Second Fullscreen Alien Splash Screen (per alien)
+      const splash2 = alienSplashMap[chosen2.id] || chosen2.splash_image_url || chosen2.image_url;
+      setAlienSplashTargetAlien({ ...chosen2, splash_image_url: splash2 });
       setAlienSplashActive(true);
 
       setTimeout(() => {
@@ -2834,7 +3193,13 @@ export default function GamePage() {
   const renderAlienSplashOverlay = () => {
     if (!alienSplashActive) return null;
 
-    const displayImage = selectionSplashUrl || alienSplashTargetAlien?.image_url;
+    const alienId = alienSplashTargetAlien?.id || '';
+    const displayImage =
+      alienSplashTargetAlien?.splash_image_url ||
+      alienSplashMap[alienId] ||
+      selectionSplashUrl ||
+      alienSplashTargetAlien?.image_url;
+
     const alienName = alienSplashTargetAlien?.name || 'Alien';
     const alienColor = alienSplashTargetAlien?.color || '#00ff66';
 
@@ -3564,63 +3929,116 @@ export default function GamePage() {
               ))}
             </div>
 
-            {/* 1. Alien Selection Splash Screen Upload Section */}
+            {/* 1. Alien Selection Splash Screen Upload Section (Per Alien) */}
             <div className="bg-slate-900/40 border border-slate-800/60 rounded-2xl p-4 space-y-3">
               <div className="flex justify-between items-center">
                 <div>
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200">
-                    Alien Selection Splash Screen
+                    Alien Splash Screens (1.5s per Alien)
                   </h3>
                   <p className="text-[11px] text-slate-400">
-                    Shown across the full game screen for 1.5 seconds when an alien is chosen
+                    Each alien has their own distinct 1.5-second fullscreen transformation screen
                   </p>
                 </div>
-                {selectionSplashUrl && (
-                  <button
-                    type="button"
-                    onClick={triggerSplashPreview}
-                    className="px-2.5 py-1 rounded-lg bg-emerald-950 hover:bg-emerald-900 border border-emerald-500/50 text-[11px] font-bold text-emerald-300 transition"
-                  >
-                    Test 1.5s Screen
-                  </button>
-                )}
               </div>
 
-              <div className="flex items-center gap-3">
-                <div className="w-14 h-14 rounded-xl border border-slate-700 bg-slate-950 overflow-hidden flex items-center justify-center shrink-0 relative shadow-inner">
-                  {selectionSplashUrl ? (
-                    <img src={selectionSplashUrl} alt="Selection Splash" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-[10px] text-slate-500 font-bold text-center px-1">No Image</span>
-                  )}
-                </div>
-
-                <div className="flex-1 flex flex-wrap items-center gap-2">
-                  <label className="px-3 py-1.5 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/50 text-xs font-bold text-cyan-300 cursor-pointer transition flex items-center gap-1.5">
-                    <span>Upload Splash Image</span>
-                    <input type="file" accept="image/*" onChange={handleSelectionSplashUpload} className="hidden" />
-                  </label>
-
-                  {selectionSplashUrl && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={triggerSplashPreview}
-                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 transition"
-                      >
-                        Preview Animation
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleRemoveSplashImage}
-                        className="px-2.5 py-1.5 rounded-xl bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-xs font-semibold text-rose-300 transition"
-                      >
-                        Remove
-                      </button>
-                    </>
-                  )}
-                </div>
+              {/* Alien selector pills */}
+              <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto custom-scrollbar p-1.5 bg-slate-950 rounded-xl border border-slate-800/80">
+                {BEN10_ALIEN_PRESETS.map((alien) => {
+                  const isSelected = selectedSplashAlienId === alien.id;
+                  const hasCustom = Boolean(alienSplashMap[alien.id]);
+                  return (
+                    <button
+                      key={alien.id}
+                      type="button"
+                      onClick={() => setSelectedSplashAlienId(alien.id)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                        isSelected
+                          ? 'bg-emerald-500 text-slate-950 shadow-md'
+                          : 'bg-slate-900 text-slate-300 hover:text-white border border-slate-800'
+                      }`}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: alien.color || '#00ff66' }}
+                      />
+                      <span>{alien.name}</span>
+                      {hasCustom && (
+                        <span
+                          className={`text-[9px] px-1 py-0.2 rounded font-black ${
+                            isSelected ? 'bg-black/40 text-emerald-950' : 'bg-emerald-500/20 text-emerald-400'
+                          }`}
+                        >
+                          CUSTOM
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
+
+              {/* Active Alien Splash Editor */}
+              {(() => {
+                const activeAlien = BEN10_ALIEN_PRESETS.find((a) => a.id === selectedSplashAlienId) || BEN10_ALIEN_PRESETS[0];
+                const currentSplash = alienSplashMap[activeAlien.id] || activeAlien.splash_image_url;
+                return (
+                  <div className="flex items-center gap-3 pt-1 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                    <div
+                      className="w-14 h-14 rounded-xl border-2 overflow-hidden flex items-center justify-center shrink-0 relative shadow-inner bg-black"
+                      style={{ borderColor: activeAlien.color || '#00ff66' }}
+                    >
+                      {currentSplash ? (
+                        <img src={currentSplash} alt={activeAlien.name} className="w-full h-full object-cover" />
+                      ) : activeAlien.image_url ? (
+                        <img src={activeAlien.image_url} alt={activeAlien.name} className="w-full h-full object-cover opacity-70" />
+                      ) : (
+                        <span className="text-xs text-slate-500 font-bold">{activeAlien.name.charAt(0)}</span>
+                      )}
+                    </div>
+
+                    <div className="flex-1 flex flex-wrap items-center gap-2">
+                      <div className="w-full">
+                        <div className="text-xs font-bold text-white flex items-center gap-2">
+                          <span>{activeAlien.name}</span>
+                          <span className="text-[10px] text-slate-400 font-normal">
+                            {currentSplash ? '(Custom Splash Active)' : '(Default Avatar Fallback)'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="w-full flex flex-wrap items-center gap-2 pt-1">
+                        <label className="px-3 py-1.5 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/50 text-xs font-bold text-cyan-300 cursor-pointer transition flex items-center gap-1.5">
+                          <span>Upload {activeAlien.name} Splash</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleAlienSplashUpload(activeAlien.id, e)}
+                            className="hidden"
+                          />
+                        </label>
+
+                        <button
+                          type="button"
+                          onClick={() => triggerAlienSplashPreview(activeAlien.id)}
+                          className="px-3 py-1.5 rounded-xl bg-emerald-950 hover:bg-emerald-900 border border-emerald-500/50 text-xs font-bold text-emerald-300 transition"
+                        >
+                          Test 1.5s Screen
+                        </button>
+
+                        {currentSplash && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveAlienSplash(activeAlien.id)}
+                            className="px-2.5 py-1.5 rounded-xl bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-xs font-semibold text-rose-300 transition"
+                          >
+                            Reset
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* 2. Battle Background Music Upload Section */}

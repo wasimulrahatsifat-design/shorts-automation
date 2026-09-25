@@ -49,6 +49,7 @@ export interface ContestantConfig {
   speed: number;
   special_power: string;
   special_ability?: SpecialAbility;
+  splash_image_url?: string | null;
 }
 
 export type ArenaItemType = 'health' | 'dagger' | 'gun' | 'shield' | 'speed';

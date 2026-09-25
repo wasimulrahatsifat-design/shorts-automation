@@ -217,10 +217,45 @@ export interface SimParticle {
   alpha: number;
 }
 
+export interface SimHazardZone {
+  id: string;
+  type: 'fire' | 'crystals' | 'vortex' | 'acid';
+  x: number;
+  y: number;
+  radius: number;
+  remainingFrames: number;
+  maxFrames: number;
+  color: string;
+  ownerId?: string;
+  damagePerFrame?: number;
+}
+
 export interface SoundEvent {
   frame: number;
-  sound: 'hit' | 'bounce' | 'item' | 'gun' | 'explosion' | 'winner' | 'ability' | 'omnitrix_open' | 'omnitrix_turn' | 'omnitrix_slam' | 'hero_time';
+  sound:
+    | 'hit'
+    | 'bounce'
+    | 'item'
+    | 'gun'
+    | 'explosion'
+    | 'winner'
+    | 'ability'
+    | 'omnitrix_open'
+    | 'omnitrix_turn'
+    | 'omnitrix_slam'
+    | 'hero_time'
+    | 'sonic_clap'
+    | 'fireblast'
+    | 'wind_tornado'
+    | 'crystal_shatter'
+    | 'laser_beam'
+    | 'cannon_roll'
+    | 'steel_bite'
+    | 'predator_roar'
+    | 'ghost_wail'
+    | 'acid_splatter';
   abilityType?: string;
+  alienType?: string;
   volume?: number;
 }
 
@@ -230,6 +265,8 @@ export interface SimFrameState {
   bullets: SimBullet[];
   floatingTexts: SimFloatingText[];
   particles: SimParticle[];
+  hazardZones?: SimHazardZone[];
+  screenShake?: number;
   winner: SimFighter | null;
   aliveCount: number;
   isOvertime?: boolean;
@@ -532,6 +569,8 @@ export function generateArenaSimulation(
   const bullets: SimBullet[] = [];
   const floatingTexts: SimFloatingText[] = [];
   const particles: SimParticle[] = [];
+  let activeHazardZones: SimHazardZone[] = [];
+  let currentFrameScreenShake = 0;
 
   let winner: SimFighter | null = null;
   let winnerAnnouncedFrame = -1;
@@ -552,6 +591,7 @@ export function generateArenaSimulation(
   const SELECTION_INTRO_FRAMES = 0;
 
   for (let frame = 0; frame < maxFrames; frame++) {
+    currentFrameScreenShake = 0;
     const aliveFighters = fighters.filter((f) => !f.isDead);
     const isSelectionIntro = frame < SELECTION_INTRO_FRAMES;
     let selectionDialScale = 1.0;
@@ -759,46 +799,60 @@ export function generateArenaSimulation(
 
           if (aType === 'four_arms') {
             // FOUR ARMS: SONIC SHOCKWAVE CLAP!
-            // Fires an expanding sonic shockwave blast toward the enemy and emits a massive shockwave ring
-            soundEvents.push({ frame, sound: 'ability', abilityType: 'damage', volume: 1.0 });
-            f.abilityAuraTimer = 60;
+            // Thunderous sonic clap sound + entire arena shakes violently
+            soundEvents.push({ frame, sound: 'sonic_clap', alienType: 'four_arms', volume: 1.0 });
+            currentFrameScreenShake = 32;
+            f.abilityAuraTimer = 65;
             f.abilityAuraColor = '#dc2626';
 
             // Giant sonic shockwave projectile flying toward the opponent
             bullets.push({
               x: f.x + Math.cos(targetAngle) * (f.size / 2 + 20),
               y: f.y + Math.sin(targetAngle) * (f.size / 2 + 20),
-              vx: Math.cos(targetAngle) * 19,
-              vy: Math.sin(targetAngle) * 19,
+              vx: Math.cos(targetAngle) * 20,
+              vy: Math.sin(targetAngle) * 20,
               ownerId: f.id,
               color: '#dc2626',
               damage: Math.round(abilityPower),
               life: 55,
               bulletType: 'shockwave',
-              size: 44,
+              size: 46,
             });
 
             // Expanding sonic shockwave dust & distortion particles
-            for (let k = 0; k < 24; k++) {
-              const ang = (k / 24) * Math.PI * 2;
+            for (let k = 0; k < 30; k++) {
+              const ang = (k / 30) * Math.PI * 2;
               particles.push({
                 x: f.x + Math.cos(ang) * (f.size / 2 + 10),
                 y: f.y + Math.sin(ang) * (f.size / 2 + 10),
-                vx: Math.cos(ang) * 14,
-                vy: Math.sin(ang) * 14,
+                vx: Math.cos(ang) * 16,
+                vy: Math.sin(ang) * 16,
                 color: k % 2 === 0 ? '#dc2626' : '#ffffff',
-                radius: rng() * 4 + 3,
+                radius: rng() * 5 + 3,
                 alpha: 1,
               });
             }
           } else if (aType === 'heatblast') {
-            // HEATBLAST: BLAZING PYRONITE FLAMETHROWER & FIREBALL BURST!
-            // Fires 3 giant blazing fireballs in a spread towards enemy
-            soundEvents.push({ frame, sound: 'ability', abilityType: 'damage', volume: 1.0 });
+            // HEATBLAST: BLAZING PYRONITE FLAMETHROWER & 3-SECOND ARENA FIRE!
+            soundEvents.push({ frame, sound: 'fireblast', alienType: 'heatblast', volume: 1.0 });
             f.abilityAuraTimer = 75;
             f.abilityAuraColor = '#ea580c';
             f.vx = Math.cos(targetAngle) * 14;
             f.vy = Math.sin(targetAngle) * 14;
+
+            // Spawn 3-second burning fire ground hazard where Heatblast attacks (target area)
+            activeHazardZones.push({
+              id: `fire_ground_${frame}_${f.id}`,
+              type: 'fire',
+              x: nearestOpp.x,
+              y: nearestOpp.y,
+              radius: 110,
+              remainingFrames: 90, // Exactly 3 seconds (90 frames at 30 fps)
+              maxFrames: 90,
+              color: '#ea580c',
+              ownerId: f.id,
+              damagePerFrame: 0.35,
+            });
 
             for (const spread of [-0.18, 0, 0.18]) {
               bullets.push({
@@ -828,13 +882,12 @@ export function generateArenaSimulation(
             }
           } else if (aType === 'xlr8') {
             // XLR8: HYPERSPEED CYCLONE TORNADO!
-            // Dashes at extreme speed, spins a whirlwind around himself
             f.speedBoostTimer = 110;
             f.abilityAuraTimer = 110;
             f.abilityAuraColor = '#0284c7';
             f.vx = Math.cos(targetAngle) * 22;
             f.vy = Math.sin(targetAngle) * 22;
-            soundEvents.push({ frame, sound: 'ability', abilityType: 'speed', volume: 1.0 });
+            soundEvents.push({ frame, sound: 'wind_tornado', alienType: 'xlr8', volume: 1.0 });
 
             for (let k = 0; k < 18; k++) {
               const ang = (k / 18) * Math.PI * 2;
@@ -853,8 +906,20 @@ export function generateArenaSimulation(
             f.bonusShield = Math.round(abilityPower * 1.5) || 50;
             f.abilityAuraTimer = 85;
             f.abilityAuraColor = '#10b981';
-            soundEvents.push({ frame, sound: 'ability', abilityType: 'shield', volume: 0.9 });
+            soundEvents.push({ frame, sound: 'crystal_shatter', alienType: 'diamondhead', volume: 1.0 });
             floatingTexts.push({ id: `shd_${frame}_${f.id}`, x: f.x, y: f.y - 40, text: `CRYSTAL BARRIER +${f.bonusShield}`, color: '#10b981', alpha: 1, vy: -2.2, scale: 1.25 });
+
+            activeHazardZones.push({
+              id: `crystal_ground_${frame}_${f.id}`,
+              type: 'crystals',
+              x: f.x,
+              y: f.y,
+              radius: 90,
+              remainingFrames: 90,
+              maxFrames: 90,
+              color: '#10b981',
+              ownerId: f.id,
+            });
 
             // Volley of 4 sharp emerald crystal shards aimed at enemy
             for (let s = -1.5; s <= 1.5; s += 1.0) {
@@ -879,24 +944,25 @@ export function generateArenaSimulation(
             f.abilityAuraColor = '#f59e0b';
             f.vx = Math.cos(targetAngle) * 24;
             f.vy = Math.sin(targetAngle) * 24;
-            soundEvents.push({ frame, sound: 'ability', abilityType: 'damage', volume: 1.0 });
+            currentFrameScreenShake = 18;
+            soundEvents.push({ frame, sound: 'cannon_roll', alienType: 'cannonbolt', volume: 1.0 });
           } else if (aType === 'wildmutt') {
             // WILDMUTT: PREDATOR SENSE POUNCE
             f.vx = Math.cos(targetAngle) * 21;
             f.vy = Math.sin(targetAngle) * 21;
             f.abilityAuraTimer = 70;
             f.abilityAuraColor = '#f97316';
-            soundEvents.push({ frame, sound: 'ability', abilityType: 'damage', volume: 0.9 });
+            soundEvents.push({ frame, sound: 'predator_roar', alienType: 'wildmutt', volume: 1.0 });
           } else if (aType === 'ripjaws') {
             // RIPJAWS: STEEL JAW BITE CHARGE
             f.vx = Math.cos(targetAngle) * 19;
             f.vy = Math.sin(targetAngle) * 19;
             f.abilityAuraTimer = 75;
             f.abilityAuraColor = '#06b6d4';
-            soundEvents.push({ frame, sound: 'ability', abilityType: 'damage', volume: 1.0 });
+            soundEvents.push({ frame, sound: 'steel_bite', alienType: 'ripjaws', volume: 1.0 });
           } else if (aType === 'upgrade') {
             // UPGRADE: OPTIC PLASMA LASER (Burst of 3 high-speed laser bolts)
-            soundEvents.push({ frame, sound: 'gun', volume: 0.9 });
+            soundEvents.push({ frame, sound: 'laser_beam', alienType: 'upgrade', volume: 1.0 });
             f.abilityAuraTimer = 65;
             f.abilityAuraColor = '#22c55e';
             for (let k = 0; k < 3; k++) {
@@ -915,7 +981,7 @@ export function generateArenaSimulation(
             }
           } else if (aType === 'grey_matter') {
             // GREY MATTER: SOLAR FOCUS DEATH RAY
-            soundEvents.push({ frame, sound: 'gun', volume: 1.0 });
+            soundEvents.push({ frame, sound: 'laser_beam', alienType: 'grey_matter', volume: 1.0 });
             f.abilityAuraTimer = 65;
             f.abilityAuraColor = '#facc15';
             bullets.push({
@@ -931,10 +997,22 @@ export function generateArenaSimulation(
               size: 38,
             });
           } else if (aType === 'stinkfly') {
-            // STINKFLY: TOXIC ACID GOOP SPRAY (3 Bubbling Slime Globs)
-            soundEvents.push({ frame, sound: 'gun', volume: 0.85 });
+            // STINKFLY: TOXIC ACID GOOP SPRAY
+            soundEvents.push({ frame, sound: 'acid_splatter', alienType: 'stinkfly', volume: 1.0 });
             f.abilityAuraTimer = 70;
             f.abilityAuraColor = '#84cc16';
+            activeHazardZones.push({
+              id: `acid_ground_${frame}_${f.id}`,
+              type: 'acid',
+              x: nearestOpp.x,
+              y: nearestOpp.y,
+              radius: 90,
+              remainingFrames: 90,
+              maxFrames: 90,
+              color: '#84cc16',
+              ownerId: f.id,
+              damagePerFrame: 0.25,
+            });
             for (const spread of [-0.22, 0, 0.22]) {
               bullets.push({
                 x: f.x + Math.cos(targetAngle + spread) * (f.size / 2 + 16),
@@ -954,7 +1032,7 @@ export function generateArenaSimulation(
             f.invulnerableTimer = 85;
             f.abilityAuraTimer = 85;
             f.abilityAuraColor = '#cbd5e1';
-            soundEvents.push({ frame, sound: 'ability', abilityType: 'freeze', volume: 0.9 });
+            soundEvents.push({ frame, sound: 'ghost_wail', alienType: 'ghostfreak', volume: 1.0 });
             bullets.push({
               x: f.x + Math.cos(targetAngle) * (f.size / 2 + 18),
               y: f.y + Math.sin(targetAngle) * (f.size / 2 + 18),
@@ -1546,6 +1624,46 @@ export function generateArenaSimulation(
       if (floatingTexts[i].alpha <= 0) floatingTexts.splice(i, 1);
     }
 
+    // Update active ground hazard zones (e.g. Heatblast burning fire for 3 seconds / 90 frames)
+    activeHazardZones.forEach((hz) => {
+      hz.remainingFrames--;
+      if (hz.type === 'fire') {
+        // Continuous burning damage to opponents in the fire zone
+        for (const opp of aliveFighters) {
+          if (opp.id !== hz.ownerId) {
+            const d = Math.hypot(opp.x - hz.x, opp.y - hz.y);
+            if (d <= hz.radius) {
+              opp.health = Math.max(0, opp.health - (hz.damagePerFrame || 0.35));
+              opp.hitFlash = Math.max(opp.hitFlash, 4);
+            }
+          }
+        }
+        // Emit fiery flame particles
+        if (frame % 4 === 0) {
+          particles.push({
+            x: hz.x + (rng() - 0.5) * hz.radius * 1.4,
+            y: hz.y + (rng() - 0.5) * hz.radius * 1.2,
+            vx: (rng() - 0.5) * 2,
+            vy: -2.5 - rng() * 3.5,
+            color: rng() > 0.4 ? '#f97316' : '#facc15',
+            radius: 3.5 + rng() * 4,
+            alpha: 0.95,
+          });
+        }
+      } else if (hz.type === 'acid') {
+        for (const opp of aliveFighters) {
+          if (opp.id !== hz.ownerId) {
+            const d = Math.hypot(opp.x - hz.x, opp.y - hz.y);
+            if (d <= hz.radius) {
+              opp.health = Math.max(0, opp.health - (hz.damagePerFrame || 0.25));
+              opp.hitFlash = Math.max(opp.hitFlash, 3);
+            }
+          }
+        }
+      }
+    });
+    activeHazardZones = activeHazardZones.filter((hz) => hz.remainingFrames > 0);
+
     // Snapshot frame
     frames.push({
       fighters: fighters.map((f) => ({ ...f })),
@@ -1553,6 +1671,8 @@ export function generateArenaSimulation(
       bullets: bullets.map((b) => ({ ...b })),
       floatingTexts: floatingTexts.map((ft) => ({ ...ft })),
       particles: particles.map((p) => ({ ...p })),
+      hazardZones: activeHazardZones.map((hz) => ({ ...hz })),
+      screenShake: currentFrameScreenShake,
       winner: winner ? { ...winner } : null,
       aliveCount: aliveFighters.length,
       isOvertime,

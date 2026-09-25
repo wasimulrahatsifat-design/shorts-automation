@@ -29,6 +29,7 @@ export interface ArenaClashData {
     speed?: number;
     special_power?: string;
     special_ability?: SpecialAbility;
+    splash_image_url?: string | null;
   }[];
   tts_url?: string;
   end_title?: string;
@@ -36,6 +37,7 @@ export interface ArenaClashData {
   bg_music_volume?: number;
   bg_music_enabled?: boolean;
   alien_splash_url?: string;
+  alien_splash_map?: Record<string, string>;
 }
 
 const resolveAudioUrl = (url?: string) => {
@@ -72,6 +74,21 @@ const resolveSoundUrl = (sound: string, abilityType?: string) => {
       return staticFile('audio/omnitrix_slam.wav');
     case 'hero_time':
       return staticFile('audio/its_hero_time.mp3');
+    case 'sonic_clap':
+    case 'fireblast':
+    case 'cannon_roll':
+    case 'predator_roar':
+      return staticFile('audio/explosion.wav');
+    case 'wind_tornado':
+    case 'ghost_wail':
+      return staticFile('audio/bounce.wav');
+    case 'crystal_shatter':
+      return staticFile('audio/item.wav');
+    case 'laser_beam':
+    case 'acid_splatter':
+      return staticFile('audio/gun.wav');
+    case 'steel_bite':
+      return staticFile('audio/hit.wav');
     case 'ability':
       if (abilityType === 'damage') return staticFile('audio/explosion.wav');
       if (abilityType === 'freeze') return staticFile('audio/bounce.wav');
@@ -667,39 +684,82 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
       </div>
 
       {/* 1.5-Second Fullscreen Alien Selection Splash in Render (frame 85 to 130 = 1.5s @ 30fps) */}
-      {data_json.alien_splash_url && frame >= 85 && frame < 130 && (
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            zIndex: 45,
-            backgroundColor: '#000000',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            overflow: 'hidden',
-          }}
-        >
-          <img
-            src={data_json.alien_splash_url}
-            alt="Alien Selection Splash"
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-            }}
-          />
+      {(() => {
+        if (frame < 85 || frame >= 130) return null;
+        const firstAlien = contestants[0];
+        const secondAlien = contestants[1];
+        const splashUrl =
+          (firstAlien && data_json.alien_splash_map?.[firstAlien.id]) ||
+          firstAlien?.splash_image_url ||
+          (secondAlien && data_json.alien_splash_map?.[secondAlien.id]) ||
+          secondAlien?.splash_image_url ||
+          data_json.alien_splash_url ||
+          firstAlien?.image_url;
+
+        if (!splashUrl) return null;
+        return (
           <div
             style={{
               position: 'absolute',
               inset: 0,
-              border: '6px solid #00ff66',
-              boxShadow: 'inset 0 0 60px rgba(0, 255, 102, 0.5)',
+              zIndex: 45,
+              backgroundColor: '#000000',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+            }}
+          >
+            <img
+              src={splashUrl}
+              alt="Alien Selection Splash"
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+              }}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                border: '6px solid #00ff66',
+                boxShadow: 'inset 0 0 60px rgba(0, 255, 102, 0.5)',
+                pointerEvents: 'none',
+              }}
+            />
+          </div>
+        );
+      })()}
+
+      {/* Active Ground Hazard Zones (e.g. Heatblast 3-second fire patch, Diamondhead crystals, Stinkfly acid) */}
+      {((current as any).hazardZones || []).map((hz: any) => {
+        const lifePct = Math.max(0.1, hz.remainingFrames / (hz.maxFrames || 90));
+        return (
+          <div
+            key={hz.id}
+            style={{
+              position: 'absolute',
+              left: hz.x,
+              top: hz.y,
+              transform: 'translate(-50%, -50%)',
+              width: hz.radius * 2,
+              height: hz.radius * 2,
+              borderRadius: '50%',
               pointerEvents: 'none',
+              zIndex: 9,
+              background:
+                hz.type === 'fire'
+                  ? `radial-gradient(circle, rgba(255, 230, 0, ${0.75 * lifePct}) 0%, rgba(249, 115, 22, ${0.65 * lifePct}) 45%, rgba(239, 68, 68, ${0.45 * lifePct}) 75%, transparent 100%)`
+                  : hz.type === 'crystals'
+                  ? `radial-gradient(circle, rgba(16, 185, 129, ${0.55 * lifePct}) 0%, rgba(5, 150, 105, ${0.25 * lifePct}) 60%, transparent 100%)`
+                  : `radial-gradient(circle, rgba(132, 204, 22, ${0.6 * lifePct}) 0%, rgba(101, 163, 13, ${0.35 * lifePct}) 60%, transparent 100%)`,
+              filter: hz.type === 'fire' ? 'blur(4px)' : 'none',
+              boxShadow: hz.type === 'fire' ? `0 0 45px rgba(249, 115, 22, ${0.85 * lifePct})` : `0 0 25px ${hz.color}66`,
             }}
           />
-        </div>
-      )}
+        );
+      })}
 
       {/* Arena Spawned Items */}
       {items.map((it) => (
