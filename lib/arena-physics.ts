@@ -213,6 +213,7 @@ export interface SimFighter {
   speedBoostTimer: number;
   specialMoveReady: boolean;
   rageModeActivated?: boolean;
+  crystalTrapCount?: number;
 }
 
 export interface SimItem {
@@ -605,6 +606,7 @@ export function generateArenaSimulation(
       speedBoostTimer: 0,
       specialMoveReady: false,
       rageModeActivated: false,
+      crystalTrapCount: 0,
     };
   });
 
@@ -955,50 +957,47 @@ export function generateArenaSimulation(
               });
             }
           } else if (aType === 'diamondhead') {
-            // DIAMONDHEAD: CRYSTAL DIAMOND SHARD VOLLEY & PRISM BARRIER
+            // DIAMONDHEAD: CRYSTAL WALL ERUPTION (Persistent crystal wall in arena)
             f.bonusShield = Math.round(abilityPower * 1.5) || 50;
             f.abilityAuraTimer = 85;
             f.abilityAuraColor = '#10b981';
             soundEvents.push({ frame, sound: 'crystal_shatter', alienType: 'diamondhead', volume: 1.0 });
-            floatingTexts.push({ id: `shd_${frame}_${f.id}`, x: f.x, y: f.y - 40, text: `CRYSTAL BARRIER +${f.bonusShield}`, color: '#10b981', alpha: 1, vy: -2.2, scale: 1.25 });
+            floatingTexts.push({ id: `shd_${frame}_${f.id}`, x: f.x, y: f.y - 40, text: `CRYSTAL WALL +${f.bonusShield}`, color: '#10b981', alpha: 1, vy: -2.2, scale: 1.25 });
+
+            // Spawn Crystal Wall in arena that PERSISTS until touched by an enemy!
+            const spawnDist = Math.min(160, Math.hypot(nearestOpp.x - f.x, nearestOpp.y - f.y) * 0.45);
+            const crystalX = Math.max(ARENA_BOX.left + 90, Math.min(ARENA_BOX.right - 90, f.x + Math.cos(targetAngle) * spawnDist));
+            const crystalY = Math.max(ARENA_BOX.top + 90, Math.min(ARENA_BOX.bottom - 90, f.y + Math.sin(targetAngle) * spawnDist));
 
             activeHazardZones.push({
-              id: `crystal_ground_${frame}_${f.id}`,
+              id: `crystal_wall_${frame}_${f.id}`,
               type: 'crystals',
-              x: f.x,
-              y: f.y,
-              radius: 90,
-              remainingFrames: 90,
-              maxFrames: 90,
+              x: crystalX,
+              y: crystalY,
+              radius: 95,
+              remainingFrames: 999999, // PERSISTENT until touched by enemy!
+              maxFrames: 999999,
               color: '#10b981',
               ownerId: f.id,
             });
-
-            // Volley of 4 sharp emerald crystal shards aimed at enemy
-            for (let s = -1.5; s <= 1.5; s += 1.0) {
-              const sp = s * 0.12;
-              bullets.push({
-                x: f.x + Math.cos(targetAngle + sp) * (f.size / 2 + 16),
-                y: f.y + Math.sin(targetAngle + sp) * (f.size / 2 + 16),
-                vx: Math.cos(targetAngle + sp) * 21,
-                vy: Math.sin(targetAngle + sp) * 21,
-                ownerId: f.id,
-                color: '#10b981',
-                damage: Math.max(3, Math.round(abilityPower / 4)),
-                life: 55,
-                bulletType: 'shard',
-                size: 24,
-              });
-            }
           } else if (aType === 'cannonbolt') {
-            // CANNONBOLT: HYPER ARMORED KINETIC WRECKING BALL
-            f.invulnerableTimer = 80;
-            f.abilityAuraTimer = 80;
+            // CANNONBOLT: HYPER ARMORED KINETIC WRECKING BALL (Takes 40% damage, deals 1.3x damage)
+            f.abilityAuraTimer = 90;
             f.abilityAuraColor = '#f59e0b';
             f.vx = Math.cos(targetAngle) * 24;
             f.vy = Math.sin(targetAngle) * 24;
             currentFrameScreenShake = 18;
             soundEvents.push({ frame, sound: 'cannon_roll', alienType: 'cannonbolt', volume: 1.0 });
+            floatingTexts.push({
+              id: `cb_roll_${frame}_${f.id}`,
+              x: f.x,
+              y: f.y - 45,
+              text: 'ARMORED ROLL!',
+              color: '#f59e0b',
+              alpha: 1,
+              vy: -2,
+              scale: 1.3,
+            });
           } else if (aType === 'wildmutt') {
             // WILDMUTT: PREDATOR SENSE POUNCE
             f.vx = Math.cos(targetAngle) * 21;
@@ -1415,6 +1414,20 @@ export function generateArenaSimulation(
             bulletDmg = Math.round(bulletDmg * 0.5);
           }
 
+          // Cannonbolt: takes 40% damage, deals 1.3x damage while ability is active
+          if (shooter && getAlienType(shooter) === 'cannonbolt' && shooter.abilityAuraTimer > 0) {
+            bulletDmg = Math.round(bulletDmg * 1.3);
+          }
+          if (getAlienType(t) === 'cannonbolt' && t.abilityAuraTimer > 0) {
+            bulletDmg = Math.round(bulletDmg * 0.4);
+          }
+
+          // Diamondhead Passive: 10% chance to completely nullify damage
+          if (getAlienType(t) === 'diamondhead' && rng() < 0.10) {
+            bulletDmg = 0;
+            floatingTexts.push({ id: `dh_null_b_${frame}_${i}`, x: t.x, y: t.y - 35, text: 'NULLIFIED! (0 DMG)', color: '#10b981', alpha: 1, vy: -2, scale: 1.15 });
+          }
+
           t.health = Math.max(0, t.health - bulletDmg);
           t.hitFlash = 14;
 
@@ -1578,6 +1591,33 @@ export function generateArenaSimulation(
               floatingTexts.push({ id: `wf_def_${frame}_${B.id}`, x: B.x, y: B.y - 30, text: 'FUNNEL GUARD -50%', color: '#0284c7', alpha: 1, vy: -2, scale: 1 });
             }
 
+            // Cannonbolt Special Ability: deals 1.3x damage, takes 40% damage (incoming dmg reduced to 40%)
+            const aCannonboltActive = aAlien === 'cannonbolt' && A.abilityAuraTimer > 0;
+            const bCannonboltActive = bAlien === 'cannonbolt' && B.abilityAuraTimer > 0;
+
+            if (aCannonboltActive) {
+              dmgA = Math.round(dmgA * 1.3);
+              dmgB = Math.round(dmgB * 0.4);
+              floatingTexts.push({ id: `cb_atk_${frame}_${B.id}`, x: B.x, y: B.y - 45, text: 'CANNON SLAM 1.3X!', color: '#f59e0b', alpha: 1, vy: -2, scale: 1.15 });
+              floatingTexts.push({ id: `cb_def_${frame}_${A.id}`, x: A.x, y: A.y - 30, text: 'ARMOR GUARD (40%)', color: '#fbbf24', alpha: 1, vy: -2, scale: 1 });
+            }
+            if (bCannonboltActive) {
+              dmgB = Math.round(dmgB * 1.3);
+              dmgA = Math.round(dmgA * 0.4);
+              floatingTexts.push({ id: `cb_atk_${frame}_${A.id}`, x: A.x, y: A.y - 45, text: 'CANNON SLAM 1.3X!', color: '#f59e0b', alpha: 1, vy: -2, scale: 1.15 });
+              floatingTexts.push({ id: `cb_def_${frame}_${B.id}`, x: B.x, y: B.y - 30, text: 'ARMOR GUARD (40%)', color: '#fbbf24', alpha: 1, vy: -2, scale: 1 });
+            }
+
+            // Diamondhead Passive: 10% chance to completely nullify incoming damage (takes 0 damage)
+            if (bAlien === 'diamondhead' && dmgA > 0 && rng() < 0.10) {
+              dmgA = 0;
+              floatingTexts.push({ id: `dh_null_B_${frame}`, x: B.x, y: B.y - 35, text: 'NULLIFIED! (0 DMG)', color: '#10b981', alpha: 1, vy: -2, scale: 1.15 });
+            }
+            if (aAlien === 'diamondhead' && dmgB > 0 && rng() < 0.10) {
+              dmgB = 0;
+              floatingTexts.push({ id: `dh_null_A_${frame}`, x: A.x, y: A.y - 35, text: 'NULLIFIED! (0 DMG)', color: '#10b981', alpha: 1, vy: -2, scale: 1.15 });
+            }
+
             // Diamondhead reflection
             if (B.abilityAuraTimer > 0 && bAlien === 'diamondhead') {
               const reflect = Math.round(dmgA * 0.35);
@@ -1720,9 +1760,11 @@ export function generateArenaSimulation(
       if (floatingTexts[i].alpha <= 0) floatingTexts.splice(i, 1);
     }
 
-    // Update active ground hazard zones (e.g. Heatblast burning fire for 3 seconds / 90 frames)
+    // Update active ground hazard zones
     activeHazardZones.forEach((hz) => {
-      hz.remainingFrames--;
+      if (hz.maxFrames < 99999) {
+        hz.remainingFrames--;
+      }
       if (hz.type === 'fire') {
         // Continuous burning damage to opponents in the fire zone
         for (const opp of aliveFighters) {
@@ -1732,6 +1774,12 @@ export function generateArenaSimulation(
               let hzDmg = hz.damagePerFrame || 0.35;
               if (getAlienType(opp) === 'xlr8' && (opp.abilityAuraTimer > 0 || opp.speedBoostTimer > 0)) {
                 hzDmg *= 0.5; // XLR8 in wind funnel takes 50% less hazard damage
+              }
+              if (getAlienType(opp) === 'cannonbolt' && opp.abilityAuraTimer > 0) {
+                hzDmg *= 0.4; // Cannonbolt takes 40% damage during special ability
+              }
+              if (getAlienType(opp) === 'diamondhead' && rng() < 0.10) {
+                hzDmg = 0; // Diamondhead 10% damage nullification
               }
               opp.health = Math.max(0, opp.health - hzDmg);
               opp.hitFlash = Math.max(opp.hitFlash, 4);
@@ -1759,8 +1807,93 @@ export function generateArenaSimulation(
               if (getAlienType(opp) === 'xlr8' && (opp.abilityAuraTimer > 0 || opp.speedBoostTimer > 0)) {
                 hzDmg *= 0.5; // XLR8 in wind funnel takes 50% less hazard damage
               }
+              if (getAlienType(opp) === 'cannonbolt' && opp.abilityAuraTimer > 0) {
+                hzDmg *= 0.4;
+              }
+              if (getAlienType(opp) === 'diamondhead' && rng() < 0.10) {
+                hzDmg = 0;
+              }
               opp.health = Math.max(0, opp.health - hzDmg);
               opp.hitFlash = Math.max(opp.hitFlash, 3);
+            }
+          }
+        }
+      } else if (hz.type === 'crystals') {
+        // Persistent Crystal Wall: stays until an enemy touches it
+        for (const opp of aliveFighters) {
+          if (opp.id !== hz.ownerId && opp.health > 0) {
+            const d = Math.hypot(opp.x - hz.x, opp.y - hz.y);
+            if (d <= hz.radius + opp.size / 2) {
+              // Enemy touches the crystal wall!
+              hz.remainingFrames = 0; // Shatter & remove
+              soundEvents.push({ frame, sound: 'crystal_shatter', alienType: 'diamondhead', volume: 1.0 });
+
+              // Green emerald crystal shatter particles
+              for (let k = 0; k < 24; k++) {
+                const ang = rng() * Math.PI * 2;
+                const spd = rng() * 12 + 4;
+                particles.push({
+                  x: opp.x,
+                  y: opp.y,
+                  vx: Math.cos(ang) * spd,
+                  vy: Math.sin(ang) * spd,
+                  color: rng() > 0.3 ? '#10b981' : '#34d399',
+                  radius: rng() * 5 + 3,
+                  alpha: 1,
+                });
+              }
+
+              // Freeze enemy for 2 seconds (60 frames at 30 fps)
+              opp.frozenTimer = 60;
+              floatingTexts.push({
+                id: `crz_frz_${frame}_${opp.id}`,
+                x: opp.x,
+                y: opp.y - 45,
+                text: 'FROZEN! (2s)',
+                color: '#10b981',
+                alpha: 1,
+                vy: -2,
+                scale: 1.3,
+              });
+
+              // Track crystal traps for Diamondhead (3rd touch crystal execution)
+              const owner = aliveFighters.find((f) => f.id === hz.ownerId);
+              if (owner) {
+                owner.crystalTrapCount = (owner.crystalTrapCount || 0) + 1;
+                // On the 3rd time (or multiples of 3), Diamondhead throws crystals at trapped enemy!
+                if (owner.crystalTrapCount % 3 === 0) {
+                  const aimAng = Math.atan2(opp.y - owner.y, opp.x - owner.x);
+                  floatingTexts.push({
+                    id: `crz_exec_${frame}_${owner.id}`,
+                    x: owner.x,
+                    y: owner.y - 45,
+                    text: 'CRYSTAL EXECUTION!',
+                    color: '#10b981',
+                    alpha: 1,
+                    vy: -2.5,
+                    scale: 1.4,
+                  });
+                  soundEvents.push({ frame, sound: 'crystal_shatter', alienType: 'diamondhead', volume: 1.0 });
+
+                  // Fire 5 sharp Taydenite crystal shards directly at the frozen enemy
+                  for (let s = -2; s <= 2; s++) {
+                    const spread = s * 0.08;
+                    bullets.push({
+                      x: owner.x + Math.cos(aimAng + spread) * (owner.size / 2 + 15),
+                      y: owner.y + Math.sin(aimAng + spread) * (owner.size / 2 + 15),
+                      vx: Math.cos(aimAng + spread) * 24,
+                      vy: Math.sin(aimAng + spread) * 24,
+                      ownerId: owner.id,
+                      color: '#10b981',
+                      damage: Math.max(14, Math.round((owner.damage || 25) * 0.75)),
+                      life: 45,
+                      bulletType: 'shard',
+                      size: 26,
+                    });
+                  }
+                }
+              }
+              break;
             }
           }
         }

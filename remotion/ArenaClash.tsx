@@ -735,7 +735,8 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
 
       {/* Active Ground Hazard Zones (e.g. Heatblast 3-second fire patch, Diamondhead crystals, Stinkfly acid) */}
       {((current as any).hazardZones || []).map((hz: any) => {
-        const lifePct = Math.max(0.1, hz.remainingFrames / (hz.maxFrames || 90));
+        const isPersistent = (hz.maxFrames || 0) >= 99999;
+        const lifePct = isPersistent ? 1.0 : Math.max(0.1, hz.remainingFrames / (hz.maxFrames || 90));
         return (
           <div
             key={hz.id}
@@ -753,10 +754,16 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                 hz.type === 'fire'
                   ? `radial-gradient(circle, rgba(255, 230, 0, ${0.75 * lifePct}) 0%, rgba(249, 115, 22, ${0.65 * lifePct}) 45%, rgba(239, 68, 68, ${0.45 * lifePct}) 75%, transparent 100%)`
                   : hz.type === 'crystals'
-                  ? `radial-gradient(circle, rgba(16, 185, 129, ${0.55 * lifePct}) 0%, rgba(5, 150, 105, ${0.25 * lifePct}) 60%, transparent 100%)`
+                  ? `radial-gradient(circle, rgba(52, 211, 153, ${0.75 * lifePct}) 0%, rgba(16, 185, 129, ${0.5 * lifePct}) 40%, rgba(5, 150, 105, ${0.25 * lifePct}) 70%, transparent 100%)`
                   : `radial-gradient(circle, rgba(132, 204, 22, ${0.6 * lifePct}) 0%, rgba(101, 163, 13, ${0.35 * lifePct}) 60%, transparent 100%)`,
               filter: hz.type === 'fire' ? 'blur(4px)' : 'none',
-              boxShadow: hz.type === 'fire' ? `0 0 45px rgba(249, 115, 22, ${0.85 * lifePct})` : `0 0 25px ${hz.color}66`,
+              boxShadow:
+                hz.type === 'fire'
+                  ? `0 0 45px rgba(249, 115, 22, ${0.85 * lifePct})`
+                  : hz.type === 'crystals'
+                  ? `0 0 35px #10b981, inset 0 0 20px #34d399`
+                  : `0 0 25px ${hz.color}66`,
+              border: hz.type === 'crystals' ? '3px dashed #10b981' : undefined,
             }}
           />
         );
@@ -1109,15 +1116,16 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
               />
             )}
 
-            {/* --- CANNONBOLT: JAGGED SHARP SILVER ARMOR SHELL --- */}
+            {/* --- CANNONBOLT: JAGGED SHARP SILVER ARMOR SHELL & SPINNING SPIKES --- */}
             {aType === 'cannonbolt' && (
               <div
                 style={{
                   position: 'absolute',
-                  inset: -12,
+                  inset: f.abilityAuraTimer && f.abilityAuraTimer > 0 ? -24 : -12,
                   borderRadius: '50%',
-                  border: '6px dashed #cbd5e1',
-                  boxShadow: '0 0 20px #94a3b8',
+                  border: f.abilityAuraTimer && f.abilityAuraTimer > 0 ? '6px dashed #f59e0b' : '6px dashed #cbd5e1',
+                  boxShadow: f.abilityAuraTimer && f.abilityAuraTimer > 0 ? '0 0 40px #f59e0b, inset 0 0 20px #fbbf24' : '0 0 20px #94a3b8',
+                  transform: f.abilityAuraTimer && f.abilityAuraTimer > 0 ? `rotate(${frame * 18}deg)` : undefined,
                   pointerEvents: 'none',
                   zIndex: -1,
                 }}

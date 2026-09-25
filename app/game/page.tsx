@@ -1651,8 +1651,9 @@ export default function GamePage() {
       // Render Active Arena Ground Hazards (Heatblast 3s Arena Fire, etc.)
       if (current.hazardZones && current.hazardZones.length > 0) {
         current.hazardZones.forEach((hz) => {
-          const lifePct = hz.remainingFrames / hz.maxFrames;
-          const alpha = Math.min(1, lifePct * 1.3);
+          const isPersistent = hz.maxFrames >= 99999;
+          const lifePct = isPersistent ? 1.0 : (hz.remainingFrames / hz.maxFrames);
+          const alpha = isPersistent ? 1.0 : Math.min(1, lifePct * 1.3);
 
           if (hz.type === 'fire') {
             ctx.save();
@@ -1693,18 +1694,41 @@ export default function GamePage() {
             ctx.restore();
           } else if (hz.type === 'crystals') {
             ctx.save();
+            // Glowing emerald ground aura
+            const grad = ctx.createRadialGradient(hz.x, hz.y, 0, hz.x, hz.y, hz.radius);
+            grad.addColorStop(0, `rgba(52, 211, 153, ${0.5 * alpha})`);
+            grad.addColorStop(0.7, `rgba(16, 185, 129, ${0.3 * alpha})`);
+            grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(hz.x, hz.y, hz.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Center large crystal spire
+            ctx.beginPath();
+            ctx.moveTo(hz.x, hz.y - 36);
+            ctx.lineTo(hz.x + 14, hz.y + 14);
+            ctx.lineTo(hz.x, hz.y + 8);
+            ctx.lineTo(hz.x - 14, hz.y + 14);
+            ctx.closePath();
+            ctx.fillStyle = `rgba(52, 211, 153, ${0.95 * alpha})`;
+            ctx.shadowColor = '#10b981';
+            ctx.shadowBlur = 22;
+            ctx.fill();
+
+            // Surrounding sharp crystal spikes (rotating slowly)
             for (let i = 0; i < 7; i++) {
-              const cAng = (i / 7) * Math.PI * 2;
-              const cx = hz.x + Math.cos(cAng) * (hz.radius * 0.5);
-              const cy = hz.y + Math.sin(cAng) * (hz.radius * 0.5);
+              const cAng = (i / 7) * Math.PI * 2 + (curFrame * 0.015);
+              const cx = hz.x + Math.cos(cAng) * (hz.radius * 0.55);
+              const cy = hz.y + Math.sin(cAng) * (hz.radius * 0.55);
               ctx.beginPath();
-              ctx.moveTo(cx, cy - 24);
+              ctx.moveTo(cx, cy - 26);
               ctx.lineTo(cx + 10, cy + 12);
               ctx.lineTo(cx - 10, cy + 12);
               ctx.closePath();
-              ctx.fillStyle = `rgba(16, 185, 129, ${0.8 * alpha})`;
+              ctx.fillStyle = `rgba(16, 185, 129, ${0.9 * alpha})`;
               ctx.shadowColor = '#10b981';
-              ctx.shadowBlur = 15;
+              ctx.shadowBlur = 16;
               ctx.fill();
             }
             ctx.restore();
@@ -2358,12 +2382,15 @@ export default function GamePage() {
         // --- CANNONBOLT: JAGGED SHARP SILVER & YELLOW ARMOR SHELL ---
         else if (aType === 'cannonbolt') {
           ctx.save();
+          // Cannonbolt: when special ability is active, the armor spikes rotate/spin!
+          const isSpecialActive = f.abilityAuraTimer > 0;
+          const spinOffset = isSpecialActive ? (curFrame * 0.38) : 0;
           const numPlates = 14;
           ctx.beginPath();
           for (let i = 0; i <= numPlates; i++) {
-            const baseAngle = (i / numPlates) * Math.PI * 2;
+            const baseAngle = spinOffset + (i / numPlates) * Math.PI * 2;
             const midAngle = baseAngle + Math.PI / numPlates;
-            const outerR = half + 18;
+            const outerR = half + (isSpecialActive ? 26 : 18);
             const innerR = half - 2;
 
             const bx = Math.cos(baseAngle) * innerR;
@@ -2379,36 +2406,37 @@ export default function GamePage() {
 
           const silverGrad = ctx.createLinearGradient(-half, -half, half, half);
           silverGrad.addColorStop(0, '#ffffff');
-          silverGrad.addColorStop(0.35, '#cbd5e1');
-          silverGrad.addColorStop(0.7, '#64748b');
-          silverGrad.addColorStop(1, '#334155');
+          silverGrad.addColorStop(0.35, isSpecialActive ? '#fef08a' : '#cbd5e1');
+          silverGrad.addColorStop(0.7, isSpecialActive ? '#f59e0b' : '#64748b');
+          silverGrad.addColorStop(1, isSpecialActive ? '#b45309' : '#334155');
           ctx.fillStyle = silverGrad;
           ctx.shadowColor = '#f59e0b';
-          ctx.shadowBlur = 18;
+          ctx.shadowBlur = isSpecialActive ? 30 : 18;
           ctx.fill();
-          ctx.lineWidth = 3;
-          ctx.strokeStyle = '#fef08a';
+          ctx.lineWidth = isSpecialActive ? 4 : 3;
+          ctx.strokeStyle = isSpecialActive ? '#fbbf24' : '#fef08a';
           ctx.stroke();
 
-          // Shell rivet studs
+          // Shell rivet studs (spinning in sync with the armor shell)
           for (let i = 0; i < numPlates; i++) {
-            const rAng = (i / numPlates) * Math.PI * 2;
+            const rAng = spinOffset + (i / numPlates) * Math.PI * 2;
             ctx.beginPath();
-            ctx.arc(Math.cos(rAng) * (half + 6), Math.sin(rAng) * (half + 6), 3, 0, Math.PI * 2);
+            ctx.arc(Math.cos(rAng) * (half + (isSpecialActive ? 10 : 6)), Math.sin(rAng) * (half + (isSpecialActive ? 10 : 6)), isSpecialActive ? 4 : 3, 0, Math.PI * 2);
             ctx.fillStyle = '#f59e0b';
             ctx.fill();
           }
 
-          // Heavy Kinetic Impact Forcefield when active!
-          if (f.abilityAuraTimer > 0 || f.invulnerableTimer > 0) {
+          // Heavy Kinetic Impact Forcefield with spinning outer blades when active!
+          if (isSpecialActive) {
             ctx.save();
             ctx.beginPath();
-            ctx.arc(0, 0, half + 24, 0, Math.PI * 2);
+            ctx.arc(0, 0, half + 30, 0, Math.PI * 2);
             ctx.strokeStyle = '#f59e0b';
-            ctx.lineWidth = 7;
+            ctx.lineWidth = 6;
             ctx.shadowColor = '#f59e0b';
-            ctx.shadowBlur = 30;
-            ctx.setLineDash([18, 12]);
+            ctx.shadowBlur = 32;
+            ctx.setLineDash([16, 10]);
+            ctx.lineDashOffset = -curFrame * 8;
             ctx.stroke();
             ctx.restore();
           }
