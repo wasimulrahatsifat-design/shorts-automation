@@ -24,6 +24,7 @@ import {
   BEN10_DEFAULT_ABILITIES,
   AlienType,
   getAlienType,
+  getAbilityStatus,
 } from '../../lib/arena-physics';
 
 export { SPECIAL_POWERS, COLOR_SWATCHES };
@@ -1003,7 +1004,8 @@ export default function GamePage() {
         if (f.isDead) return;
 
         const half = f.size / 2;
-        const isCharged = (f.energyCharge || 0) >= 100 || f.specialMoveReady;
+        const abilityStatus = getAbilityStatus(f);
+        const isCharged = abilityStatus.isReady;
         const aType = getAlienType(f);
         const curFrame = currentFrameRef.current;
 
@@ -2006,16 +2008,17 @@ export default function GamePage() {
       ctx.save();
       ctx.translate(x, y);
 
-      const isCharged = (f.energyCharge ?? 0) >= 100;
+      const abilityStatus = getAbilityStatus(f);
+      const isReady = abilityStatus.isReady;
 
       // Card Background (Dark Ben 10 Omnitrix Theme)
       ctx.beginPath();
       ctx.roundRect(0, 0, colWidth, cardHeight, 18);
       ctx.fillStyle = f.isDead ? 'rgba(5, 12, 8, 0.45)' : 'rgba(4, 18, 10, 0.94)';
       ctx.fill();
-      ctx.lineWidth = f.isDead ? 1 : isCharged ? 3.5 : 2;
-      ctx.strokeStyle = f.isDead ? '#1e293b' : isCharged ? '#00ff66' : f.color;
-      if (isCharged && !f.isDead) {
+      ctx.lineWidth = f.isDead ? 1 : isReady ? 3.5 : 2;
+      ctx.strokeStyle = f.isDead ? '#1e293b' : isReady ? '#00ff66' : f.color;
+      if (isReady && !f.isDead) {
         ctx.shadowColor = '#00ff66';
         ctx.shadowBlur = 16;
       }
@@ -2057,7 +2060,7 @@ export default function GamePage() {
       ctx.beginPath();
       ctx.arc(12 + thumbSize / 2, 12 + thumbSize / 2, thumbSize / 2, 0, Math.PI * 2);
       ctx.lineWidth = 2.5;
-      ctx.strokeStyle = f.isDead ? '#475569' : isCharged ? '#00ff66' : f.color;
+      ctx.strokeStyle = f.isDead ? '#475569' : isReady ? '#00ff66' : f.color;
       ctx.stroke();
 
       const textX = thumbSize + (isDual ? 28 : 22);
@@ -2143,20 +2146,21 @@ export default function GamePage() {
         ctx.fillText(`MOVE: ${f.specialAbility.name.toUpperCase()}`, colWidth - 16, midRowY + badgeH / 2);
       }
 
-      // 3. Bottom Row: Omnitrix Energy Charge Bar & Percentage
+      // 3. Bottom Row: Special Ability Trigger Gauge & Readiness
       const energyRowY = isDual ? 122 : 84;
       const energyBarH = isDual ? 12 : 8;
-      const energy = Math.round(f.energyCharge ?? 0);
+      const gaugeLabel = abilityStatus.label;
+      const gaugePct = abilityStatus.progress;
 
       // Label on left
       ctx.font = `900 ${isDual ? 16 : 11}px "Montserrat", sans-serif`;
       ctx.fillStyle = '#94a3b8';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText('CHARGE', barX, energyRowY + energyBarH / 2);
+      ctx.fillText(gaugeLabel, barX, energyRowY + energyBarH / 2);
 
       // Bar in center
-      const labelW = isDual ? 80 : 54;
+      const labelW = isDual ? Math.max(90, ctx.measureText(gaugeLabel).width + 16) : Math.max(65, ctx.measureText(gaugeLabel).width + 10);
       const valW = isDual ? 90 : 66;
       const chargeBarX = barX + labelW;
       const chargeBarW = colWidth - chargeBarX - valW;
@@ -2169,11 +2173,11 @@ export default function GamePage() {
       ctx.strokeStyle = 'rgba(0, 255, 102, 0.3)';
       ctx.stroke();
 
-      if (!f.isDead && energy > 0) {
+      if (!f.isDead && gaugePct > 0) {
         ctx.beginPath();
-        ctx.roundRect(chargeBarX, energyRowY, chargeBarW * (Math.min(100, energy) / 100), energyBarH, energyBarH / 2);
-        ctx.fillStyle = isCharged ? '#00ff66' : '#10b981';
-        if (isCharged) {
+        ctx.roundRect(chargeBarX, energyRowY, chargeBarW * (Math.min(100, gaugePct) / 100), energyBarH, energyBarH / 2);
+        ctx.fillStyle = isReady ? '#00ff66' : '#10b981';
+        if (isReady) {
           ctx.shadowColor = '#00ff66';
           ctx.shadowBlur = 10;
         }
@@ -2181,16 +2185,16 @@ export default function GamePage() {
         ctx.shadowBlur = 0;
       }
 
-      // Energy text on right
+      // Gauge text on right
       ctx.font = `900 ${isDual ? 20 : 13}px "Montserrat", sans-serif`;
-      ctx.fillStyle = isCharged ? '#00ff66' : '#a7f3d0';
+      ctx.fillStyle = isReady ? '#00ff66' : '#a7f3d0';
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
-      if (isCharged) {
+      if (isReady) {
         ctx.shadowColor = '#00ff66';
         ctx.shadowBlur = 10;
       }
-      ctx.fillText(isCharged ? 'READY!' : `${energy}%`, colWidth - 16, energyRowY + energyBarH / 2);
+      ctx.fillText(isReady ? 'READY!' : `${gaugePct}%`, colWidth - 16, energyRowY + energyBarH / 2);
       ctx.shadowBlur = 0;
 
       ctx.restore();

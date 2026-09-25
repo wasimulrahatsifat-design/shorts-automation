@@ -8,6 +8,7 @@ import {
   SpecialAbility,
   AlienType,
   getAlienType,
+  getAbilityStatus,
 } from '../lib/arena-physics';
 
 export interface ArenaClashData {
@@ -251,8 +252,8 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
       if (f.frozenTimer > 0) itemTag += ' [FROZEN]';
 
       const ab = f.specialAbility;
-      const energy = Math.round(f.energyCharge || 0);
-      const isCharged = energy >= 100 || f.specialMoveReady;
+      const abilityStatus = getAbilityStatus(f);
+      const isCharged = abilityStatus.isReady;
       const currentDmg = f.hasDagger ? Math.round((f.damage || 20) * 2) : Math.round(f.damage || 20);
 
       const thumbSize = isDual ? cardHeight - 24 : cardHeight - 20;
@@ -413,9 +414,10 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                   color: '#94a3b8',
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px',
+                  whiteSpace: 'nowrap',
                 }}
               >
-                CHARGE
+                {abilityStatus.label}
               </span>
               <div
                 style={{
@@ -429,7 +431,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
               >
                 <div
                   style={{
-                    width: `${Math.min(100, energy)}%`,
+                    width: `${Math.min(100, abilityStatus.progress)}%`,
                     height: '100%',
                     backgroundColor: isCharged ? '#00ff66' : '#10b981',
                     boxShadow: isCharged ? '0 0 10px #00ff66' : 'none',
@@ -446,7 +448,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                   textShadow: isCharged ? '0 0 10px #00ff66' : 'none',
                 }}
               >
-                {isCharged ? 'READY!' : `${energy}%`}
+                {isCharged ? 'READY!' : `${abilityStatus.progress}%`}
               </span>
             </div>
           </div>
@@ -849,7 +851,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
 
         const isAbilityActive = f.abilityAuraTimer > 0;
         const isFrozen = f.frozenTimer > 0;
-        const isCharged = (f.energyCharge || 0) >= 100 || f.specialMoveReady;
+        const isCharged = getAbilityStatus(f).isReady;
         const half = f.size / 2;
 
         return (

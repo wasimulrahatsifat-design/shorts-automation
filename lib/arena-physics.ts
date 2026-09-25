@@ -31,6 +31,72 @@ export function getAlienType(f?: { id?: string; name?: string; special_power?: s
   return 'normal';
 }
 
+export interface AbilityStatus {
+  label: string;
+  progress: number;
+  isReady: boolean;
+}
+
+export function getAbilityStatus(f: SimFighter): AbilityStatus {
+  const ab = f.specialAbility;
+  const triggerType = ab?.trigger_type || 'charge';
+  const triggerVal = ab?.trigger_value !== undefined ? ab.trigger_value : (triggerType === 'charge' ? 100 : triggerType === 'hp_threshold' ? 50 : 4);
+
+  let label = 'CHARGE';
+  let progress = 0;
+  let isReady = false;
+
+  if (triggerType === 'charge') {
+    label = 'CHARGE';
+    progress = Math.min(100, Math.round(f.energyCharge || 0));
+    isReady = progress >= 100 || f.specialMoveReady;
+  } else if (triggerType === 'hp_threshold') {
+    label = `RAGE <${triggerVal}%`;
+    const thresholdHp = (f.maxHealth * triggerVal) / 100;
+    if (f.health <= thresholdHp) {
+      if (f.abilityCooldownTimer <= 0) {
+        progress = 100;
+        isReady = true;
+      } else {
+        const cdMax = f.abilityCooldownMax || 150;
+        progress = Math.min(99, Math.round(((cdMax - f.abilityCooldownTimer) / cdMax) * 100));
+        isReady = false;
+      }
+    } else {
+      const hpOver = f.health - thresholdHp;
+      const totalOver = Math.max(1, f.maxHealth - thresholdHp);
+      progress = Math.max(0, Math.min(99, Math.round((1 - hpOver / totalOver) * 100)));
+      isReady = false;
+    }
+  } else if (triggerType === 'hit_combo') {
+    label = `COMBO ${f.hitCombo || 0}/${triggerVal}`;
+    if ((f.hitCombo || 0) >= triggerVal && f.abilityCooldownTimer <= 0) {
+      progress = 100;
+      isReady = true;
+    } else {
+      progress = Math.min(99, Math.round(((f.hitCombo || 0) / triggerVal) * 100));
+      isReady = false;
+    }
+  } else if (triggerType === 'cooldown') {
+    label = 'COOLDOWN';
+    const cdMax = f.abilityCooldownMax || 150;
+    if (f.abilityCooldownTimer <= 0) {
+      progress = 100;
+      isReady = true;
+    } else {
+      progress = Math.min(99, Math.round(((cdMax - f.abilityCooldownTimer) / cdMax) * 100));
+      isReady = false;
+    }
+  }
+
+  if (f.specialMoveReady) {
+    isReady = true;
+    progress = 100;
+  }
+
+  return { label, progress, isReady };
+}
+
 export interface SpecialAbility {
   name: string;             // e.g., "Sonic Clap", "Supernova Inferno"
   icon: string;             // Clean text label (no emojis)
@@ -571,10 +637,14 @@ export function generateArenaSimulation(
         const triggerType = ab.trigger_type || 'charge';
         const triggerVal = ab.trigger_value !== undefined ? ab.trigger_value : (triggerType === 'charge' ? 100 : triggerType === 'hp_threshold' ? 50 : 4);
 
+        if (!f.isDead && (f.energyCharge || 0) < 100) {
+          f.energyCharge = Math.min(100, (f.energyCharge || 0) + 0.15);
+        }
+
         // Check if criteria is satisfied
         let isTriggerReady = false;
         if (triggerType === 'charge') {
-          isTriggerReady = f.energyCharge >= 100 && f.abilityCooldownTimer <= 0;
+          isTriggerReady = f.energyCharge >= 100;
         } else if (triggerType === 'hp_threshold') {
           isTriggerReady = f.health <= (f.maxHealth * triggerVal) / 100 && f.abilityCooldownTimer <= 0;
         } else if (triggerType === 'hit_combo') {
@@ -840,9 +910,71 @@ export function generateArenaSimulation(
               size: 38,
             });
           } else {
-            // Generic Fallback
-            f.abilityAuraTimer = 45;
+            // Generic Fallback for custom or non-preset fighters
+            f.abilityAuraTimer = 60;
             f.abilityAuraColor = f.color;
+
+            if (ab.type === 'shield') {
+              f.bonusShield = Math.round(abilityPower * 1.5) || 50;
+              soundEvents.push({ frame, sound: 'ability', abilityType: 'shield', volume: 0.9 });
+              floatingTexts.push({
+                id: `shd_${frame}_${f.id}`,
+                x: f.x,
+                y: f.y - 40,
+                text: `SHIELD +${f.bonusShield}`,
+                color: '#10b981',
+                alpha: 1,
+                vy: -2.2,
+                scale: 1.25,
+              });
+            } else if (ab.type === 'heal') {
+              const healAmt = Math.round(abilityPower) || 35;
+              f.health = Math.min(f.maxHealth, f.health + healAmt);
+              soundEvents.push({ frame, sound: 'item', volume: 0.9 });
+              floatingTexts.push({
+                id: `heal_${frame}_${f.id}`,
+                x: f.x,
+                y: f.y - 40,
+                text: `+${healAmt} HP`,
+                color: '#22c55e',
+                alpha: 1,
+                vy: -2.2,
+                scale: 1.25,
+              });
+            } else if (ab.type === 'speed') {
+              f.speedBoostTimer = 100;
+              f.vx = Math.cos(targetAngle) * 22;
+              f.vy = Math.sin(targetAngle) * 22;
+              soundEvents.push({ frame, sound: 'ability', abilityType: 'speed', volume: 1.0 });
+            } else if (ab.type === 'freeze') {
+              nearestOpp.frozenTimer = 65;
+              soundEvents.push({ frame, sound: 'ability', abilityType: 'freeze', volume: 0.9 });
+              floatingTexts.push({
+                id: `frz_${frame}_${nearestOpp.id}`,
+                x: nearestOpp.x,
+                y: nearestOpp.y - 40,
+                text: 'FROZEN!',
+                color: '#38bdf8',
+                alpha: 1,
+                vy: -2.0,
+                scale: 1.25,
+              });
+            } else {
+              // Default: Damage Blast Projectile
+              soundEvents.push({ frame, sound: 'ability', abilityType: 'damage', volume: 1.0 });
+              bullets.push({
+                x: f.x + Math.cos(targetAngle) * (f.size / 2 + 18),
+                y: f.y + Math.sin(targetAngle) * (f.size / 2 + 18),
+                vx: Math.cos(targetAngle) * 20,
+                vy: Math.sin(targetAngle) * 20,
+                ownerId: f.id,
+                color: f.color || '#00ff66',
+                damage: Math.round(abilityPower),
+                life: 55,
+                bulletType: 'shockwave',
+                size: 38,
+              });
+            }
           }
         }
       });
