@@ -74,8 +74,9 @@ const resolveSoundUrl = (sound: string, abilityType?: string) => {
       return staticFile('audio/omnitrix_slam.wav');
     case 'hero_time':
       return staticFile('audio/its_hero_time.mp3');
-    case 'sonic_clap':
     case 'fireblast':
+      return staticFile('audio/fireblast.wav');
+    case 'sonic_clap':
     case 'cannon_roll':
     case 'predator_roar':
       return staticFile('audio/explosion.wav');
@@ -1072,6 +1073,20 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                   borderRadius: '50%',
                   boxShadow: '0 0 30px #00f0ff, inset 0 0 18px #0284c7',
                   border: '2px dashed #38bdf8',
+                  pointerEvents: 'none',
+                  zIndex: -1,
+                }}
+              />
+            )}
+            {/* --- XLR8: ACTIVE WIND FUNNEL CYCLONE VORTEX --- */}
+            {aType === 'xlr8' && ((f.abilityAuraTimer && f.abilityAuraTimer > 0) || (f.speedBoostTimer && f.speedBoostTimer > 0)) && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: -28,
+                  borderRadius: '50%',
+                  border: '4px dashed #38bdf8',
+                  boxShadow: '0 0 50px #00f0ff, inset 0 0 30px #0284c7',
                   pointerEvents: 'none',
                   zIndex: -1,
                 }}

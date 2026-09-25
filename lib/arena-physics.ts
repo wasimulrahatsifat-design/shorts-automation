@@ -931,6 +931,16 @@ export function generateArenaSimulation(
             f.vx = Math.cos(targetAngle) * 22;
             f.vy = Math.sin(targetAngle) * 22;
             soundEvents.push({ frame, sound: 'wind_tornado', alienType: 'xlr8', volume: 1.0 });
+            floatingTexts.push({
+              id: `wf_${frame}_${f.id}`,
+              x: f.x,
+              y: f.y - 45,
+              text: 'WIND FUNNEL!',
+              color: '#38bdf8',
+              alpha: 1,
+              vy: -2,
+              scale: 1.3,
+            });
 
             for (let k = 0; k < 18; k++) {
               const ang = (k / 18) * Math.PI * 2;
@@ -1125,6 +1135,16 @@ export function generateArenaSimulation(
               f.vx = Math.cos(targetAngle) * 22;
               f.vy = Math.sin(targetAngle) * 22;
               soundEvents.push({ frame, sound: 'wind_tornado', alienType: 'xlr8', volume: 1.0 });
+              floatingTexts.push({
+                id: `wf_${frame}_${f.id}`,
+                x: f.x,
+                y: f.y - 45,
+                text: 'WIND FUNNEL!',
+                color: '#38bdf8',
+                alpha: 1,
+                vy: -2,
+                scale: 1.3,
+              });
             } else if (ab.type === 'freeze') {
               nearestOpp.frozenTimer = 65;
               soundEvents.push({ frame, sound: 'ghost_wail', alienType: 'ghostfreak', volume: 1.0 });
@@ -1384,11 +1404,21 @@ export function generateArenaSimulation(
         if (t.id === b.ownerId) continue;
         if (t.invulnerableTimer > 0) continue; // Phased through intangible fighter!
         if (Math.hypot(t.x - b.x, t.y - b.y) < t.size / 2 + (b.size ? b.size / 3 : 5)) {
-          t.health = Math.max(0, t.health - b.damage);
+          const shooter = aliveFighters.find((sf) => sf.id === b.ownerId);
+          let bulletDmg = b.damage;
+
+          // XLR8 Wind Funnel damage modifiers on projectiles
+          if (shooter && getAlienType(shooter) === 'xlr8' && (shooter.abilityAuraTimer > 0 || shooter.speedBoostTimer > 0)) {
+            bulletDmg = Math.round(bulletDmg * 1.5);
+          }
+          if (getAlienType(t) === 'xlr8' && (t.abilityAuraTimer > 0 || t.speedBoostTimer > 0)) {
+            bulletDmg = Math.round(bulletDmg * 0.5);
+          }
+
+          t.health = Math.max(0, t.health - bulletDmg);
           t.hitFlash = 14;
 
           // Credit shooter with hit combo
-          const shooter = aliveFighters.find((sf) => sf.id === b.ownerId);
           if (shooter) {
             shooter.hitCombo = (shooter.hitCombo || 0) + 1;
           }
@@ -1398,12 +1428,18 @@ export function generateArenaSimulation(
           t.vx += (b.vx / bDist) * 8;
           t.vy += (b.vy / bDist) * 8;
 
-          soundEvents.push({ frame, sound: 'hit', volume: 0.8 });
+          const isFireBullet = shooter && getAlienType(shooter) === 'heatblast';
+          soundEvents.push({
+            frame,
+            sound: isFireBullet ? 'fireblast' : 'hit',
+            alienType: isFireBullet ? 'heatblast' : undefined,
+            volume: 0.85,
+          });
           floatingTexts.push({
             id: `b_${frame}_${i}`,
             x: t.x,
             y: t.y - 35,
-            text: `-${b.damage}`,
+            text: `-${bulletDmg}`,
             color: b.color || '#ef4444',
             alpha: 1,
             vy: -2.4,
@@ -1489,6 +1525,7 @@ export function generateArenaSimulation(
               if (aAlien === 'heatblast') {
                 dmgA += Math.round(A.damage * 0.6) || 20; // Burning impact
                 floatingTexts.push({ id: `fire_${frame}_${B.id}`, x: B.x, y: B.y - 45, text: 'FIRE BLAST!', color: '#ea580c', alpha: 1, vy: -2, scale: 1.1 });
+                soundEvents.push({ frame, sound: 'fireblast', alienType: 'heatblast', volume: 0.85 });
               } else if (aAlien === 'cannonbolt') {
                 dmgA += Math.round(A.damage * 0.75) || 25; // Armored kinetic impact
                 B.vx += nx * 14; B.vy += ny * 14;
@@ -1508,6 +1545,7 @@ export function generateArenaSimulation(
               if (bAlien === 'heatblast') {
                 dmgB += Math.round(B.damage * 0.6) || 20;
                 floatingTexts.push({ id: `fire_${frame}_${A.id}`, x: A.x, y: A.y - 45, text: 'FIRE BLAST!', color: '#ea580c', alpha: 1, vy: -2, scale: 1.1 });
+                soundEvents.push({ frame, sound: 'fireblast', alienType: 'heatblast', volume: 0.85 });
               } else if (bAlien === 'cannonbolt') {
                 dmgB += Math.round(B.damage * 0.75) || 25;
                 A.vx -= nx * 14; A.vy -= ny * 14;
@@ -1521,6 +1559,23 @@ export function generateArenaSimulation(
                 A.bonusShield = 0; A.hasShield = false;
                 floatingTexts.push({ id: `jaw_${frame}_${A.id}`, x: A.x, y: A.y - 45, text: 'PIERCE CRUSH!', color: '#06b6d4', alpha: 1, vy: -2, scale: 1.2 });
               }
+            }
+
+            // XLR8 Wind Funnel: deals 1.5x damage, and takes 50% less damage (incoming dmg reduced by 50%)
+            const aInWindFunnel = aAlien === 'xlr8' && (A.abilityAuraTimer > 0 || A.speedBoostTimer > 0);
+            const bInWindFunnel = bAlien === 'xlr8' && (B.abilityAuraTimer > 0 || B.speedBoostTimer > 0);
+
+            if (aInWindFunnel) {
+              dmgA = Math.round(dmgA * 1.5);
+              dmgB = Math.round(dmgB * 0.5);
+              floatingTexts.push({ id: `wf_atk_${frame}_${B.id}`, x: B.x, y: B.y - 45, text: 'WIND FUNNEL 1.5X!', color: '#38bdf8', alpha: 1, vy: -2, scale: 1.15 });
+              floatingTexts.push({ id: `wf_def_${frame}_${A.id}`, x: A.x, y: A.y - 30, text: 'FUNNEL GUARD -50%', color: '#0284c7', alpha: 1, vy: -2, scale: 1 });
+            }
+            if (bInWindFunnel) {
+              dmgB = Math.round(dmgB * 1.5);
+              dmgA = Math.round(dmgA * 0.5);
+              floatingTexts.push({ id: `wf_atk_${frame}_${A.id}`, x: A.x, y: A.y - 45, text: 'WIND FUNNEL 1.5X!', color: '#38bdf8', alpha: 1, vy: -2, scale: 1.15 });
+              floatingTexts.push({ id: `wf_def_${frame}_${B.id}`, x: B.x, y: B.y - 30, text: 'FUNNEL GUARD -50%', color: '#0284c7', alpha: 1, vy: -2, scale: 1 });
             }
 
             // Diamondhead reflection
@@ -1674,7 +1729,11 @@ export function generateArenaSimulation(
           if (opp.id !== hz.ownerId) {
             const d = Math.hypot(opp.x - hz.x, opp.y - hz.y);
             if (d <= hz.radius) {
-              opp.health = Math.max(0, opp.health - (hz.damagePerFrame || 0.35));
+              let hzDmg = hz.damagePerFrame || 0.35;
+              if (getAlienType(opp) === 'xlr8' && (opp.abilityAuraTimer > 0 || opp.speedBoostTimer > 0)) {
+                hzDmg *= 0.5; // XLR8 in wind funnel takes 50% less hazard damage
+              }
+              opp.health = Math.max(0, opp.health - hzDmg);
               opp.hitFlash = Math.max(opp.hitFlash, 4);
             }
           }
@@ -1696,7 +1755,11 @@ export function generateArenaSimulation(
           if (opp.id !== hz.ownerId) {
             const d = Math.hypot(opp.x - hz.x, opp.y - hz.y);
             if (d <= hz.radius) {
-              opp.health = Math.max(0, opp.health - (hz.damagePerFrame || 0.25));
+              let hzDmg = hz.damagePerFrame || 0.25;
+              if (getAlienType(opp) === 'xlr8' && (opp.abilityAuraTimer > 0 || opp.speedBoostTimer > 0)) {
+                hzDmg *= 0.5; // XLR8 in wind funnel takes 50% less hazard damage
+              }
+              opp.health = Math.max(0, opp.health - hzDmg);
               opp.hitFlash = Math.max(opp.hitFlash, 3);
             }
           }

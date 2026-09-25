@@ -836,13 +836,13 @@ export default function GamePage() {
       return;
     }
 
-    if (type === 'omnitrix_open' || type === 'omnitrix_turn' || type === 'omnitrix_slam') {
+    if (type === 'omnitrix_open' || type === 'omnitrix_turn' || type === 'omnitrix_slam' || type === 'fireblast') {
       try {
         const audio = new Audio(`/audio/${type}.wav?v=${Date.now()}`);
         audio.volume = Math.min(1, soundVolume * 1.0);
         audio.play().catch(() => {});
       } catch (e) {}
-      return;
+      if (type !== 'fireblast') return;
     }
 
     // Remap any generic ability event to authentic sound
@@ -984,44 +984,48 @@ export default function GamePage() {
         oscBoom.start();
         oscBoom.stop(ctx.currentTime + 0.55);
       } else if (type === 'fireblast') {
-        // HEATBLAST: ROARING FIREBLAST WHOOSH
-        const bufferSize = Math.round(ctx.sampleRate * 0.65);
+        // HEATBLAST: ROARING BLAZING WHOOSH & FIRE CRACKLE SYNTHESIS FALLBACK
+        const bufferSize = Math.round(ctx.sampleRate * 0.85);
         const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
         const data = buffer.getChannelData(0);
         for (let i = 0; i < bufferSize; i++) {
-          data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.22));
+          const t = i / ctx.sampleRate;
+          const env = t < 0.05 ? t / 0.05 : Math.exp(-(t - 0.05) / 0.35);
+          const noise = (Math.random() * 2 - 1);
+          const pop = Math.random() < 0.015 ? (Math.random() * 2 - 1) * 0.8 : 0;
+          data[i] = (noise * 0.7 + pop) * env;
         }
-        const noise = ctx.createBufferSource();
-        noise.buffer = buffer;
+        const noiseSource = ctx.createBufferSource();
+        noiseSource.buffer = buffer;
 
         const filter = ctx.createBiquadFilter();
-        filter.type = 'bandpass';
-        filter.frequency.setValueAtTime(320, ctx.currentTime);
-        filter.frequency.linearRampToValueAtTime(780, ctx.currentTime + 0.15);
-        filter.frequency.exponentialRampToValueAtTime(140, ctx.currentTime + 0.65);
-        filter.Q.value = 2.4;
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(650, ctx.currentTime);
+        filter.frequency.linearRampToValueAtTime(1400, ctx.currentTime + 0.12);
+        filter.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.85);
 
         const gain = ctx.createGain();
-        gain.gain.setValueAtTime(0.9 * soundVolume, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.65);
+        gain.gain.setValueAtTime(1.0 * soundVolume, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.85);
 
-        noise.connect(filter);
+        noiseSource.connect(filter);
         filter.connect(gain);
         gain.connect(ctx.destination);
-        noise.start();
-        noise.stop(ctx.currentTime + 0.65);
+        noiseSource.start();
+        noiseSource.stop(ctx.currentTime + 0.85);
 
-        const oscWhoosh = ctx.createOscillator();
-        const gainWhoosh = ctx.createGain();
-        oscWhoosh.type = 'sine';
-        oscWhoosh.frequency.setValueAtTime(160, ctx.currentTime);
-        oscWhoosh.frequency.exponentialRampToValueAtTime(45, ctx.currentTime + 0.5);
-        gainWhoosh.gain.setValueAtTime(0.65 * soundVolume, ctx.currentTime);
-        gainWhoosh.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-        oscWhoosh.connect(gainWhoosh);
-        gainWhoosh.connect(ctx.destination);
-        oscWhoosh.start();
-        oscWhoosh.stop(ctx.currentTime + 0.5);
+        // Low sub-bass flame roar
+        const oscSub = ctx.createOscillator();
+        const gainSub = ctx.createGain();
+        oscSub.type = 'sawtooth';
+        oscSub.frequency.setValueAtTime(110, ctx.currentTime);
+        oscSub.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + 0.6);
+        gainSub.gain.setValueAtTime(0.4 * soundVolume, ctx.currentTime);
+        gainSub.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+        oscSub.connect(gainSub);
+        gainSub.connect(ctx.destination);
+        oscSub.start();
+        oscSub.stop(ctx.currentTime + 0.6);
       } else if (type === 'wind_tornado') {
         // XLR8: HYPERSPEED CYCLONE TORNADO WIND ROAR (REALISTIC AIR TURBULENCE - NO TONAL BEEP)
         const bufferSize = Math.round(ctx.sampleRate * 0.85);
