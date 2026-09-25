@@ -206,19 +206,20 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
   const renderHealthBars = () => {
     const startY = ARENA_BOX.bottom + 25; // 1305
     const count = fighters.length;
-    const colWidth = 470;
-    const leftX = 45;
-    const rightX = width - colWidth - 45;
+    const isDual = count === 2;
+    const colWidth = isDual ? width - 80 : 475;
+    const leftX = isDual ? 40 : 35;
+    const rightX = isDual ? 40 : width - colWidth - 35;
     const rows = Math.ceil(count / 2);
-    const rowHeight = Math.min(125, 570 / Math.max(rows, 2));
+    const cardHeight = isDual ? 160 : Math.min(145, 570 / Math.max(rows, 2));
 
     return fighters.map((f, idx) => {
       let x = leftX;
       let y = startY;
 
-      if (count === 2) {
-        x = idx === 0 ? leftX : rightX;
-        y = startY + 40;
+      if (isDual) {
+        x = leftX;
+        y = startY + 15 + idx * (cardHeight + 20);
       } else if (count === 3) {
         if (idx === 0) {
           x = leftX;
@@ -228,13 +229,13 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
           y = startY;
         } else {
           x = (width - colWidth) / 2;
-          y = startY + rowHeight + 15;
+          y = startY + cardHeight + 20;
         }
       } else {
         const isRight = idx % 2 === 1;
         const row = Math.floor(idx / 2);
         x = isRight ? rightX : leftX;
-        y = startY + row * rowHeight;
+        y = startY + row * (cardHeight + 16);
       }
 
       const hpPct = Math.max(0, f.health / f.maxHealth);
@@ -254,6 +255,8 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
       const isCharged = energy >= 100 || f.specialMoveReady;
       const currentDmg = f.hasDagger ? Math.round((f.damage || 20) * 2) : Math.round(f.damage || 20);
 
+      const thumbSize = isDual ? cardHeight - 24 : cardHeight - 20;
+
       return (
         <div
           key={f.id}
@@ -262,15 +265,15 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
             left: x,
             top: y,
             width: colWidth,
-            height: rowHeight - 8,
+            height: cardHeight,
             borderRadius: 18,
             backgroundColor: f.isDead ? 'rgba(5, 15, 10, 0.45)' : 'rgba(3, 16, 8, 0.95)',
             border: `3px solid ${f.isDead ? '#1e293b' : isCharged ? '#00ff66' : f.color}`,
             display: 'flex',
             alignItems: 'center',
-            padding: '10px 14px',
+            padding: isDual ? '14px 18px' : '10px 14px',
             boxSizing: 'border-box',
-            gap: 14,
+            gap: isDual ? 20 : 14,
             overflow: 'hidden',
             boxShadow: f.isDead
               ? 'none'
@@ -282,8 +285,8 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
           {/* Avatar Spherical Thumbnail */}
           <div
             style={{
-              width: rowHeight - 28,
-              height: rowHeight - 28,
+              width: thumbSize,
+              height: thumbSize,
               borderRadius: '50%',
               backgroundColor: f.color,
               overflow: 'hidden',
@@ -291,8 +294,8 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              border: `2px solid ${isCharged ? '#00ff66' : '#ffffff'}`,
-              boxShadow: `0 0 14px ${f.color}88`,
+              border: `2.5px solid ${isCharged ? '#00ff66' : '#ffffff'}`,
+              boxShadow: `0 0 16px ${f.color}88`,
             }}
           >
             {f.image_url ? (
@@ -302,7 +305,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                 style={{
                   color: f.color === '#ffffff' ? '#000' : '#fff',
                   fontWeight: 900,
-                  fontSize: 26,
+                  fontSize: isDual ? 36 : 26,
                 }}
               >
                 {f.name.charAt(0).toUpperCase()}
@@ -311,20 +314,20 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
           </div>
 
           {/* Info & Bars */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: isDual ? 8 : 5 }}>
             {/* Top Row: Alien Name & Live HP */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span
                 style={{
                   color: f.isDead ? '#64748b' : '#ffffff',
                   fontWeight: 900,
-                  fontSize: count <= 4 ? 22 : 18,
+                  fontSize: isDual ? 28 : 20,
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
-                  maxWidth: 210,
+                  maxWidth: isDual ? 500 : 210,
                   textShadow: '0 2px 8px rgba(0,0,0,0.9)',
                 }}
               >
@@ -334,8 +337,8 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                 style={{
                   color: f.isDead ? '#ef4444' : '#00ff66',
                   fontWeight: 900,
-                  fontSize: count <= 4 ? 20 : 17,
-                  textShadow: '0 0 10px rgba(0, 255, 102, 0.7)',
+                  fontSize: isDual ? 28 : 19,
+                  textShadow: '0 0 12px rgba(0, 255, 102, 0.7)',
                 }}
               >
                 {f.isDead ? 'ELIMINATED' : `${Math.round(f.health)} HP`}
@@ -346,10 +349,10 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
             <div
               style={{
                 width: '100%',
-                height: 12,
-                borderRadius: 6,
+                height: isDual ? 16 : 12,
+                borderRadius: isDual ? 8 : 6,
                 backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
                 overflow: 'hidden',
                 position: 'relative',
               }}
@@ -358,9 +361,9 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                 style={{
                   width: `${hpPct * 100}%`,
                   height: '100%',
-                  borderRadius: 6,
+                  borderRadius: isDual ? 8 : 6,
                   backgroundColor: hpColor,
-                  boxShadow: `0 0 10px ${hpColor}`,
+                  boxShadow: `0 0 12px ${hpColor}`,
                 }}
               />
             </div>
@@ -369,12 +372,12 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 1 }}>
               <span
                 style={{
-                  fontSize: 13,
+                  fontSize: isDual ? 20 : 13,
                   fontWeight: 900,
                   color: '#facc15',
-                  backgroundColor: 'rgba(250, 204, 21, 0.15)',
-                  border: '1px solid rgba(250, 204, 21, 0.4)',
-                  padding: '1px 8px',
+                  backgroundColor: 'rgba(250, 204, 21, 0.18)',
+                  border: '1.5px solid rgba(250, 204, 21, 0.5)',
+                  padding: isDual ? '3px 12px' : '1px 8px',
                   borderRadius: 6,
                   letterSpacing: '0.5px',
                 }}
@@ -385,7 +388,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
               {ab && (
                 <span
                   style={{
-                    fontSize: 12,
+                    fontSize: isDual ? 18 : 12,
                     fontWeight: 800,
                     color: '#38bdf8',
                     textTransform: 'uppercase',
@@ -393,7 +396,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
-                    maxWidth: 160,
+                    maxWidth: isDual ? 400 : 160,
                   }}
                 >
                   MOVE: {ab.name}
@@ -402,11 +405,11 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
             </div>
 
             {/* Bottom Row: Omnitrix Energy Charge Bar & Percentage */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 1 }}>
               <span
                 style={{
-                  fontSize: 11,
-                  fontWeight: 800,
+                  fontSize: isDual ? 16 : 11,
+                  fontWeight: 900,
                   color: '#94a3b8',
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px',
@@ -417,10 +420,10 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
               <div
                 style={{
                   flex: 1,
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: 'rgba(0, 20, 10, 0.85)',
-                  border: '1px solid rgba(0, 255, 102, 0.2)',
+                  height: isDual ? 12 : 8,
+                  borderRadius: isDual ? 6 : 4,
+                  backgroundColor: 'rgba(0, 20, 10, 0.9)',
+                  border: '1px solid rgba(0, 255, 102, 0.3)',
                   overflow: 'hidden',
                 }}
               >
@@ -435,12 +438,12 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
               </div>
               <span
                 style={{
-                  fontSize: 13,
+                  fontSize: isDual ? 20 : 13,
                   fontWeight: 900,
                   color: isCharged ? '#00ff66' : '#a7f3d0',
                   textTransform: 'uppercase',
                   whiteSpace: 'nowrap',
-                  textShadow: isCharged ? '0 0 8px #00ff66' : 'none',
+                  textShadow: isCharged ? '0 0 10px #00ff66' : 'none',
                 }}
               >
                 {isCharged ? 'READY!' : `${energy}%`}

@@ -1971,19 +1971,20 @@ export default function GamePage() {
   const drawLiveHealthBars = (ctx: CanvasRenderingContext2D, fighters: SimFighter[], width: number) => {
     const startY = ARENA_BOX.bottom + 25; // 1305
     const count = fighters.length;
-    const colWidth = 460;
-    const leftX = 50;
-    const rightX = width - colWidth - 50;
+    const isDual = count === 2;
+    const colWidth = isDual ? width - 80 : 475;
+    const leftX = isDual ? 40 : 35;
+    const rightX = isDual ? 40 : width - colWidth - 35;
     const rows = Math.ceil(count / 2);
-    const rowHeight = Math.min(125, 570 / Math.max(rows, 2));
+    const cardHeight = isDual ? 160 : Math.min(145, 570 / Math.max(rows, 2));
 
     fighters.forEach((f, idx) => {
       let x = leftX;
       let y = startY;
 
-      if (count === 2) {
-        x = idx === 0 ? leftX : rightX;
-        y = startY + 30;
+      if (isDual) {
+        x = leftX;
+        y = startY + 15 + idx * (cardHeight + 20);
       } else if (count === 3) {
         if (idx === 0) {
           x = leftX;
@@ -1993,37 +1994,36 @@ export default function GamePage() {
           y = startY;
         } else {
           x = (width - colWidth) / 2;
-          y = startY + rowHeight + 20;
+          y = startY + cardHeight + 20;
         }
       } else {
         const isRight = idx % 2 === 1;
         const row = Math.floor(idx / 2);
         x = isRight ? rightX : leftX;
-        y = startY + row * rowHeight;
+        y = startY + row * (cardHeight + 16);
       }
 
       ctx.save();
       ctx.translate(x, y);
 
       const isCharged = (f.energyCharge ?? 0) >= 100;
-      const cardHeight = rowHeight - 14;
 
       // Card Background (Dark Ben 10 Omnitrix Theme)
       ctx.beginPath();
-      ctx.roundRect(0, 0, colWidth, cardHeight, 16);
-      ctx.fillStyle = f.isDead ? 'rgba(5, 12, 8, 0.45)' : 'rgba(4, 18, 10, 0.92)';
+      ctx.roundRect(0, 0, colWidth, cardHeight, 18);
+      ctx.fillStyle = f.isDead ? 'rgba(5, 12, 8, 0.45)' : 'rgba(4, 18, 10, 0.94)';
       ctx.fill();
-      ctx.lineWidth = f.isDead ? 1 : isCharged ? 3 : 2;
+      ctx.lineWidth = f.isDead ? 1 : isCharged ? 3.5 : 2;
       ctx.strokeStyle = f.isDead ? '#1e293b' : isCharged ? '#00ff66' : f.color;
       if (isCharged && !f.isDead) {
         ctx.shadowColor = '#00ff66';
-        ctx.shadowBlur = 12;
+        ctx.shadowBlur = 16;
       }
       ctx.stroke();
       ctx.shadowBlur = 0;
 
       // Spherical Ball Avatar thumbnail
-      const thumbSize = cardHeight - 24;
+      const thumbSize = isDual ? cardHeight - 24 : cardHeight - 20;
       ctx.save();
       ctx.translate(12, 12);
       ctx.beginPath();
@@ -2046,7 +2046,7 @@ export default function GamePage() {
         ctx.drawImage(img, 0, 0, thumbSize, thumbSize);
       } else {
         ctx.fillStyle = f.color === '#ffffff' ? '#000' : '#fff';
-        ctx.font = '900 26px "Montserrat", sans-serif';
+        ctx.font = `900 ${isDual ? 36 : 26}px "Montserrat", sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(f.name.charAt(0).toUpperCase(), thumbSize / 2, thumbSize / 2);
@@ -2056,14 +2056,14 @@ export default function GamePage() {
       // Thumbnail Border
       ctx.beginPath();
       ctx.arc(12 + thumbSize / 2, 12 + thumbSize / 2, thumbSize / 2, 0, Math.PI * 2);
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2.5;
       ctx.strokeStyle = f.isDead ? '#475569' : isCharged ? '#00ff66' : f.color;
       ctx.stroke();
 
-      const textX = thumbSize + 24;
+      const textX = thumbSize + (isDual ? 28 : 22);
 
       // Top Row: Alien Name & Live HP
-      ctx.font = '900 20px "Montserrat", sans-serif';
+      ctx.font = `900 ${isDual ? 28 : 20}px "Montserrat", sans-serif`;
       ctx.fillStyle = f.isDead ? '#64748b' : '#ffffff';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
@@ -2075,26 +2075,26 @@ export default function GamePage() {
       if (f.speedBoostTimer > 0) itemTag += ' [SPEED]';
       if (f.frozenTimer > 0) itemTag += ' [FROZEN]';
 
-      ctx.fillText(`${f.name}${itemTag}`, textX, 10);
+      ctx.fillText(`${f.name}${itemTag}`, textX, isDual ? 14 : 10);
 
       // HP text
-      ctx.font = '900 19px "Montserrat", sans-serif';
+      ctx.font = `900 ${isDual ? 28 : 19}px "Montserrat", sans-serif`;
       ctx.fillStyle = f.isDead ? '#ef4444' : '#00ff66';
       ctx.textAlign = 'right';
-      ctx.fillText(f.isDead ? 'ELIMINATED' : `${Math.round(f.health)} HP`, colWidth - 14, 10);
+      ctx.fillText(f.isDead ? 'ELIMINATED' : `${Math.round(f.health)} HP`, colWidth - 16, isDual ? 14 : 10);
 
       const barX = textX;
-      const barW = colWidth - textX - 14;
+      const barW = colWidth - textX - 16;
 
       // 1. Health Bar Track
-      const hpBarY = 36;
-      const hpBarH = 12;
+      const hpBarY = isDual ? 52 : 36;
+      const hpBarH = isDual ? 16 : 12;
       ctx.beginPath();
-      ctx.roundRect(barX, hpBarY, barW, hpBarH, 6);
+      ctx.roundRect(barX, hpBarY, barW, hpBarH, hpBarH / 2);
       ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
       ctx.fill();
       ctx.lineWidth = 1;
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
       ctx.stroke();
 
       if (!f.isDead && f.health > 0) {
@@ -2104,10 +2104,10 @@ export default function GamePage() {
         else if (hpPct < 0.5) hpColor = '#f59e0b';
 
         ctx.beginPath();
-        ctx.roundRect(barX, hpBarY, barW * hpPct, hpBarH, 6);
+        ctx.roundRect(barX, hpBarY, barW * hpPct, hpBarH, hpBarH / 2);
         ctx.fillStyle = hpColor;
         ctx.shadowColor = hpColor;
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = 10;
         ctx.fill();
         ctx.shadowBlur = 0;
       }
@@ -2116,78 +2116,81 @@ export default function GamePage() {
       const currentDmg = f.hasDagger ? Math.round((f.damage || 20) * 2) : Math.round(f.damage || 20);
       const dmgText = `DMG: ${currentDmg}${f.hasDagger ? ' [2X]' : ''}`;
 
-      ctx.font = '900 13px "Montserrat", sans-serif';
-      const dmgBadgeW = ctx.measureText(dmgText).width + 16;
-      const midRowY = 56;
+      ctx.font = `900 ${isDual ? 20 : 13}px "Montserrat", sans-serif`;
+      const dmgBadgeW = ctx.measureText(dmgText).width + (isDual ? 24 : 16);
+      const midRowY = isDual ? 82 : 56;
+      const badgeH = isDual ? 28 : 20;
 
       ctx.beginPath();
-      ctx.roundRect(barX, midRowY, dmgBadgeW, 20, 6);
-      ctx.fillStyle = 'rgba(250, 204, 21, 0.15)';
+      ctx.roundRect(barX, midRowY, dmgBadgeW, badgeH, 6);
+      ctx.fillStyle = 'rgba(250, 204, 21, 0.18)';
       ctx.fill();
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = 'rgba(250, 204, 21, 0.45)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.5)';
       ctx.stroke();
 
       ctx.fillStyle = '#facc15';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(dmgText, barX + dmgBadgeW / 2, midRowY + 10);
+      ctx.fillText(dmgText, barX + dmgBadgeW / 2, midRowY + badgeH / 2);
 
       // Special Ability Move Name Tag
       if (f.specialAbility) {
-        ctx.font = '800 12px "Montserrat", sans-serif';
+        ctx.font = `800 ${isDual ? 18 : 12}px "Montserrat", sans-serif`;
         ctx.fillStyle = '#38bdf8';
         ctx.textAlign = 'right';
         ctx.textBaseline = 'middle';
-        ctx.fillText(`MOVE: ${f.specialAbility.name.toUpperCase()}`, colWidth - 14, midRowY + 10);
+        ctx.fillText(`MOVE: ${f.specialAbility.name.toUpperCase()}`, colWidth - 16, midRowY + badgeH / 2);
       }
 
       // 3. Bottom Row: Omnitrix Energy Charge Bar & Percentage
-      const energyRowY = 84;
-      const energyBarH = 8;
+      const energyRowY = isDual ? 122 : 84;
+      const energyBarH = isDual ? 12 : 8;
       const energy = Math.round(f.energyCharge ?? 0);
 
       // Label on left
-      ctx.font = '800 11px "Montserrat", sans-serif';
+      ctx.font = `900 ${isDual ? 16 : 11}px "Montserrat", sans-serif`;
       ctx.fillStyle = '#94a3b8';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText('CHARGE', barX, energyRowY + 4);
+      ctx.fillText('CHARGE', barX, energyRowY + energyBarH / 2);
 
       // Bar in center
-      const chargeBarX = barX + 54;
-      const chargeBarW = colWidth - chargeBarX - 66;
+      const labelW = isDual ? 80 : 54;
+      const valW = isDual ? 90 : 66;
+      const chargeBarX = barX + labelW;
+      const chargeBarW = colWidth - chargeBarX - valW;
 
       ctx.beginPath();
-      ctx.roundRect(chargeBarX, energyRowY, chargeBarW, energyBarH, 4);
-      ctx.fillStyle = 'rgba(0, 20, 10, 0.85)';
+      ctx.roundRect(chargeBarX, energyRowY, chargeBarW, energyBarH, energyBarH / 2);
+      ctx.fillStyle = 'rgba(0, 20, 10, 0.9)';
       ctx.fill();
       ctx.lineWidth = 1;
-      ctx.strokeStyle = 'rgba(0, 255, 102, 0.25)';
+      ctx.strokeStyle = 'rgba(0, 255, 102, 0.3)';
       ctx.stroke();
 
       if (!f.isDead && energy > 0) {
         ctx.beginPath();
-        ctx.roundRect(chargeBarX, energyRowY, chargeBarW * (Math.min(100, energy) / 100), energyBarH, 4);
+        ctx.roundRect(chargeBarX, energyRowY, chargeBarW * (Math.min(100, energy) / 100), energyBarH, energyBarH / 2);
         ctx.fillStyle = isCharged ? '#00ff66' : '#10b981';
         if (isCharged) {
           ctx.shadowColor = '#00ff66';
-          ctx.shadowBlur = 8;
+          ctx.shadowBlur = 10;
         }
         ctx.fill();
         ctx.shadowBlur = 0;
       }
 
       // Energy text on right
-      ctx.font = '900 13px "Montserrat", sans-serif';
+      ctx.font = `900 ${isDual ? 20 : 13}px "Montserrat", sans-serif`;
       ctx.fillStyle = isCharged ? '#00ff66' : '#a7f3d0';
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
       if (isCharged) {
         ctx.shadowColor = '#00ff66';
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = 10;
       }
-      ctx.fillText(isCharged ? 'READY!' : `${energy}%`, colWidth - 14, energyRowY + 4);
+      ctx.fillText(isCharged ? 'READY!' : `${energy}%`, colWidth - 16, energyRowY + energyBarH / 2);
       ctx.shadowBlur = 0;
 
       ctx.restore();
