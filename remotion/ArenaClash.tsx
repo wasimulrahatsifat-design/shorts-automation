@@ -68,6 +68,8 @@ const resolveSoundUrl = (sound: string, abilityType?: string) => {
       return staticFile('audio/omnitrix_turn.wav');
     case 'omnitrix_slam':
       return staticFile('audio/omnitrix_slam.wav');
+    case 'hero_time':
+      return staticFile('audio/its_hero_time.mp3');
     case 'ability':
       if (abilityType === 'damage') return staticFile('audio/explosion.wav');
       if (abilityType === 'freeze') return staticFile('audio/bounce.wav');
@@ -250,6 +252,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
       const ab = f.specialAbility;
       const energy = Math.round(f.energyCharge || 0);
       const isCharged = energy >= 100 || f.specialMoveReady;
+      const currentDmg = f.hasDagger ? Math.round((f.damage || 20) * 2) : Math.round(f.damage || 20);
 
       return (
         <div
@@ -259,13 +262,13 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
             left: x,
             top: y,
             width: colWidth,
-            height: rowHeight - 12,
+            height: rowHeight - 8,
             borderRadius: 18,
             backgroundColor: f.isDead ? 'rgba(5, 15, 10, 0.45)' : 'rgba(3, 16, 8, 0.95)',
             border: `3px solid ${f.isDead ? '#1e293b' : isCharged ? '#00ff66' : f.color}`,
             display: 'flex',
             alignItems: 'center',
-            padding: '8px 14px',
+            padding: '10px 14px',
             boxSizing: 'border-box',
             gap: 14,
             overflow: 'hidden',
@@ -279,8 +282,8 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
           {/* Avatar Spherical Thumbnail */}
           <div
             style={{
-              width: rowHeight - 32,
-              height: rowHeight - 32,
+              width: rowHeight - 28,
+              height: rowHeight - 28,
               borderRadius: '50%',
               backgroundColor: f.color,
               overflow: 'hidden',
@@ -308,20 +311,20 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
           </div>
 
           {/* Info & Bars */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
             {/* Top Row: Alien Name & Live HP */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span
                 style={{
                   color: f.isDead ? '#64748b' : '#ffffff',
                   fontWeight: 900,
-                  fontSize: count <= 4 ? 24 : 20,
+                  fontSize: count <= 4 ? 22 : 18,
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
-                  maxWidth: 220,
+                  maxWidth: 210,
                   textShadow: '0 2px 8px rgba(0,0,0,0.9)',
                 }}
               >
@@ -331,7 +334,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                 style={{
                   color: f.isDead ? '#ef4444' : '#00ff66',
                   fontWeight: 900,
-                  fontSize: count <= 4 ? 22 : 18,
+                  fontSize: count <= 4 ? 20 : 17,
                   textShadow: '0 0 10px rgba(0, 255, 102, 0.7)',
                 }}
               >
@@ -346,6 +349,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                 height: 12,
                 borderRadius: 6,
                 backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
                 overflow: 'hidden',
                 position: 'relative',
               }}
@@ -361,14 +365,62 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
               />
             </div>
 
-            {/* Omnitrix Energy Charge Bar */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+            {/* Middle Row: Damage Badge & Special Ability Name */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 1 }}>
+              <span
+                style={{
+                  fontSize: 13,
+                  fontWeight: 900,
+                  color: '#facc15',
+                  backgroundColor: 'rgba(250, 204, 21, 0.15)',
+                  border: '1px solid rgba(250, 204, 21, 0.4)',
+                  padding: '1px 8px',
+                  borderRadius: 6,
+                  letterSpacing: '0.5px',
+                }}
+              >
+                DMG: {currentDmg}{f.hasDagger ? ' [2X]' : ''}
+              </span>
+
+              {ab && (
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 800,
+                    color: '#38bdf8',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.3px',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    maxWidth: 160,
+                  }}
+                >
+                  MOVE: {ab.name}
+                </span>
+              )}
+            </div>
+
+            {/* Bottom Row: Omnitrix Energy Charge Bar & Percentage */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 1 }}>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  color: '#94a3b8',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                }}
+              >
+                CHARGE
+              </span>
               <div
                 style={{
                   flex: 1,
-                  height: 6,
-                  borderRadius: 3,
-                  backgroundColor: 'rgba(0, 20, 10, 0.8)',
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: 'rgba(0, 20, 10, 0.85)',
+                  border: '1px solid rgba(0, 255, 102, 0.2)',
                   overflow: 'hidden',
                 }}
               >
@@ -377,38 +429,23 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                     width: `${Math.min(100, energy)}%`,
                     height: '100%',
                     backgroundColor: isCharged ? '#00ff66' : '#10b981',
-                    boxShadow: isCharged ? '0 0 8px #00ff66' : 'none',
+                    boxShadow: isCharged ? '0 0 10px #00ff66' : 'none',
                   }}
                 />
               </div>
               <span
                 style={{
-                  fontSize: 12,
-                  fontWeight: 800,
-                  color: isCharged ? '#00ff66' : '#94a3b8',
+                  fontSize: 13,
+                  fontWeight: 900,
+                  color: isCharged ? '#00ff66' : '#a7f3d0',
                   textTransform: 'uppercase',
                   whiteSpace: 'nowrap',
+                  textShadow: isCharged ? '0 0 8px #00ff66' : 'none',
                 }}
               >
                 {isCharged ? 'READY!' : `${energy}%`}
               </span>
             </div>
-
-            {/* Special Move Badge */}
-            {ab && (
-              <span
-                style={{
-                  fontSize: 11,
-                  fontWeight: 800,
-                  color: '#94a3b8',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}
-              >
-                {ab.name}
-              </span>
-            )}
           </div>
         </div>
       );
@@ -1103,32 +1140,6 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
             </div>
 
             {/* LIVE HP NUMBER DISPLAYED DIRECTLY INSIDE CENTER OF BALL (Viral Video Style) */}
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 10,
-                pointerEvents: 'none',
-              }}
-            >
-              <span
-                style={{
-                  fontSize: Math.round(f.size * 0.38),
-                  fontWeight: 900,
-                  color: '#ffffff',
-                  textShadow:
-                    '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 4px 10px rgba(0,0,0,0.95)',
-                  letterSpacing: '-0.5px',
-                  userSelect: 'none',
-                }}
-              >
-                {Math.round(f.health)}
-              </span>
-            </div>
-
             {/* Visible Name Badge directly below the ball */}
             <div
               style={{

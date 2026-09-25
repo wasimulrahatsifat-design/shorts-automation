@@ -141,7 +141,7 @@ export interface SimParticle {
 
 export interface SoundEvent {
   frame: number;
-  sound: 'hit' | 'bounce' | 'item' | 'gun' | 'explosion' | 'winner' | 'ability' | 'omnitrix_open' | 'omnitrix_turn' | 'omnitrix_slam';
+  sound: 'hit' | 'bounce' | 'item' | 'gun' | 'explosion' | 'winner' | 'ability' | 'omnitrix_open' | 'omnitrix_turn' | 'omnitrix_slam' | 'hero_time';
   abilityType?: string;
   volume?: number;
 }
@@ -488,9 +488,10 @@ export function generateArenaSimulation(
         selectedAlienColor = '#00ff66';
       }
 
-      // Slam down impact at frame 85: Shockwave particle burst + slam sound!
+      // Slam down impact at frame 85: Shockwave particle burst + slam sound + It's Hero Time voice!
       if (frame === 85) {
         soundEvents.push({ frame: 85, sound: 'omnitrix_slam', volume: 1.0 });
+        soundEvents.push({ frame: 85, sound: 'hero_time', volume: 1.0 });
         for (let pIdx = 0; pIdx < 28; pIdx++) {
           const pAngle = (pIdx / 28) * Math.PI * 2;
           const pSpeed = 6 + rng() * 9;

@@ -338,10 +338,20 @@ export default function GamePage() {
       | 'omnitrix_open'
       | 'omnitrix_turn'
       | 'omnitrix_slam'
+      | 'hero_time'
   ) => {
     if (!soundEnabled) return;
 
-    // Fast-path HTML5 audio for authentic Ben 10 WAV sound effects
+    // Authentic Ben 10 voice and Omnitrix sound effects
+    if (type === 'hero_time') {
+      try {
+        const audio = new Audio('/audio/its_hero_time.mp3');
+        audio.volume = Math.min(1, soundVolume * 1.0);
+        audio.play().catch(() => {});
+      } catch (e) {}
+      return;
+    }
+
     if (type === 'omnitrix_open' || type === 'omnitrix_turn' || type === 'omnitrix_slam') {
       try {
         const audio = new Audio(`/audio/${type}.wav`);
@@ -1816,19 +1826,7 @@ export default function GamePage() {
         ctx.stroke();
 
         // ==========================================
-        // 3. LIVE HP NUMBER DIRECTLY INSIDE BALL
-        // ==========================================
-        ctx.font = `900 ${Math.round(f.size * 0.38)}px "Montserrat", sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.lineWidth = 6;
-        ctx.strokeStyle = '#000000';
-        ctx.fillStyle = '#ffffff';
-        ctx.strokeText(Math.round(f.health).toString(), 0, 2);
-        ctx.fillText(Math.round(f.health).toString(), 0, 2);
-
-        // ==========================================
-        // 4. DISTINCT NAME BADGE DIRECTLY BELOW BALL
+        // 3. DISTINCT NAME BADGE DIRECTLY BELOW BALL
         // ==========================================
         ctx.save();
         ctx.fillStyle = 'rgba(3, 16, 8, 0.95)';
@@ -2063,12 +2061,13 @@ export default function GamePage() {
       ctx.stroke();
 
       const textX = thumbSize + 24;
-      ctx.font = '900 22px "Montserrat", sans-serif';
+
+      // Top Row: Alien Name & Live HP
+      ctx.font = '900 20px "Montserrat", sans-serif';
       ctx.fillStyle = f.isDead ? '#64748b' : '#ffffff';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
 
-      const abName = f.specialAbility ? f.specialAbility.name : '';
       let itemTag = '';
       if (f.bonusShield > 0 || f.hasShield) itemTag += ' [SHIELD]';
       if (f.hasDagger) itemTag += ' [2X DMG]';
@@ -2079,7 +2078,7 @@ export default function GamePage() {
       ctx.fillText(`${f.name}${itemTag}`, textX, 10);
 
       // HP text
-      ctx.font = '900 20px "Montserrat", sans-serif';
+      ctx.font = '900 19px "Montserrat", sans-serif';
       ctx.fillStyle = f.isDead ? '#ef4444' : '#00ff66';
       ctx.textAlign = 'right';
       ctx.fillText(f.isDead ? 'ELIMINATED' : `${Math.round(f.health)} HP`, colWidth - 14, 10);
@@ -2087,13 +2086,16 @@ export default function GamePage() {
       const barX = textX;
       const barW = colWidth - textX - 14;
 
-      // 1. Health Bar
-      const hpBarY = 40;
+      // 1. Health Bar Track
+      const hpBarY = 36;
       const hpBarH = 12;
       ctx.beginPath();
       ctx.roundRect(barX, hpBarY, barW, hpBarH, 6);
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
       ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+      ctx.stroke();
 
       if (!f.isDead && f.health > 0) {
         const hpPct = Math.max(0, f.health / f.maxHealth);
@@ -2110,20 +2112,63 @@ export default function GamePage() {
         ctx.shadowBlur = 0;
       }
 
-      // 2. Omnitrix Energy Charge Bar
-      const energyBarY = 58;
-      const energyBarH = 8;
-      const energy = Math.round(f.energyCharge ?? 0);
-      const energyW = barW - 65;
+      // 2. Middle Row: Damage Badge & Special Move Name
+      const currentDmg = f.hasDagger ? Math.round((f.damage || 20) * 2) : Math.round(f.damage || 20);
+      const dmgText = `DMG: ${currentDmg}${f.hasDagger ? ' [2X]' : ''}`;
+
+      ctx.font = '900 13px "Montserrat", sans-serif';
+      const dmgBadgeW = ctx.measureText(dmgText).width + 16;
+      const midRowY = 56;
 
       ctx.beginPath();
-      ctx.roundRect(barX, energyBarY, energyW, energyBarH, 4);
+      ctx.roundRect(barX, midRowY, dmgBadgeW, 20, 6);
+      ctx.fillStyle = 'rgba(250, 204, 21, 0.15)';
+      ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.45)';
+      ctx.stroke();
+
+      ctx.fillStyle = '#facc15';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(dmgText, barX + dmgBadgeW / 2, midRowY + 10);
+
+      // Special Ability Move Name Tag
+      if (f.specialAbility) {
+        ctx.font = '800 12px "Montserrat", sans-serif';
+        ctx.fillStyle = '#38bdf8';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`MOVE: ${f.specialAbility.name.toUpperCase()}`, colWidth - 14, midRowY + 10);
+      }
+
+      // 3. Bottom Row: Omnitrix Energy Charge Bar & Percentage
+      const energyRowY = 84;
+      const energyBarH = 8;
+      const energy = Math.round(f.energyCharge ?? 0);
+
+      // Label on left
+      ctx.font = '800 11px "Montserrat", sans-serif';
+      ctx.fillStyle = '#94a3b8';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('CHARGE', barX, energyRowY + 4);
+
+      // Bar in center
+      const chargeBarX = barX + 54;
+      const chargeBarW = colWidth - chargeBarX - 66;
+
+      ctx.beginPath();
+      ctx.roundRect(chargeBarX, energyRowY, chargeBarW, energyBarH, 4);
       ctx.fillStyle = 'rgba(0, 20, 10, 0.85)';
       ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(0, 255, 102, 0.25)';
+      ctx.stroke();
 
       if (!f.isDead && energy > 0) {
         ctx.beginPath();
-        ctx.roundRect(barX, energyBarY, energyW * (Math.min(100, energy) / 100), energyBarH, 4);
+        ctx.roundRect(chargeBarX, energyRowY, chargeBarW * (Math.min(100, energy) / 100), energyBarH, 4);
         ctx.fillStyle = isCharged ? '#00ff66' : '#10b981';
         if (isCharged) {
           ctx.shadowColor = '#00ff66';
@@ -2133,21 +2178,17 @@ export default function GamePage() {
         ctx.shadowBlur = 0;
       }
 
-      // Energy text (NO EMOJIS)
-      ctx.font = '800 12px "Montserrat", sans-serif';
-      ctx.fillStyle = isCharged ? '#00ff66' : '#94a3b8';
+      // Energy text on right
+      ctx.font = '900 13px "Montserrat", sans-serif';
+      ctx.fillStyle = isCharged ? '#00ff66' : '#a7f3d0';
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
-      ctx.fillText(isCharged ? 'READY!' : `${energy}%`, colWidth - 14, energyBarY + 4);
-
-      // 3. Ability Name Tag
-      if (f.specialAbility) {
-        ctx.font = '700 11px "Montserrat", sans-serif';
-        ctx.fillStyle = '#64748b';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        ctx.fillText(`${f.specialAbility.icon} ${f.specialAbility.name}`, barX, 72);
+      if (isCharged) {
+        ctx.shadowColor = '#00ff66';
+        ctx.shadowBlur = 8;
       }
+      ctx.fillText(isCharged ? 'READY!' : `${energy}%`, colWidth - 14, energyRowY + 4);
+      ctx.shadowBlur = 0;
 
       ctx.restore();
     });
@@ -2291,7 +2332,7 @@ export default function GamePage() {
         setGreenFlash(false);
         setSelectionPhase('hero_time');
         setHeroTimeBanner(true);
-        playSound('victory');
+        playSound('hero_time');
 
         const custom1 = contestants.find((c) => c.id === chosen1.id || c.name === chosen1.name);
         const custom2 = contestants.find((c) => c.id === chosen2.id || c.name === chosen2.name);
