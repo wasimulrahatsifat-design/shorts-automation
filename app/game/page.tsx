@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { supabase } from '../../lib/supabase';
 import {
   SPECIAL_POWERS,
   COLOR_SWATCHES,
@@ -220,6 +221,255 @@ export default function GamePage() {
   const [dialRotationAngle, setDialRotationAngle] = useState<number>(0);
   const [greenFlash, setGreenFlash] = useState<boolean>(false);
   const [heroTimeBanner, setHeroTimeBanner] = useState<boolean>(false);
+
+  // Alien Selection 1.5s Splash Screen State
+  const [selectionSplashUrl, setSelectionSplashUrl] = useState<string | null>(null);
+  const [selectionSplashName, setSelectionSplashName] = useState<string | null>(null);
+  const [alienSplashActive, setAlienSplashActive] = useState<boolean>(false);
+  const [alienSplashTargetAlien, setAlienSplashTargetAlien] = useState<ContestantConfig | null>(null);
+
+  // Battle Background Music (BGM) State
+  const [bgMusicUrl, setBgMusicUrl] = useState<string>('/audio/battle_bgm.mp3');
+  const [bgMusicName, setBgMusicName] = useState<string>('Default: Epic Battle');
+  const [bgMusicEnabled, setBgMusicEnabled] = useState<boolean>(true);
+  const [bgMusicVolume, setBgMusicVolume] = useState<number>(0.35);
+  const [isPlayingMusicPreview, setIsPlayingMusicPreview] = useState<boolean>(false);
+  const bgmAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const safeSaveLocalStorage = (key: string, value: string) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      console.warn(`localStorage quota exceeded for ${key}`);
+    }
+  };
+
+  // Restore saved splash image & BGM settings
+  useEffect(() => {
+    try {
+      const savedSplash = localStorage.getItem('arena_selection_splash_url');
+      const savedSplashName = localStorage.getItem('arena_selection_splash_name');
+      if (savedSplash) {
+        setSelectionSplashUrl(savedSplash);
+        setSelectionSplashName(savedSplashName || 'Custom Splash Image');
+      }
+
+      const savedBgmUrl = localStorage.getItem('arena_bg_music_url');
+      const savedBgmName = localStorage.getItem('arena_bg_music_name');
+      if (savedBgmUrl) {
+        setBgMusicUrl(savedBgmUrl);
+        setBgMusicName(savedBgmName || 'Custom Battle BGM');
+      }
+
+      const savedBgmEnabled = localStorage.getItem('arena_bg_music_enabled');
+      if (savedBgmEnabled !== null) {
+        setBgMusicEnabled(savedBgmEnabled === 'true');
+      }
+
+      const savedBgmVolume = localStorage.getItem('arena_bg_music_volume');
+      if (savedBgmVolume !== null) {
+        setBgMusicVolume(Number(savedBgmVolume));
+      }
+    } catch {}
+  }, []);
+
+  // Background Music Playback Functions
+  const startBattleMusic = () => {
+    if (!bgMusicEnabled || !soundEnabled) return;
+    const targetUrl = bgMusicUrl || '/audio/battle_bgm.mp3';
+    try {
+      if (!bgmAudioRef.current || bgmAudioRef.current.src !== targetUrl) {
+        if (bgmAudioRef.current) {
+          bgmAudioRef.current.pause();
+        }
+        const audio = new Audio(targetUrl);
+        audio.loop = true;
+        audio.volume = Math.min(1, Math.max(0, bgMusicVolume));
+        bgmAudioRef.current = audio;
+      } else {
+        bgmAudioRef.current.volume = Math.min(1, Math.max(0, bgMusicVolume));
+      }
+      bgmAudioRef.current.play().catch(() => {});
+    } catch (err) {}
+  };
+
+  const pauseBattleMusic = () => {
+    if (bgmAudioRef.current) {
+      bgmAudioRef.current.pause();
+    }
+    setIsPlayingMusicPreview(false);
+  };
+
+  const stopBattleMusic = () => {
+    if (bgmAudioRef.current) {
+      bgmAudioRef.current.pause();
+      bgmAudioRef.current.currentTime = 0;
+    }
+    setIsPlayingMusicPreview(false);
+  };
+
+  const toggleMusicPreview = () => {
+    const targetUrl = bgMusicUrl || '/audio/battle_bgm.mp3';
+    if (isPlayingMusicPreview) {
+      if (bgmAudioRef.current) {
+        bgmAudioRef.current.pause();
+      }
+      setIsPlayingMusicPreview(false);
+    } else {
+      if (bgmAudioRef.current) {
+        bgmAudioRef.current.pause();
+      }
+      const audio = new Audio(targetUrl);
+      audio.volume = Math.min(1, Math.max(0, bgMusicVolume));
+      audio.onended = () => setIsPlayingMusicPreview(false);
+      bgmAudioRef.current = audio;
+      audio.play()
+        .then(() => setIsPlayingMusicPreview(true))
+        .catch(() => setIsPlayingMusicPreview(false));
+    }
+  };
+
+  const handleBgMusicUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const cleanName = file.name.replace(/\.[^/.]+$/, '').trim();
+    const blobUrl = URL.createObjectURL(file);
+
+    if (bgmAudioRef.current) {
+      bgmAudioRef.current.pause();
+    }
+    setIsPlayingMusicPreview(false);
+
+    setBgMusicUrl(blobUrl);
+    setBgMusicName(`Custom: ${cleanName}`);
+    setBgMusicEnabled(true);
+    safeSaveLocalStorage('arena_bg_music_name', `Custom: ${cleanName}`);
+    safeSaveLocalStorage('arena_bg_music_enabled', 'true');
+
+    if (file.size < 4 * 1024 * 1024) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = reader.result as string;
+        safeSaveLocalStorage('arena_bg_music_url', dataUrl);
+        setBgMusicUrl(dataUrl);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    try {
+      const fileExt = file.name.split('.').pop() || 'mp3';
+      const fileName = `arena_bgm_${Date.now()}.${fileExt}`;
+      const { data, error } = await supabase.storage.from('shorts').upload(fileName, file, {
+        contentType: file.type || 'audio/mpeg',
+        upsert: true,
+      });
+      if (!error && data) {
+        const { data: publicData } = supabase.storage.from('shorts').getPublicUrl(fileName);
+        if (publicData?.publicUrl) {
+          setBgMusicUrl(publicData.publicUrl);
+          safeSaveLocalStorage('arena_bg_music_url', publicData.publicUrl);
+        }
+      }
+    } catch {}
+
+    e.target.value = '';
+  };
+
+  const handleRemoveCustomMusic = () => {
+    if (bgmAudioRef.current) {
+      bgmAudioRef.current.pause();
+      bgmAudioRef.current = null;
+    }
+    setIsPlayingMusicPreview(false);
+    setBgMusicUrl('/audio/battle_bgm.mp3');
+    setBgMusicName('Default: Epic Battle');
+    localStorage.removeItem('arena_bg_music_url');
+    localStorage.removeItem('arena_bg_music_name');
+  };
+
+  const handleSelectionSplashUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = reader.result as string;
+      setSelectionSplashUrl(dataUrl);
+      setSelectionSplashName(file.name);
+      safeSaveLocalStorage('arena_selection_splash_url', dataUrl);
+      safeSaveLocalStorage('arena_selection_splash_name', file.name);
+    };
+    reader.readAsDataURL(file);
+
+    try {
+      const fileExt = file.name.split('.').pop() || 'png';
+      const fileName = `arena_splash_${Date.now()}.${fileExt}`;
+      const { data, error } = await supabase.storage.from('shorts').upload(fileName, file, {
+        contentType: file.type || 'image/png',
+        upsert: true,
+      });
+      if (!error && data) {
+        const { data: publicData } = supabase.storage.from('shorts').getPublicUrl(fileName);
+        if (publicData?.publicUrl) {
+          setSelectionSplashUrl(publicData.publicUrl);
+          safeSaveLocalStorage('arena_selection_splash_url', publicData.publicUrl);
+        }
+      }
+    } catch {}
+
+    e.target.value = '';
+  };
+
+  const handleRemoveSplashImage = () => {
+    setSelectionSplashUrl(null);
+    setSelectionSplashName(null);
+    localStorage.removeItem('arena_selection_splash_url');
+    localStorage.removeItem('arena_selection_splash_name');
+  };
+
+  const triggerSplashPreview = () => {
+    const target = selectedP1 || contestants[0] || BEN10_ALIEN_PRESETS[0];
+    setAlienSplashTargetAlien(target);
+    setAlienSplashActive(true);
+    setTimeout(() => {
+      setAlienSplashActive(false);
+    }, 1500);
+  };
+
+  // Sync BGM with battle play state
+  useEffect(() => {
+    if (isPlaying && selectionPhase === 'battling') {
+      startBattleMusic();
+    } else if (!isPlaying) {
+      pauseBattleMusic();
+    }
+  }, [isPlaying, selectionPhase, bgMusicEnabled, soundEnabled]);
+
+  useEffect(() => {
+    if (bgmAudioRef.current) {
+      bgmAudioRef.current.volume = Math.min(1, Math.max(0, bgMusicVolume));
+    }
+    safeSaveLocalStorage('arena_bg_music_volume', String(bgMusicVolume));
+  }, [bgMusicVolume]);
+
+  useEffect(() => {
+    safeSaveLocalStorage('arena_bg_music_enabled', String(bgMusicEnabled));
+    if (!bgMusicEnabled && bgmAudioRef.current) {
+      bgmAudioRef.current.pause();
+    } else if (bgMusicEnabled && isPlaying && selectionPhase === 'battling') {
+      startBattleMusic();
+    }
+  }, [bgMusicEnabled]);
+
+  useEffect(() => {
+    return () => {
+      if (bgmAudioRef.current) {
+        bgmAudioRef.current.pause();
+        bgmAudioRef.current = null;
+      }
+    };
+  }, []);
 
   // Preload Omnitrix rotation animation GIF
   useEffect(() => {
@@ -2239,6 +2489,7 @@ export default function GamePage() {
 
         if (nextFrame >= sim.frames.length - 1) {
           setIsPlaying(false);
+          pauseBattleMusic();
         }
       }
 
@@ -2312,13 +2563,18 @@ export default function GamePage() {
         });
       }
 
+      // Show 1.5-Second Fullscreen Alien Splash Screen
+      setAlienSplashTargetAlien(chosen1);
+      setAlienSplashActive(true);
+
       setTimeout(() => {
+        setAlienSplashActive(false);
         setGreenFlash(false);
         setSelectionPhase('select_p2');
         setP2Index((p1Index + 1) % roster.length);
         setDialRotationAngle(0);
         drawFrame();
-      }, 450);
+      }, 1500);
     } else if (selectionPhase === 'select_p2') {
       const chosen1 = selectedP1 || roster[p1Index % roster.length];
       const chosen2 = roster[p2Index % roster.length];
@@ -2335,7 +2591,12 @@ export default function GamePage() {
         }
       }
 
+      // Show 1.5-Second Fullscreen Alien Splash Screen
+      setAlienSplashTargetAlien(chosen2);
+      setAlienSplashActive(true);
+
       setTimeout(() => {
+        setAlienSplashActive(false);
         setGreenFlash(false);
         setSelectionPhase('hero_time');
         setHeroTimeBanner(true);
@@ -2378,21 +2639,24 @@ export default function GamePage() {
         setWinner(null);
         setAliveCount(2);
 
-        // Start battle immediately with "It's Hero Time!" banner showing once!
+        // Start battle immediately with "It's Hero Time!" banner and start Background Music!
         setSelectionPhase('battling');
         setIsPlaying(true);
+        startBattleMusic();
         drawFrame();
 
         // Banner fades out smoothly after 1.2s while battle is active!
         setTimeout(() => {
           setHeroTimeBanner(false);
         }, 1200);
-      }, 450);
+      }, 1500);
     }
   };
 
   const resetSimulation = () => {
     setIsPlaying(false);
+    stopBattleMusic();
+    setAlienSplashActive(false);
     setSelectionPhase('idle');
     setSelectedP1(null);
     setSelectedP2(null);
@@ -2417,8 +2681,12 @@ export default function GamePage() {
         setWinner(null);
       }
       setIsPlaying(true);
+      if (selectionPhase === 'battling') {
+        startBattleMusic();
+      }
     } else {
       setIsPlaying(false);
+      pauseBattleMusic();
     }
   };
 
@@ -2560,6 +2828,85 @@ export default function GamePage() {
           </div>
         )}
       </>
+    );
+  };
+
+  const renderAlienSplashOverlay = () => {
+    if (!alienSplashActive) return null;
+
+    const displayImage = selectionSplashUrl || alienSplashTargetAlien?.image_url;
+    const alienName = alienSplashTargetAlien?.name || 'Alien';
+    const alienColor = alienSplashTargetAlien?.color || '#00ff66';
+
+    return (
+      <div
+        className="absolute inset-0 z-50 bg-black flex flex-col items-center justify-center overflow-hidden animate-in fade-in duration-150"
+        style={{
+          boxShadow: `inset 0 0 80px ${alienColor}40`,
+        }}
+      >
+        {/* Background radial energy flare */}
+        <div
+          className="absolute inset-0 pointer-events-none opacity-40"
+          style={{
+            background: `radial-gradient(circle at center, ${alienColor}60 0%, transparent 75%)`,
+          }}
+        />
+
+        {/* Main Fullscreen Splash Image */}
+        {displayImage ? (
+          <img
+            src={displayImage}
+            alt={alienName}
+            className="w-full h-full object-cover select-none pointer-events-none filter drop-shadow-[0_0_25px_rgba(0,0,0,0.8)]"
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center p-6 bg-gradient-to-b from-slate-950 via-[#0a1a0f] to-black">
+            <div
+              className="w-36 h-36 rounded-full border-4 flex items-center justify-center shadow-2xl mb-4"
+              style={{
+                borderColor: alienColor,
+                backgroundColor: `${alienColor}20`,
+                boxShadow: `0 0 50px ${alienColor}`,
+              }}
+            >
+              <span className="text-5xl font-black" style={{ color: alienColor }}>
+                {alienName.charAt(0).toUpperCase()}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Futuristic Ben 10 Glowing Frame Border */}
+        <div
+          className="absolute inset-0 pointer-events-none border-[5px]"
+          style={{
+            borderColor: alienColor,
+            boxShadow: `inset 0 0 40px ${alienColor}60, 0 0 30px ${alienColor}80`,
+          }}
+        />
+
+        {/* Top Banner Tag */}
+        <div className="absolute top-8 left-0 right-0 flex justify-center z-20 pointer-events-none">
+          <div className="px-5 py-1.5 rounded-full bg-black/85 border border-white/20 text-[11px] font-black tracking-widest text-emerald-300 uppercase shadow-lg backdrop-blur-md">
+            Alien Selected
+          </div>
+        </div>
+
+        {/* Bottom Alien Name Banner */}
+        <div className="absolute bottom-10 left-4 right-4 z-20 flex flex-col items-center pointer-events-none">
+          <div
+            className="px-6 py-2.5 rounded-2xl bg-black/90 border-2 font-black text-xl tracking-widest uppercase text-white shadow-2xl backdrop-blur-md text-center"
+            style={{
+              borderColor: alienColor,
+              boxShadow: `0 0 30px ${alienColor}aa`,
+              textShadow: `0 0 15px ${alienColor}`,
+            }}
+          >
+            {alienName.toUpperCase()}
+          </div>
+        </div>
+      </div>
     );
   };
 
@@ -2772,6 +3119,10 @@ export default function GamePage() {
         })),
         duration_seconds: dynamicDurationSeconds,
         seed: currentSeed,
+        bg_music_url: bgMusicUrl || '/audio/battle_bgm.mp3',
+        bg_music_volume: bgMusicVolume,
+        bg_music_enabled: bgMusicEnabled,
+        alien_splash_url: selectionSplashUrl || null,
       };
 
       const response = await fetch('/api/queue-video', {
@@ -3213,10 +3564,143 @@ export default function GamePage() {
               ))}
             </div>
 
+            {/* 1. Alien Selection Splash Screen Upload Section */}
+            <div className="bg-slate-900/40 border border-slate-800/60 rounded-2xl p-4 space-y-3">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                    Alien Selection Splash Screen
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Shown across the full game screen for 1.5 seconds when an alien is chosen
+                  </p>
+                </div>
+                {selectionSplashUrl && (
+                  <button
+                    type="button"
+                    onClick={triggerSplashPreview}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-950 hover:bg-emerald-900 border border-emerald-500/50 text-[11px] font-bold text-emerald-300 transition"
+                  >
+                    Test 1.5s Screen
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="w-14 h-14 rounded-xl border border-slate-700 bg-slate-950 overflow-hidden flex items-center justify-center shrink-0 relative shadow-inner">
+                  {selectionSplashUrl ? (
+                    <img src={selectionSplashUrl} alt="Selection Splash" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-[10px] text-slate-500 font-bold text-center px-1">No Image</span>
+                  )}
+                </div>
+
+                <div className="flex-1 flex flex-wrap items-center gap-2">
+                  <label className="px-3 py-1.5 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/50 text-xs font-bold text-cyan-300 cursor-pointer transition flex items-center gap-1.5">
+                    <span>Upload Splash Image</span>
+                    <input type="file" accept="image/*" onChange={handleSelectionSplashUpload} className="hidden" />
+                  </label>
+
+                  {selectionSplashUrl && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={triggerSplashPreview}
+                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 transition"
+                      >
+                        Preview Animation
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRemoveSplashImage}
+                        className="px-2.5 py-1.5 rounded-xl bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-xs font-semibold text-rose-300 transition"
+                      >
+                        Remove
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Battle Background Music Upload Section */}
+            <div className="bg-slate-900/40 border border-slate-800/60 rounded-2xl p-4 space-y-3">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200">
+                    Battle Background Music
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Plays automatically when the battle begins
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBgMusicEnabled(!bgMusicEnabled)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition border ${
+                      bgMusicEnabled
+                        ? 'bg-emerald-950 border-emerald-500/50 text-emerald-300'
+                        : 'bg-slate-950 border-slate-800 text-slate-500'
+                    }`}
+                  >
+                    {bgMusicEnabled ? 'BGM ON' : 'BGM OFF'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                <label className="px-3 py-1.5 rounded-xl bg-amber-950/80 hover:bg-amber-900 border border-amber-500/50 text-xs font-bold text-amber-300 cursor-pointer transition flex items-center gap-1.5">
+                  <span>Upload Music File</span>
+                  <input type="file" accept="audio/*" onChange={handleBgMusicUpload} className="hidden" />
+                </label>
+
+                <button
+                  type="button"
+                  onClick={toggleMusicPreview}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition border ${
+                    isPlayingMusicPreview
+                      ? 'bg-amber-500 text-slate-950 border-amber-400'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                  }`}
+                >
+                  {isPlayingMusicPreview ? 'Pause Preview' : 'Play Preview'}
+                </button>
+
+                {bgMusicName.startsWith('Custom:') && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveCustomMusic}
+                    className="px-2.5 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-slate-400 hover:text-rose-400 transition"
+                  >
+                    Reset to Default
+                  </button>
+                )}
+              </div>
+
+              {/* Active Track Name Pill */}
+              <div className="flex items-center justify-between text-xs px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800/80">
+                <span className="text-slate-400 truncate max-w-[240px]">Track: <span className="text-white font-medium">{bgMusicName}</span></span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-slate-400">Vol:</span>
+                  <input
+                    type="range"
+                    min="0.05"
+                    max="1"
+                    step="0.05"
+                    value={bgMusicVolume}
+                    onChange={(e) => setBgMusicVolume(Number(e.target.value))}
+                    className="accent-amber-500 w-20"
+                  />
+                  <span className="text-[11px] font-mono text-amber-300 w-8 text-right">{Math.round(bgMusicVolume * 100)}%</span>
+                </div>
+              </div>
+            </div>
+
             {/* Audio & Sound Minimal Bar */}
             <div className="flex justify-between items-center px-4 py-2.5 bg-slate-900/40 border border-slate-800/60 rounded-xl text-xs">
               <div className="flex items-center gap-3">
-                <span className="font-semibold text-slate-400">Audio Volume:</span>
+                <span className="font-semibold text-slate-400">Sound Effects:</span>
                 <input
                   type="range"
                   min="0.1"
@@ -3279,6 +3763,9 @@ export default function GamePage() {
 
                 {/* Pre-Battle Omnitrix Alien Selection Overlay */}
                 {renderOmnitrixOverlay()}
+
+                {/* 1.5-Second Fullscreen Alien Selection Splash Overlay */}
+                {renderAlienSplashOverlay()}
               </div>
             </div>
 
@@ -3385,6 +3872,9 @@ export default function GamePage() {
 
               {/* Pre-Battle Omnitrix Alien Selection Overlay */}
               {renderOmnitrixOverlay()}
+
+              {/* 1.5-Second Fullscreen Alien Selection Splash Overlay */}
+              {renderAlienSplashOverlay()}
             </div>
           </div>
         )}

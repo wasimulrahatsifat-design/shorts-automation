@@ -35,6 +35,7 @@ export interface ArenaClashData {
   bg_music_url?: string;
   bg_music_volume?: number;
   bg_music_enabled?: boolean;
+  alien_splash_url?: string;
 }
 
 const resolveAudioUrl = (url?: string) => {
@@ -664,6 +665,41 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
           <OmnitrixDial size={280} opacity={0.92} />
         )}
       </div>
+
+      {/* 1.5-Second Fullscreen Alien Selection Splash in Render (frame 85 to 130 = 1.5s @ 30fps) */}
+      {data_json.alien_splash_url && frame >= 85 && frame < 130 && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 45,
+            backgroundColor: '#000000',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+          }}
+        >
+          <img
+            src={data_json.alien_splash_url}
+            alt="Alien Selection Splash"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              border: '6px solid #00ff66',
+              boxShadow: 'inset 0 0 60px rgba(0, 255, 102, 0.5)',
+              pointerEvents: 'none',
+            }}
+          />
+        </div>
+      )}
 
       {/* Arena Spawned Items */}
       {items.map((it) => (
