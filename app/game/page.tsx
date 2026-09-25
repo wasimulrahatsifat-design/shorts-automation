@@ -288,6 +288,39 @@ export default function GamePage() {
       if (savedBgmVolume !== null) {
         setBgMusicVolume(Number(savedBgmVolume));
       }
+
+      // Restore custom uploaded / cropped ball images per alien from localStorage
+      const savedBallImages = localStorage.getItem('arena_alien_ball_images');
+      if (savedBallImages) {
+        try {
+          const imgMap: Record<string, string> = JSON.parse(savedBallImages);
+          // 1. Update BEN10_ALIEN_PRESETS so Omnitrix selector has the custom ball images
+          BEN10_ALIEN_PRESETS.forEach((preset, pIdx) => {
+            const keyByName = preset.name.toLowerCase().replace(/\s+/g, '_');
+            const customImg = imgMap[preset.id] || imgMap[keyByName] || imgMap[`alien_${pIdx}`];
+            if (customImg) {
+              preset.image_url = customImg;
+            }
+          });
+          // 2. Pre-cache into loadedImagesRef
+          Object.values(imgMap).forEach((url) => {
+            if (url) {
+              const im = new Image();
+              im.onload = () => drawFrame();
+              im.src = url;
+              loadedImagesRef.current.set(url, im);
+            }
+          });
+          // 3. Update contestants
+          setContestants((prev) =>
+            prev.map((c, cIdx) => {
+              const keyByName = c.name.toLowerCase().replace(/\s+/g, '_');
+              const customImg = imgMap[c.id] || imgMap[keyByName] || imgMap[`alien_${cIdx}`];
+              return customImg ? { ...c, image_url: customImg } : c;
+            })
+          );
+        } catch {}
+      }
     } catch {}
   }, []);
 
@@ -524,14 +557,14 @@ export default function GamePage() {
     }, 1000);
   };
 
-  // Sync BGM with battle play state
+  // Sync BGM with battle play state (Pauses immediately on victory)
   useEffect(() => {
-    if (isPlaying && selectionPhase === 'battling') {
+    if (isPlaying && selectionPhase === 'battling' && !winner) {
       startBattleMusic();
-    } else if (!isPlaying) {
+    } else {
       pauseBattleMusic();
     }
-  }, [isPlaying, selectionPhase, bgMusicEnabled, soundEnabled]);
+  }, [isPlaying, selectionPhase, bgMusicEnabled, soundEnabled, winner]);
 
   useEffect(() => {
     if (bgmAudioRef.current) {
@@ -1080,7 +1113,7 @@ export default function GamePage() {
         special_power: c.special_power,
         special_ability: c.special_ability,
       })),
-      3600,
+      7200,
       battleSeedRef.current
     );
 
@@ -1467,8 +1500,11 @@ export default function GamePage() {
       ctx.fillText(topic.toUpperCase() || 'ARENA CLASH', width / 2, 275);
       ctx.restore();
 
-      // Dual Sided Healthbars below arena (Firmly anchored, crisp)
-      drawLiveHealthBars(ctx, fighters, width);
+      // Dual Sided Healthbars below arena - ONLY shown after selection is completed!
+      const activePhase = selectionPhaseRef.current;
+      if (activePhase === 'hero_time' || activePhase === 'battling') {
+        drawLiveHealthBars(ctx, fighters, width);
+      }
 
       // Arena Shake Section: ONLY shake the battle arena
       ctx.save();
@@ -2695,6 +2731,7 @@ export default function GamePage() {
 
       // Victory Overlay: ONLY SHOWN WHEN frameWinner IS PRESENT! (NO EMOJIS)
       if (frameWinner) {
+        pauseBattleMusic();
         ctx.save();
         ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
         ctx.fillRect(0, 0, width, height);
@@ -2794,6 +2831,7 @@ export default function GamePage() {
           setAliveCount(curFrameState.aliveCount);
           if (curFrameState.winner && !winner) {
             setWinner(curFrameState.winner as any);
+            pauseBattleMusic();
           }
         }
 
@@ -2921,7 +2959,7 @@ export default function GamePage() {
             special_power: c.special_power,
             special_ability: c.special_ability,
           })),
-          3600,
+          7200,
           battleSeedRef.current
         );
         simResultRef.current = sim;
@@ -3359,9 +3397,21 @@ export default function GamePage() {
       });
 
       // Also update BEN10_ALIEN_PRESETS so preset persistence works
+      const targetFighter = contestants[cropTargetIndex] || BEN10_ALIEN_PRESETS[cropTargetIndex];
       if (BEN10_ALIEN_PRESETS[cropTargetIndex]) {
         BEN10_ALIEN_PRESETS[cropTargetIndex].image_url = croppedDataUrl;
       }
+
+      // Persist in localStorage so custom image is NEVER lost on refresh!
+      try {
+        const savedBallImages = JSON.parse(localStorage.getItem('arena_alien_ball_images') || '{}');
+        const targetId = targetFighter?.id || `alien_${cropTargetIndex}`;
+        savedBallImages[targetId] = croppedDataUrl;
+        if (targetFighter?.name) {
+          savedBallImages[targetFighter.name.toLowerCase().replace(/\s+/g, '_')] = croppedDataUrl;
+        }
+        safeSaveLocalStorage('arena_alien_ball_images', JSON.stringify(savedBallImages));
+      } catch (e) {}
 
       setCropModalOpen(false);
       setRawImageSrc(null);
@@ -3388,7 +3438,7 @@ export default function GamePage() {
       loadedImagesRef.current.set(updates.image_url, cachedImg);
     }
 
-    const targetFighter = contestants[index];
+    const targetFighter = contestants[index] || BEN10_ALIEN_PRESETS[index];
     if (targetFighter) {
       const preset = BEN10_ALIEN_PRESETS.find(
         (p) => p.id === targetFighter.id || p.name === targetFighter.name
@@ -3396,6 +3446,25 @@ export default function GamePage() {
       if (preset) {
         Object.assign(preset, updates);
       }
+    }
+
+    if (updates.image_url !== undefined) {
+      try {
+        const savedBallImages = JSON.parse(localStorage.getItem('arena_alien_ball_images') || '{}');
+        const targetId = targetFighter?.id || `alien_${index}`;
+        if (updates.image_url) {
+          savedBallImages[targetId] = updates.image_url;
+          if (targetFighter?.name) {
+            savedBallImages[targetFighter.name.toLowerCase().replace(/\s+/g, '_')] = updates.image_url;
+          }
+        } else {
+          delete savedBallImages[targetId];
+          if (targetFighter?.name) {
+            delete savedBallImages[targetFighter.name.toLowerCase().replace(/\s+/g, '_')];
+          }
+        }
+        safeSaveLocalStorage('arena_alien_ball_images', JSON.stringify(savedBallImages));
+      } catch (e) {}
     }
   };
 
@@ -3419,7 +3488,7 @@ export default function GamePage() {
           special_power: c.special_power,
           special_ability: c.special_ability,
         })),
-        3600,
+        7200,
         currentSeed
       );
 

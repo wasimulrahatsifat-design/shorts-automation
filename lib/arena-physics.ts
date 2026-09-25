@@ -456,7 +456,7 @@ export const DEFAULT_ABILITIES = BEN10_DEFAULT_ABILITIES;
 
 export function generateArenaSimulation(
   contestants: FighterInput[],
-  maxFrames = 3600, // Safe upper limit (2 minutes), battle stops when winner emerges!
+  maxFrames = 7200, // Safe upper limit (4 minutes), battle stops when winner emerges!
   seed = 42
 ): SimulationResult {
   const rng = createSeededRng(seed);
@@ -601,7 +601,7 @@ export function generateArenaSimulation(
     let selectionDialScale = 1.0;
     let selectedAlienName = '';
     let selectedAlienColor = '#00ff66';
-    const isOvertime = !isSelectionIntro && frame >= 1800 && aliveFighters.length > 1;
+    const isOvertime = !isSelectionIntro && frame >= 5400 && aliveFighters.length > 1;
 
     if (isSelectionIntro) {
       if (frame === 0) {
@@ -661,14 +661,14 @@ export function generateArenaSimulation(
         });
       }
     } else {
-      // Sudden death / overtime after 60s (frame 1800) if match is still ongoing
+      // Sudden death / overtime after 3 minutes (frame 5400) if match is still ongoing
       if (isOvertime && !announcedOvertime) {
         announcedOvertime = true;
         floatingTexts.push({
           id: `overtime_${frame}`,
           x: ARENA_CENTER.x,
           y: ARENA_CENTER.y - 120,
-          text: 'OVERTIME: 2X DAMAGE!',
+          text: '3-MIN FRENZY: 2X DAMAGE & SPEED!',
           color: '#ef4444',
           alpha: 1,
           vy: -1,
@@ -1150,7 +1150,8 @@ export function generateArenaSimulation(
         }
       }
 
-      const spdMult = f.speedBoostTimer > 0 ? 1.6 : 1.0;
+      const overtimeSpeed = isOvertime ? 1.5 : 1.0;
+      const spdMult = (f.speedBoostTimer > 0 ? 1.6 : 1.0) * overtimeSpeed;
       f.x += f.vx * spdMult;
       f.y += f.vy * spdMult;
 
@@ -1498,7 +1499,7 @@ export function generateArenaSimulation(
               floatingTexts.push({ id: `refB_${frame}`, x: B.x, y: B.y - 30, text: `REFLECT -${reflect}`, color: '#10b981', alpha: 1, vy: -2, scale: 1 });
             }
 
-            if (isOvertime) { dmgA *= 1.5; dmgB *= 1.5; }
+            if (isOvertime) { dmgA *= 2; dmgB *= 2; }
             if (A.hasDagger) { dmgA *= 2; A.daggerActivated = true; }
             if (A.specialPower === 'berserker' && A.health / A.maxHealth <= 0.2) dmgA *= 2;
 
