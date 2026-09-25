@@ -14,20 +14,24 @@ export type AlienType =
   | 'stinkfly'
   | 'normal';
 
-export function getAlienType(f?: { id?: string; name?: string; special_power?: string; specialPower?: string } | null): AlienType {
+export function getAlienType(f?: { id?: string; name?: string; special_power?: string; specialPower?: string; specialAbility?: { name?: string; icon?: string; description?: string } } | null): AlienType {
   if (!f) return 'normal';
-  const str = `${f.id || ''} ${f.name || ''} ${f.special_power || ''} ${f.specialPower || ''}`.toLowerCase().replace(/[\s_-]+/g, '');
-  if (str.includes('heatblast') || str.includes('fire')) return 'heatblast';
-  if (str.includes('fourarms') || str.includes('four_arms')) return 'four_arms';
-  if (str.includes('xlr8') || str.includes('speedster')) return 'xlr8';
-  if (str.includes('diamondhead') || str.includes('diamond')) return 'diamondhead';
-  if (str.includes('cannonbolt') || str.includes('cannon')) return 'cannonbolt';
-  if (str.includes('wildmutt')) return 'wildmutt';
-  if (str.includes('ripjaws') || str.includes('ripjaw')) return 'ripjaws';
-  if (str.includes('upgrade')) return 'upgrade';
-  if (str.includes('ghostfreak') || str.includes('ghost')) return 'ghostfreak';
-  if (str.includes('greymatter') || str.includes('graymatter') || str.includes('galvan')) return 'grey_matter';
-  if (str.includes('stinkfly') || str.includes('stink')) return 'stinkfly';
+  const ab = (f as any).specialAbility;
+  const str = `${f.id || ''} ${f.name || ''} ${f.special_power || ''} ${f.specialPower || ''} ${ab?.name || ''} ${ab?.icon || ''} ${ab?.description || ''}`
+    .toLowerCase()
+    .replace(/[\s_-]+/g, '');
+
+  if (str.includes('heatblast') || str.includes('firewave') || str.includes('fireblast') || str.includes('fireball') || str.includes('fire') || str.includes('pyronite')) return 'heatblast';
+  if (str.includes('fourarms') || str.includes('four_arms') || str.includes('sonicclap') || str.includes('tetramand')) return 'four_arms';
+  if (str.includes('xlr8') || str.includes('windfunnel') || str.includes('tornado') || str.includes('cyclone') || str.includes('speedster') || str.includes('kineceleran')) return 'xlr8';
+  if (str.includes('diamondhead') || str.includes('crystalwall') || str.includes('crystal') || str.includes('taydenite') || str.includes('petrosapien')) return 'diamondhead';
+  if (str.includes('cannonbolt') || str.includes('armoredroll') || str.includes('cannon') || str.includes('arburian')) return 'cannonbolt';
+  if (str.includes('wildmutt') || str.includes('predator') || str.includes('vulpimancer')) return 'wildmutt';
+  if (str.includes('ripjaws') || str.includes('steeljaw') || str.includes('ripjaw') || str.includes('piscciss')) return 'ripjaws';
+  if (str.includes('upgrade') || str.includes('opticlaser') || str.includes('plasma') || str.includes('mechamorph')) return 'upgrade';
+  if (str.includes('ghostfreak') || str.includes('ghost') || str.includes('ectoneurite')) return 'ghostfreak';
+  if (str.includes('greymatter') || str.includes('graymatter') || str.includes('deathray') || str.includes('galvan')) return 'grey_matter';
+  if (str.includes('stinkfly') || str.includes('acid') || str.includes('slime') || str.includes('stink') || str.includes('lepidopterran')) return 'stinkfly';
   return 'normal';
 }
 
@@ -670,7 +674,7 @@ export function generateArenaSimulation(
           vy: -1,
           scale: 1.6,
         });
-        soundEvents.push({ frame, sound: 'ability', abilityType: 'damage', volume: 1.0 });
+        soundEvents.push({ frame, sound: 'fireblast', abilityType: 'damage', volume: 1.0 });
       }
 
       // Check winner: Battle runs until last fighter standing!
@@ -1052,7 +1056,7 @@ export function generateArenaSimulation(
 
             if (ab.type === 'shield') {
               f.bonusShield = Math.round(abilityPower * 1.5) || 50;
-              soundEvents.push({ frame, sound: 'ability', abilityType: 'shield', volume: 0.9 });
+              soundEvents.push({ frame, sound: 'crystal_shatter', alienType: 'diamondhead', volume: 1.0 });
               floatingTexts.push({
                 id: `shd_${frame}_${f.id}`,
                 x: f.x,
@@ -1066,7 +1070,7 @@ export function generateArenaSimulation(
             } else if (ab.type === 'heal') {
               const healAmt = Math.round(abilityPower) || 35;
               f.health = Math.min(f.maxHealth, f.health + healAmt);
-              soundEvents.push({ frame, sound: 'item', volume: 0.9 });
+              soundEvents.push({ frame, sound: 'crystal_shatter', volume: 0.9 });
               floatingTexts.push({
                 id: `heal_${frame}_${f.id}`,
                 x: f.x,
@@ -1081,10 +1085,10 @@ export function generateArenaSimulation(
               f.speedBoostTimer = 100;
               f.vx = Math.cos(targetAngle) * 22;
               f.vy = Math.sin(targetAngle) * 22;
-              soundEvents.push({ frame, sound: 'ability', abilityType: 'speed', volume: 1.0 });
+              soundEvents.push({ frame, sound: 'wind_tornado', alienType: 'xlr8', volume: 1.0 });
             } else if (ab.type === 'freeze') {
               nearestOpp.frozenTimer = 65;
-              soundEvents.push({ frame, sound: 'ability', abilityType: 'freeze', volume: 0.9 });
+              soundEvents.push({ frame, sound: 'ghost_wail', alienType: 'ghostfreak', volume: 1.0 });
               floatingTexts.push({
                 id: `frz_${frame}_${nearestOpp.id}`,
                 x: nearestOpp.x,
@@ -1097,7 +1101,7 @@ export function generateArenaSimulation(
               });
             } else {
               // Default: Damage Blast Projectile
-              soundEvents.push({ frame, sound: 'ability', abilityType: 'damage', volume: 1.0 });
+              soundEvents.push({ frame, sound: 'fireblast', alienType: 'heatblast', volume: 1.0 });
               bullets.push({
                 x: f.x + Math.cos(targetAngle) * (f.size / 2 + 18),
                 y: f.y + Math.sin(targetAngle) * (f.size / 2 + 18),

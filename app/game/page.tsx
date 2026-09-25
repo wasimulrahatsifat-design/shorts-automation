@@ -502,7 +502,7 @@ export default function GamePage() {
     setAlienSplashActive(true);
     setTimeout(() => {
       setAlienSplashActive(false);
-    }, 1500);
+    }, 1000);
   };
 
   const triggerSplashPreview = () => {
@@ -512,7 +512,7 @@ export default function GamePage() {
     setAlienSplashActive(true);
     setTimeout(() => {
       setAlienSplashActive(false);
-    }, 1500);
+    }, 1000);
   };
 
   // Sync BGM with battle play state
@@ -677,14 +677,16 @@ export default function GamePage() {
       | 'steel_bite'
       | 'predator_roar'
       | 'ghost_wail'
-      | 'acid_splatter'
+      | 'acid_splatter',
+    abilityType?: string,
+    alienType?: string
   ) => {
     if (!soundEnabled) return;
 
-    // Authentic Ben 10 voice and Omnitrix sound effects
+    // Authentic Ben 10 voice and Omnitrix sound effects from user's audio files
     if (type === 'hero_time') {
       try {
-        const audio = new Audio('/audio/its_hero_time.mp3');
+        const audio = new Audio(`/audio/its_hero_time.mp3?v=${Date.now()}`);
         audio.volume = Math.min(1, soundVolume * 1.0);
         audio.play().catch(() => {});
       } catch (e) {}
@@ -693,118 +695,31 @@ export default function GamePage() {
 
     if (type === 'omnitrix_open' || type === 'omnitrix_turn' || type === 'omnitrix_slam') {
       try {
-        const audio = new Audio(`/audio/${type}.wav`);
+        const audio = new Audio(`/audio/${type}.wav?v=${Date.now()}`);
         audio.volume = Math.min(1, soundVolume * 1.0);
         audio.play().catch(() => {});
       } catch (e) {}
+      return;
+    }
+
+    // Remap any generic ability event to authentic sound
+    if (type === 'ability') {
+      if (abilityType === 'speed' || alienType === 'xlr8') {
+        type = 'wind_tornado';
+      } else if (abilityType === 'shield' || alienType === 'diamondhead') {
+        type = 'crystal_shatter';
+      } else if (abilityType === 'freeze' || alienType === 'ghostfreak') {
+        type = 'ghost_wail';
+      } else {
+        type = 'fireblast';
+      }
     }
 
     try {
       const ctx = getAudioContext();
       if (!ctx) return;
 
-      if (type === 'omnitrix_open') {
-        // 1. Mechanical spring pop click (480Hz -> 60Hz)
-        const oscPop = ctx.createOscillator();
-        const gainPop = ctx.createGain();
-        oscPop.type = 'triangle';
-        oscPop.frequency.setValueAtTime(480, ctx.currentTime);
-        oscPop.frequency.exponentialRampToValueAtTime(60, ctx.currentTime + 0.04);
-        gainPop.gain.setValueAtTime(0.6 * soundVolume, ctx.currentTime);
-        gainPop.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
-        oscPop.connect(gainPop);
-        gainPop.connect(ctx.destination);
-        oscPop.start();
-        oscPop.stop(ctx.currentTime + 0.04);
-
-        // 2. Iconic rising futuristic servo energy whine (340Hz -> 1550Hz)
-        const oscServo = ctx.createOscillator();
-        const oscHarmonic = ctx.createOscillator();
-        const gainServo = ctx.createGain();
-        oscServo.type = 'sine';
-        oscHarmonic.type = 'triangle';
-        oscServo.frequency.setValueAtTime(340, ctx.currentTime + 0.02);
-        oscServo.frequency.exponentialRampToValueAtTime(1550, ctx.currentTime + 0.38);
-        oscHarmonic.frequency.setValueAtTime(550, ctx.currentTime + 0.02);
-        oscHarmonic.frequency.exponentialRampToValueAtTime(2500, ctx.currentTime + 0.38);
-        gainServo.gain.setValueAtTime(0.001, ctx.currentTime);
-        gainServo.gain.linearRampToValueAtTime(0.55 * soundVolume, ctx.currentTime + 0.1);
-        gainServo.gain.setValueAtTime(0.55 * soundVolume, ctx.currentTime + 0.32);
-        gainServo.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.42);
-        oscServo.connect(gainServo);
-        oscHarmonic.connect(gainServo);
-        gainServo.connect(ctx.destination);
-        oscServo.start(ctx.currentTime + 0.02);
-        oscHarmonic.start(ctx.currentTime + 0.02);
-        oscServo.stop(ctx.currentTime + 0.42);
-        oscHarmonic.stop(ctx.currentTime + 0.42);
-
-        // 3. Activation lock chime
-        [1550, 2280].forEach((freq) => {
-          const oscChime = ctx.createOscillator();
-          const gainChime = ctx.createGain();
-          oscChime.type = 'sine';
-          oscChime.frequency.setValueAtTime(freq, ctx.currentTime + 0.28);
-          gainChime.gain.setValueAtTime(0.4 * soundVolume, ctx.currentTime + 0.28);
-          gainChime.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.46);
-          oscChime.connect(gainChime);
-          gainChime.connect(ctx.destination);
-          oscChime.start(ctx.currentTime + 0.28);
-          oscChime.stop(ctx.currentTime + 0.46);
-        });
-      } else if (type === 'omnitrix_turn') {
-        // Classic Ben 10 Ratchet Dial Click
-        const oscSnap = ctx.createOscillator();
-        const gainSnap = ctx.createGain();
-        oscSnap.type = 'sawtooth';
-        oscSnap.frequency.setValueAtTime(2400, ctx.currentTime);
-        oscSnap.frequency.exponentialRampToValueAtTime(750, ctx.currentTime + 0.025);
-        gainSnap.gain.setValueAtTime(0.5 * soundVolume, ctx.currentTime);
-        gainSnap.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.025);
-        oscSnap.connect(gainSnap);
-        gainSnap.connect(ctx.destination);
-        oscSnap.start();
-        oscSnap.stop(ctx.currentTime + 0.025);
-
-        // Resonant body click
-        const oscBody = ctx.createOscillator();
-        const gainBody = ctx.createGain();
-        oscBody.type = 'triangle';
-        oscBody.frequency.setValueAtTime(1100, ctx.currentTime + 0.006);
-        oscBody.frequency.exponentialRampToValueAtTime(320, ctx.currentTime + 0.08);
-        gainBody.gain.setValueAtTime(0.45 * soundVolume, ctx.currentTime + 0.006);
-        gainBody.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
-        oscBody.connect(gainBody);
-        gainBody.connect(ctx.destination);
-        oscBody.start(ctx.currentTime + 0.006);
-        oscBody.stop(ctx.currentTime + 0.08);
-      } else if (type === 'omnitrix_slam') {
-        // Heavy mechanical core slam
-        const oscSlam = ctx.createOscillator();
-        const gainSlam = ctx.createGain();
-        oscSlam.type = 'triangle';
-        oscSlam.frequency.setValueAtTime(160, ctx.currentTime);
-        oscSlam.frequency.exponentialRampToValueAtTime(45, ctx.currentTime + 0.18);
-        gainSlam.gain.setValueAtTime(0.7 * soundVolume, ctx.currentTime);
-        gainSlam.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
-        oscSlam.connect(gainSlam);
-        gainSlam.connect(ctx.destination);
-        oscSlam.start();
-        oscSlam.stop(ctx.currentTime + 0.18);
-
-        // Alien energy surge
-        const oscEnergy = ctx.createOscillator();
-        const gainEnergy = ctx.createGain();
-        oscEnergy.type = 'sawtooth';
-        oscEnergy.frequency.setValueAtTime(440, ctx.currentTime + 0.02);
-        oscEnergy.frequency.exponentialRampToValueAtTime(110, ctx.currentTime + 0.35);
-        gainEnergy.gain.setValueAtTime(0.4 * soundVolume, ctx.currentTime + 0.02);
-        gainEnergy.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-        oscEnergy.connect(gainEnergy);
-        gainEnergy.connect(ctx.destination);
-        oscEnergy.start(ctx.currentTime + 0.02);
-        oscEnergy.stop(ctx.currentTime + 0.35);
-      } else if (type === 'bounce') {
+      if (type === 'bounce') {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'sine';
@@ -965,19 +880,54 @@ export default function GamePage() {
         oscWhoosh.start();
         oscWhoosh.stop(ctx.currentTime + 0.5);
       } else if (type === 'wind_tornado') {
-        // XLR8: CYCLONE WIND VORTEX
-        const oscWind = ctx.createOscillator();
-        const gainWind = ctx.createGain();
-        oscWind.type = 'sine';
-        oscWind.frequency.setValueAtTime(450, ctx.currentTime);
-        oscWind.frequency.linearRampToValueAtTime(1200, ctx.currentTime + 0.2);
-        oscWind.frequency.exponentialRampToValueAtTime(280, ctx.currentTime + 0.55);
-        gainWind.gain.setValueAtTime(0.7 * soundVolume, ctx.currentTime);
-        gainWind.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55);
-        oscWind.connect(gainWind);
-        gainWind.connect(ctx.destination);
-        oscWind.start();
-        oscWind.stop(ctx.currentTime + 0.55);
+        // XLR8: HYPERSPEED CYCLONE TORNADO WIND ROAR (REALISTIC AIR TURBULENCE - NO TONAL BEEP)
+        const bufferSize = Math.round(ctx.sampleRate * 0.85);
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        let b0 = 0, b1 = 0, b2 = 0;
+        for (let i = 0; i < bufferSize; i++) {
+          const white = Math.random() * 2 - 1;
+          b0 = 0.99765 * b0 + white * 0.0990460;
+          b1 = 0.96300 * b1 + white * 0.2965164;
+          b2 = 0.57000 * b2 + white * 1.0526913;
+          const pink = b0 + b1 + b2 + white * 0.1848;
+          data[i] = pink * 0.35 * Math.sin((i / bufferSize) * Math.PI);
+        }
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        const bpFilter = ctx.createBiquadFilter();
+        bpFilter.type = 'bandpass';
+        bpFilter.frequency.setValueAtTime(260, ctx.currentTime);
+        bpFilter.frequency.linearRampToValueAtTime(920, ctx.currentTime + 0.3);
+        bpFilter.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.85);
+        bpFilter.Q.setValueAtTime(4.2, ctx.currentTime);
+
+        const windGain = ctx.createGain();
+        windGain.gain.setValueAtTime(0.01, ctx.currentTime);
+        windGain.gain.linearRampToValueAtTime(1.0 * soundVolume, ctx.currentTime + 0.15);
+        windGain.gain.linearRampToValueAtTime(0.85 * soundVolume, ctx.currentTime + 0.45);
+        windGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.85);
+
+        noise.connect(bpFilter);
+        bpFilter.connect(windGain);
+        windGain.connect(ctx.destination);
+        noise.start();
+        noise.stop(ctx.currentTime + 0.85);
+
+        // Low-frequency atmospheric vortex rumble
+        const rumbleOsc = ctx.createOscillator();
+        const rumbleGain = ctx.createGain();
+        rumbleOsc.type = 'triangle';
+        rumbleOsc.frequency.setValueAtTime(45, ctx.currentTime);
+        rumbleOsc.frequency.linearRampToValueAtTime(75, ctx.currentTime + 0.3);
+        rumbleOsc.frequency.exponentialRampToValueAtTime(28, ctx.currentTime + 0.8);
+        rumbleGain.gain.setValueAtTime(0.5 * soundVolume, ctx.currentTime);
+        rumbleGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+        rumbleOsc.connect(rumbleGain);
+        rumbleGain.connect(ctx.destination);
+        rumbleOsc.start();
+        rumbleOsc.stop(ctx.currentTime + 0.8);
       } else if (type === 'crystal_shatter') {
         // DIAMONDHEAD: CRYSTAL SHATTER & BELL HARMONICS
         [1760, 2640, 3520].forEach((freq, idx) => {
@@ -2830,7 +2780,7 @@ export default function GamePage() {
         if (soundEnabled && sim.soundEvents) {
           for (const ev of sim.soundEvents) {
             if (ev.frame > lastSoundFrameRef.current && ev.frame <= nextFrame) {
-              playSound(ev.sound === 'winner' ? 'victory' : ev.sound);
+              playSound(ev.sound === 'winner' ? 'victory' : ev.sound, ev.abilityType, ev.alienType);
             }
           }
           lastSoundFrameRef.current = nextFrame;
@@ -2920,7 +2870,7 @@ export default function GamePage() {
         });
       }
 
-      // Show 1.5-Second Fullscreen Alien Splash Screen (per alien)
+      // Show 1-Second Fullscreen Alien Splash Screen (per alien)
       const splash1 = alienSplashMap[chosen1.id] || chosen1.splash_image_url || chosen1.image_url;
       setAlienSplashTargetAlien({ ...chosen1, splash_image_url: splash1 });
       setAlienSplashActive(true);
@@ -2932,7 +2882,7 @@ export default function GamePage() {
         setP2Index((p1Index + 1) % roster.length);
         setDialRotationAngle(0);
         drawFrame();
-      }, 1500);
+      }, 1000);
     } else if (selectionPhase === 'select_p2') {
       const chosen1 = selectedP1 || roster[p1Index % roster.length];
       const chosen2 = roster[p2Index % roster.length];
@@ -2949,7 +2899,7 @@ export default function GamePage() {
         }
       }
 
-      // Show 1.5-Second Fullscreen Alien Splash Screen (per alien)
+      // Show 1-Second Fullscreen Alien Splash Screen (per alien)
       const splash2 = alienSplashMap[chosen2.id] || chosen2.splash_image_url || chosen2.image_url;
       setAlienSplashTargetAlien({ ...chosen2, splash_image_url: splash2 });
       setAlienSplashActive(true);
@@ -3008,7 +2958,7 @@ export default function GamePage() {
         setTimeout(() => {
           setHeroTimeBanner(false);
         }, 1200);
-      }, 1500);
+      }, 1000);
     }
   };
 
@@ -3934,10 +3884,10 @@ export default function GamePage() {
               <div className="flex justify-between items-center">
                 <div>
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200">
-                    Alien Splash Screens (1.5s per Alien)
+                    Alien Splash Screens (1s per Alien)
                   </h3>
                   <p className="text-[11px] text-slate-400">
-                    Each alien has their own distinct 1.5-second fullscreen transformation screen
+                    Each alien has their own distinct 1-second fullscreen transformation screen
                   </p>
                 </div>
               </div>
@@ -4022,7 +3972,7 @@ export default function GamePage() {
                           onClick={() => triggerAlienSplashPreview(activeAlien.id)}
                           className="px-3 py-1.5 rounded-xl bg-emerald-950 hover:bg-emerald-900 border border-emerald-500/50 text-xs font-bold text-emerald-300 transition"
                         >
-                          Test 1.5s Screen
+                          Test 1s Screen
                         </button>
 
                         {currentSplash && (

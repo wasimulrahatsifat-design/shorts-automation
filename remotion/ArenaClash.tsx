@@ -683,9 +683,9 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
         )}
       </div>
 
-      {/* 1.5-Second Fullscreen Alien Selection Splash in Render (frame 85 to 130 = 1.5s @ 30fps) */}
+      {/* 1-Second Fullscreen Alien Selection Splash in Render (frame 85 to 115 = 1.0s @ 30fps) */}
       {(() => {
-        if (frame < 85 || frame >= 130) return null;
+        if (frame < 85 || frame >= 115) return null;
         const firstAlien = contestants[0];
         const secondAlien = contestants[1];
         const splashUrl =
