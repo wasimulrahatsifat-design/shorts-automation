@@ -53,6 +53,26 @@ export function getAlienType(f?: { id?: string; name?: string; special_power?: s
   return 'normal';
 }
 
+// Canonical physical size scale per Ben 10 alien lore (Grey Matter tiny, Four Arms huge)
+export const ALIEN_SIZE_SCALES: Record<AlienType, number> = {
+  grey_matter: 0.60,   // Galvan: 5 inches tall canonically, small ball (~60% of base)
+  xlr8: 0.88,          // Kineceleran: Sleek aerodynamic speedster (~88%)
+  ghostfreak: 0.92,    // Ectonurite: Slender wispy phantom (~92%)
+  stinkfly: 0.95,      // Lepidopterran: Slender insectoid (~95%)
+  upgrade: 1.0,        // Galvanic Mechamorph: Standard (~100%)
+  heatblast: 1.0,      // Pyronite: Standard (~100%)
+  wildmutt: 1.08,      // Vulpimancer: Muscular predator beast (~108%)
+  ripjaws: 1.06,       // Piscciss Volann: Predatory aquatic alien (~106%)
+  diamondhead: 1.14,   // Petrosapien: Tall dense crystal armored titan (~114%)
+  cannonbolt: 1.24,    // Arburian Pelarota: Heavy armored sphere titan (~124%)
+  four_arms: 1.35,     // Tetramand: 12-foot hulking 4-armed titan (~135%)
+  normal: 1.0,
+};
+
+export function getAlienSizeMultiplier(alienType: AlienType): number {
+  return ALIEN_SIZE_SCALES[alienType] || 1.0;
+}
+
 export interface AbilityStatus {
   label: string;
   progress: number;
@@ -79,7 +99,8 @@ export function getAbilityStatus(f: SimFighter): AbilityStatus {
   let isReady = false;
 
   if (triggerType === 'charge') {
-    label = 'CHARGE';
+    const bounces = Math.min(5, Math.floor((f.energyCharge || 0) / 20));
+    label = bounces >= 5 ? 'READY!' : `BOUNCE ${bounces}/5`;
     progress = Math.min(100, Math.round(f.energyCharge || 0));
     isReady = progress >= 100 || f.specialMoveReady;
   } else if (triggerType === 'hp_threshold') {
@@ -479,7 +500,7 @@ export function generateArenaSimulation(
 ): SimulationResult {
   const rng = createSeededRng(seed);
   const count = Math.max(2, contestants.length);
-  const dynamicSize = getFighterSize(count);
+  const baseSize = getFighterSize(count);
 
   // Initialize Fighters inside Square Arena Box
   const fighters: SimFighter[] = contestants.map((c, idx) => {
@@ -489,6 +510,8 @@ export function generateArenaSimulation(
     let y = ARENA_CENTER.y + Math.sin(angle) * spawnRadius;
 
     const alienType = getAlienType(c);
+    const sizeMultiplier = ALIEN_SIZE_SCALES[alienType] || 1.0;
+    const individualSize = Math.round(baseSize * sizeMultiplier);
     let baseSpd = c.speed || 6.8;
     if (alienType === 'xlr8') {
       baseSpd = 14.0; // Always noticeably and significantly faster than other balls
@@ -554,7 +577,7 @@ export function generateArenaSimulation(
       y,
       vx,
       vy,
-      size: dynamicSize,
+      size: individualSize,
       angle: rng() * Math.PI * 2,
       energyCharge: 0,
       hitCombo: 0,
@@ -742,9 +765,7 @@ export function generateArenaSimulation(
           triggerVal = triggerVal || 5;
         }
 
-        if (!f.isDead && (f.energyCharge || 0) < 100) {
-          f.energyCharge = Math.min(100, (f.energyCharge || 0) + 0.15);
-        }
+        // Omnitrix charge is now strictly driven by wall bounces (+20% per bounce, 5 bounces = 100%)
 
         // Low HP Rage instant activation on first drop below threshold
         const thresholdHp = (f.maxHealth * triggerVal) / 100;
@@ -1251,8 +1272,8 @@ export function generateArenaSimulation(
       }
 
       if (bounced) {
-        // Wall bounce charges energy gauge (+5%)
-        f.energyCharge = Math.min(100, (f.energyCharge || 0) + 5);
+        // Wall bounce charges Omnitrix energy gauge (+20% per bounce, exactly 5 bounces = 100%)
+        f.energyCharge = Math.min(100, (f.energyCharge || 0) + 20);
         if (frame - lastBounceFrame > 2) {
           soundEvents.push({ frame, sound: 'bounce', volume: 0.5 });
           lastBounceFrame = frame;
@@ -1366,11 +1387,10 @@ export function generateArenaSimulation(
           t.health = Math.max(0, t.health - b.damage);
           t.hitFlash = 14;
 
-          // Credit shooter with hit combo and energy charge
+          // Credit shooter with hit combo
           const shooter = aliveFighters.find((sf) => sf.id === b.ownerId);
           if (shooter) {
             shooter.hitCombo = (shooter.hitCombo || 0) + 1;
-            shooter.energyCharge = Math.min(100, (shooter.energyCharge || 0) + 10);
           }
 
           // Kinetic knockback in bullet's flight direction
@@ -1454,9 +1474,7 @@ export function generateArenaSimulation(
               lastHitFrame = frame;
             }
 
-            // Both balls gain +15% Omnitrix energy on impact and increment hit combo
-            A.energyCharge = Math.min(100, (A.energyCharge || 0) + 15);
-            B.energyCharge = Math.min(100, (B.energyCharge || 0) + 15);
+            // Increment hit combo on impact
             A.hitCombo = (A.hitCombo || 0) + 1;
             B.hitCombo = (B.hitCombo || 0) + 1;
 

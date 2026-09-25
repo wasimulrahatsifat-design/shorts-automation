@@ -26,6 +26,8 @@ import {
   AlienType,
   getAlienType,
   getAbilityStatus,
+  ALIEN_SIZE_SCALES,
+  getFighterSize,
 } from '../../lib/arena-physics';
 import { idbGet, idbSet, idbDelete } from '../../lib/storage-idb';
 
@@ -3050,11 +3052,16 @@ export default function GamePage() {
 
     // Sync fighter at currentSelectingIndex in current simulation
     if (simResultRef.current) {
+      const aType = getAlienType(chosen);
+      const sizeMultiplier = ALIEN_SIZE_SCALES[aType] || 1.0;
+      const baseSize = getFighterSize(contestantCount);
+      const individualSize = Math.round(baseSize * sizeMultiplier);
       simResultRef.current.frames.forEach((fr) => {
         if (fr.fighters[currentSelectingIndex]) {
           fr.fighters[currentSelectingIndex].name = chosen.name;
           fr.fighters[currentSelectingIndex].color = chosen.color;
           fr.fighters[currentSelectingIndex].image_url = chosen.image_url;
+          fr.fighters[currentSelectingIndex].size = individualSize;
           if (chosen.special_ability) {
             fr.fighters[currentSelectingIndex].specialAbility = chosen.special_ability;
           }
