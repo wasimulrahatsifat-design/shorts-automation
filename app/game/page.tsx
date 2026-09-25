@@ -27,6 +27,7 @@ import {
   getAlienType,
   getAbilityStatus,
 } from '../../lib/arena-physics';
+import { idbGet, idbSet, idbDelete } from '../../lib/storage-idb';
 
 export { SPECIAL_POWERS, COLOR_SWATCHES };
 export type { ContestantConfig };
@@ -247,72 +248,117 @@ export default function GamePage() {
   const [isPlayingMusicPreview, setIsPlayingMusicPreview] = useState<boolean>(false);
   const bgmAudioRef = useRef<HTMLAudioElement | null>(null);
 
+  const stripDataUrls = (list: ContestantConfig[]): ContestantConfig[] => {
+    return list.map((c) => ({
+      ...c,
+      image_url: c.image_url && c.image_url.startsWith('data:') ? null : c.image_url,
+      splash_image_url: c.splash_image_url && c.splash_image_url.startsWith('data:') ? null : c.splash_image_url,
+    }));
+  };
+
   const safeSaveLocalStorage = (key: string, value: string) => {
     try {
       localStorage.setItem(key, value);
     } catch (e) {
-      console.warn(`localStorage quota warning for ${key}, cleaning up old cache...`);
-      try {
-        for (let i = 0; i < localStorage.length; i++) {
-          const k = localStorage.key(i);
-          if (k && k !== key && k.startsWith('temp_')) {
-            localStorage.removeItem(k);
-          }
-        }
-        localStorage.setItem(key, value);
-      } catch (e2) {
-        console.error(`Unable to save ${key} to localStorage`, e2);
-      }
+      console.warn(`localStorage quota warning for ${key}`);
     }
   };
 
   // Restore saved splash image, BGM settings, custom alien stats & ball images
   useEffect(() => {
-    try {
-      const savedMap = localStorage.getItem('arena_alien_splash_map');
-      if (savedMap) {
-        try {
-          setAlienSplashMap(JSON.parse(savedMap));
-        } catch {}
-      }
+    const initStorageAndState = async () => {
+      // 1. Purge legacy heavy base64 items out of localStorage into IndexedDB to free up localStorage immediately!
+      try {
+        const heavyKeys = [
+          'arena_alien_ball_images',
+          'arena_alien_splash_map',
+          'arena_selection_splash_url',
+          'arena_bg_music_url',
+          'arena_active_contestants',
+        ];
+        for (const k of heavyKeys) {
+          const val = localStorage.getItem(k);
+          if (val && val.includes('data:')) {
+            try {
+              if (k === 'arena_active_contestants') {
+                const parsed = JSON.parse(val);
+                if (Array.isArray(parsed)) {
+                  localStorage.setItem(k, JSON.stringify(stripDataUrls(parsed)));
+                }
+              } else if (k === 'arena_alien_ball_images' || k === 'arena_alien_splash_map') {
+                const parsed = JSON.parse(val);
+                await idbSet(k, parsed);
+                localStorage.removeItem(k);
+              } else {
+                await idbSet(k, val);
+                localStorage.removeItem(k);
+              }
+            } catch {}
+          }
+        }
+      } catch {}
 
-      const savedSplash = localStorage.getItem('arena_selection_splash_url');
-      const savedSplashName = localStorage.getItem('arena_selection_splash_name');
-      if (savedSplash) {
-        setSelectionSplashUrl(savedSplash);
-        setSelectionSplashName(savedSplashName || 'Custom Splash Image');
-      }
+      // 2. Load splash map
+      try {
+        const idbSplashMap = await idbGet<Record<string, string>>('arena_alien_splash_map');
+        const lsSplashMap = localStorage.getItem('arena_alien_splash_map');
+        const map = idbSplashMap || (lsSplashMap ? JSON.parse(lsSplashMap) : null);
+        if (map) setAlienSplashMap(map);
+      } catch {}
 
-      const savedBgmUrl = localStorage.getItem('arena_bg_music_url');
-      const savedBgmName = localStorage.getItem('arena_bg_music_name');
-      if (savedBgmUrl) {
-        setBgMusicUrl(savedBgmUrl);
-        setBgMusicName(savedBgmName || 'Custom Battle BGM');
-      }
+      // 3. Load global selection splash
+      try {
+        const idbSplash = await idbGet<string>('arena_selection_splash_url');
+        const lsSplash = localStorage.getItem('arena_selection_splash_url');
+        const splash = idbSplash || lsSplash;
+        const splashName = localStorage.getItem('arena_selection_splash_name');
+        if (splash) {
+          setSelectionSplashUrl(splash);
+          setSelectionSplashName(splashName || 'Custom Splash Image');
+        }
+      } catch {}
+
+      // 4. Load BGM
+      try {
+        const idbBgm = await idbGet<string>('arena_bg_music_url');
+        const lsBgm = localStorage.getItem('arena_bg_music_url');
+        const bgm = idbBgm || lsBgm;
+        const bgmName = localStorage.getItem('arena_bg_music_name');
+        if (bgm) {
+          setBgMusicUrl(bgm);
+          setBgMusicName(bgmName || 'Custom Battle BGM');
+        }
+      } catch {}
 
       const savedBgmEnabled = localStorage.getItem('arena_bg_music_enabled');
-      if (savedBgmEnabled !== null) {
-        setBgMusicEnabled(savedBgmEnabled === 'true');
-      }
-
+      if (savedBgmEnabled !== null) setBgMusicEnabled(savedBgmEnabled === 'true');
       const savedBgmVolume = localStorage.getItem('arena_bg_music_volume');
-      if (savedBgmVolume !== null) {
-        setBgMusicVolume(Number(savedBgmVolume));
-      }
+      if (savedBgmVolume !== null) setBgMusicVolume(Number(savedBgmVolume));
 
-      // Restore custom uploaded / cropped ball images & stats per alien from localStorage
-      const savedBallImages = localStorage.getItem('arena_alien_ball_images');
-      const savedCustoms = localStorage.getItem('arena_alien_customizations');
-      const customsMap: Record<string, Partial<ContestantConfig>> = savedCustoms ? JSON.parse(savedCustoms) : {};
-      const imgMap: Record<string, string> = savedBallImages ? JSON.parse(savedBallImages) : {};
+      // 5. Load Ball Images from IndexedDB (with fallback to localStorage)
+      let imgMap: Record<string, string> = {};
+      try {
+        const idbImages = await idbGet<Record<string, string>>('arena_alien_ball_images');
+        if (idbImages && typeof idbImages === 'object') {
+          imgMap = idbImages;
+        } else {
+          const lsImages = localStorage.getItem('arena_alien_ball_images');
+          if (lsImages) imgMap = JSON.parse(lsImages);
+        }
+      } catch {}
 
-      // 1. Update in-memory BEN10_ALIEN_PRESETS so Omnitrix selector has custom stats & ball images
+      // 6. Load Stat Customizations
+      let customsMap: Record<string, Partial<ContestantConfig>> = {};
+      try {
+        const savedCustoms = localStorage.getItem('arena_alien_customizations');
+        if (savedCustoms) customsMap = JSON.parse(savedCustoms);
+      } catch {}
+
+      // Update in-memory BEN10_ALIEN_PRESETS
       BEN10_ALIEN_PRESETS.forEach((preset, pIdx) => {
         const keyByName = preset.name.toLowerCase().replace(/\s+/g, '_');
         const customImg = imgMap[preset.id] || imgMap[keyByName] || imgMap[`alien_${pIdx}`];
-        if (customImg) {
-          preset.image_url = customImg;
-        }
+        if (customImg) preset.image_url = customImg;
         const saved = customsMap[preset.id] || customsMap[keyByName] || customsMap[`fighter_${pIdx}`];
         if (saved) {
           if (saved.starting_health !== undefined) preset.starting_health = saved.starting_health;
@@ -320,11 +366,10 @@ export default function GamePage() {
           if (saved.speed !== undefined) preset.speed = saved.speed;
           if (saved.special_power !== undefined) preset.special_power = saved.special_power;
           if (saved.special_ability) preset.special_ability = { ...preset.special_ability, ...saved.special_ability };
-          if (saved.image_url) preset.image_url = saved.image_url;
         }
       });
 
-      // 2. Pre-cache into loadedImagesRef
+      // Pre-cache into loadedImagesRef
       Object.values(imgMap).forEach((url) => {
         if (url) {
           const im = new Image();
@@ -334,15 +379,13 @@ export default function GamePage() {
         }
       });
 
-      // 3. Restore contestants with full persistence
-      const savedActiveContestants = localStorage.getItem('arena_active_contestants');
+      // 7. Restore active contestants
+      const savedActive = localStorage.getItem('arena_active_contestants');
       let baseList: ContestantConfig[] = [];
-      if (savedActiveContestants) {
+      if (savedActive) {
         try {
-          const parsed = JSON.parse(savedActiveContestants);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            baseList = parsed;
-          }
+          const parsed = JSON.parse(savedActive);
+          if (Array.isArray(parsed) && parsed.length > 0) baseList = parsed;
         } catch {}
       }
 
@@ -373,7 +416,9 @@ export default function GamePage() {
           loadedImagesRef.current.set(c.image_url, im);
         }
       });
-    } catch {}
+    };
+
+    initStorageAndState();
   }, []);
 
   // Background Music Playback Functions
@@ -450,11 +495,11 @@ export default function GamePage() {
     safeSaveLocalStorage('arena_bg_music_name', `Custom: ${cleanName}`);
     safeSaveLocalStorage('arena_bg_music_enabled', 'true');
 
-    if (file.size < 4 * 1024 * 1024) {
+    if (file.size < 15 * 1024 * 1024) {
       const reader = new FileReader();
-      reader.onloadend = () => {
+      reader.onloadend = async () => {
         const dataUrl = reader.result as string;
-        safeSaveLocalStorage('arena_bg_music_url', dataUrl);
+        await idbSet('arena_bg_music_url', dataUrl);
         setBgMusicUrl(dataUrl);
       };
       reader.readAsDataURL(file);
@@ -479,7 +524,7 @@ export default function GamePage() {
     e.target.value = '';
   };
 
-  const handleRemoveCustomMusic = () => {
+  const handleRemoveCustomMusic = async () => {
     if (bgmAudioRef.current) {
       bgmAudioRef.current.pause();
       bgmAudioRef.current = null;
@@ -487,6 +532,7 @@ export default function GamePage() {
     setIsPlayingMusicPreview(false);
     setBgMusicUrl('/audio/battle_bgm.mp3');
     setBgMusicName('Default: Epic Battle');
+    await idbDelete('arena_bg_music_url');
     localStorage.removeItem('arena_bg_music_url');
     localStorage.removeItem('arena_bg_music_name');
   };
@@ -496,11 +542,11 @@ export default function GamePage() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onloadend = () => {
+    reader.onloadend = async () => {
       const dataUrl = reader.result as string;
       setSelectionSplashUrl(dataUrl);
       setSelectionSplashName(file.name);
-      safeSaveLocalStorage('arena_selection_splash_url', dataUrl);
+      await idbSet('arena_selection_splash_url', dataUrl);
       safeSaveLocalStorage('arena_selection_splash_name', file.name);
     };
     reader.readAsDataURL(file);
@@ -524,9 +570,10 @@ export default function GamePage() {
     e.target.value = '';
   };
 
-  const handleRemoveSplashImage = () => {
+  const handleRemoveSplashImage = async () => {
     setSelectionSplashUrl(null);
     setSelectionSplashName(null);
+    await idbDelete('arena_selection_splash_url');
     localStorage.removeItem('arena_selection_splash_url');
     localStorage.removeItem('arena_selection_splash_name');
   };
@@ -536,11 +583,11 @@ export default function GamePage() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onloadend = () => {
+    reader.onloadend = async () => {
       const dataUrl = reader.result as string;
       setAlienSplashMap((prev) => {
         const updated = { ...prev, [alienId]: dataUrl };
-        safeSaveLocalStorage('arena_alien_splash_map', JSON.stringify(updated));
+        idbSet('arena_alien_splash_map', updated);
         return updated;
       });
 
@@ -562,7 +609,7 @@ export default function GamePage() {
         if (publicData?.publicUrl) {
           setAlienSplashMap((prev) => {
             const updated = { ...prev, [alienId]: publicData.publicUrl };
-            safeSaveLocalStorage('arena_alien_splash_map', JSON.stringify(updated));
+            idbSet('arena_alien_splash_map', updated);
             return updated;
           });
         }
@@ -572,11 +619,11 @@ export default function GamePage() {
     e.target.value = '';
   };
 
-  const handleRemoveAlienSplash = (alienId: string) => {
+  const handleRemoveAlienSplash = async (alienId: string) => {
     setAlienSplashMap((prev) => {
       const updated = { ...prev };
       delete updated[alienId];
-      safeSaveLocalStorage('arena_alien_splash_map', JSON.stringify(updated));
+      idbSet('arena_alien_splash_map', updated);
       return updated;
     });
     setContestants((prev) =>
@@ -723,7 +770,7 @@ export default function GamePage() {
       }
       try {
         if (updated.length > 0) {
-          safeSaveLocalStorage('arena_active_contestants', JSON.stringify(updated));
+          safeSaveLocalStorage('arena_active_contestants', JSON.stringify(stripDataUrls(updated)));
         }
       } catch {}
       return updated;
@@ -3052,7 +3099,7 @@ export default function GamePage() {
 
         setContestants(matchContestants);
         try {
-          safeSaveLocalStorage('arena_active_contestants', JSON.stringify(matchContestants));
+          safeSaveLocalStorage('arena_active_contestants', JSON.stringify(stripDataUrls(matchContestants)));
         } catch {}
         setAliveCount(matchContestants.length);
 
@@ -3496,14 +3543,14 @@ export default function GamePage() {
       cachedImg.src = croppedDataUrl;
       loadedImagesRef.current.set(croppedDataUrl, cachedImg);
 
-      // Update contestant in state and persist active list
+      // Update contestant in state and persist active list (stripped of heavy base64 to keep localStorage under 1KB)
       setContestants((prev) => {
         const copy = [...prev];
         if (copy[cropTargetIndex]) {
           copy[cropTargetIndex] = { ...copy[cropTargetIndex], image_url: croppedDataUrl };
         }
         try {
-          safeSaveLocalStorage('arena_active_contestants', JSON.stringify(copy));
+          safeSaveLocalStorage('arena_active_contestants', JSON.stringify(stripDataUrls(copy)));
         } catch (e) {}
         return copy;
       });
@@ -3522,24 +3569,18 @@ export default function GamePage() {
         BEN10_ALIEN_PRESETS[cropTargetIndex].image_url = croppedDataUrl;
       }
 
-      // Persist in localStorage so custom image is NEVER lost on refresh!
-      try {
-        const savedBallImages = JSON.parse(localStorage.getItem('arena_alien_ball_images') || '{}');
-        const targetId = targetFighter?.id || `alien_${cropTargetIndex}`;
-        savedBallImages[targetId] = croppedDataUrl;
-        if (targetFighter?.name) {
-          savedBallImages[targetFighter.name.toLowerCase().replace(/\s+/g, '_')] = croppedDataUrl;
-        }
-        safeSaveLocalStorage('arena_alien_ball_images', JSON.stringify(savedBallImages));
-
-        const savedCustoms = JSON.parse(localStorage.getItem('arena_alien_customizations') || '{}');
-        savedCustoms[targetId] = { ...(savedCustoms[targetId] || {}), image_url: croppedDataUrl };
-        if (targetFighter?.name) {
-          const keyByName = targetFighter.name.toLowerCase().replace(/\s+/g, '_');
-          savedCustoms[keyByName] = { ...(savedCustoms[keyByName] || {}), image_url: croppedDataUrl };
-        }
-        safeSaveLocalStorage('arena_alien_customizations', JSON.stringify(savedCustoms));
-      } catch (e) {}
+      // Persist in IndexedDB (practically unlimited quota - avoids QuotaExceededError completely!)
+      (async () => {
+        try {
+          const currentMap = (await idbGet<Record<string, string>>('arena_alien_ball_images')) || {};
+          const targetId = targetFighter?.id || `alien_${cropTargetIndex}`;
+          currentMap[targetId] = croppedDataUrl;
+          if (targetFighter?.name) {
+            currentMap[targetFighter.name.toLowerCase().replace(/\s+/g, '_')] = croppedDataUrl;
+          }
+          await idbSet('arena_alien_ball_images', currentMap);
+        } catch {}
+      })();
 
       setCropModalOpen(false);
       setRawImageSrc(null);
@@ -3553,7 +3594,7 @@ export default function GamePage() {
       const copy = [...prev];
       copy[index] = { ...copy[index], ...updates };
       try {
-        safeSaveLocalStorage('arena_active_contestants', JSON.stringify(copy));
+        safeSaveLocalStorage('arena_active_contestants', JSON.stringify(stripDataUrls(copy)));
       } catch (e) {}
       return copy;
     });
@@ -3582,15 +3623,20 @@ export default function GamePage() {
       try {
         const savedCustoms = JSON.parse(localStorage.getItem('arena_alien_customizations') || '{}');
         const targetId = targetFighter.id || `alien_${index}`;
+        // Strip data: URLs from customizations so localStorage stays tiny (<1KB)
+        const cleanUpdates = { ...updates };
+        if (cleanUpdates.image_url && cleanUpdates.image_url.startsWith('data:')) {
+          delete cleanUpdates.image_url;
+        }
         savedCustoms[targetId] = {
           ...(savedCustoms[targetId] || {}),
-          ...updates,
+          ...cleanUpdates,
         };
         if (targetFighter.name) {
           const keyByName = targetFighter.name.toLowerCase().replace(/\s+/g, '_');
           savedCustoms[keyByName] = {
             ...(savedCustoms[keyByName] || {}),
-            ...updates,
+            ...cleanUpdates,
           };
         }
         safeSaveLocalStorage('arena_alien_customizations', JSON.stringify(savedCustoms));
@@ -3598,22 +3644,24 @@ export default function GamePage() {
     }
 
     if (updates.image_url !== undefined) {
-      try {
-        const savedBallImages = JSON.parse(localStorage.getItem('arena_alien_ball_images') || '{}');
-        const targetId = targetFighter?.id || `alien_${index}`;
-        if (updates.image_url) {
-          savedBallImages[targetId] = updates.image_url;
-          if (targetFighter?.name) {
-            savedBallImages[targetFighter.name.toLowerCase().replace(/\s+/g, '_')] = updates.image_url;
+      const targetId = targetFighter?.id || `alien_${index}`;
+      (async () => {
+        try {
+          const currentMap = (await idbGet<Record<string, string>>('arena_alien_ball_images')) || {};
+          if (updates.image_url) {
+            currentMap[targetId] = updates.image_url;
+            if (targetFighter?.name) {
+              currentMap[targetFighter.name.toLowerCase().replace(/\s+/g, '_')] = updates.image_url;
+            }
+          } else {
+            delete currentMap[targetId];
+            if (targetFighter?.name) {
+              delete currentMap[targetFighter.name.toLowerCase().replace(/\s+/g, '_')];
+            }
           }
-        } else {
-          delete savedBallImages[targetId];
-          if (targetFighter?.name) {
-            delete savedBallImages[targetFighter.name.toLowerCase().replace(/\s+/g, '_')];
-          }
-        }
-        safeSaveLocalStorage('arena_alien_ball_images', JSON.stringify(savedBallImages));
-      } catch (e) {}
+          await idbSet('arena_alien_ball_images', currentMap);
+        } catch {}
+      })();
     }
   };
 
