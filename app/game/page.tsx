@@ -206,18 +206,27 @@ export default function GamePage() {
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Interactive Ben 10 Omnitrix Selection State
-  type SelectionPhase = 'idle' | 'select_p1' | 'select_p2' | 'hero_time' | 'battling';
+  // Interactive Ben 10 Omnitrix Selection State (Supports N Players based on Fighter Count)
+  type SelectionPhase = 'idle' | 'selecting' | 'hero_time' | 'battling';
   const [selectionPhase, setSelectionPhase] = useState<SelectionPhase>('idle');
   const selectionPhaseRef = useRef<SelectionPhase>('idle');
   useEffect(() => {
     selectionPhaseRef.current = selectionPhase;
   }, [selectionPhase]);
 
-  const [p1Index, setP1Index] = useState<number>(0);
-  const [p2Index, setP2Index] = useState<number>(1);
-  const [selectedP1, setSelectedP1] = useState<ContestantConfig | null>(null);
-  const [selectedP2, setSelectedP2] = useState<ContestantConfig | null>(null);
+  const [currentSelectingIndex, setCurrentSelectingIndex] = useState<number>(0);
+  const currentSelectingIndexRef = useRef<number>(0);
+  useEffect(() => {
+    currentSelectingIndexRef.current = currentSelectingIndex;
+  }, [currentSelectingIndex]);
+
+  const [selectedAliens, setSelectedAliens] = useState<ContestantConfig[]>([]);
+  const selectedAliensRef = useRef<ContestantConfig[]>([]);
+  useEffect(() => {
+    selectedAliensRef.current = selectedAliens;
+  }, [selectedAliens]);
+
+  const [dialAlienIndex, setDialAlienIndex] = useState<number>(0);
   const [dialRotationAngle, setDialRotationAngle] = useState<number>(0);
   const [greenFlash, setGreenFlash] = useState<boolean>(false);
   const [heroTimeBanner, setHeroTimeBanner] = useState<boolean>(false);
@@ -506,7 +515,7 @@ export default function GamePage() {
   };
 
   const triggerSplashPreview = () => {
-    const target = selectedP1 || contestants[0] || BEN10_ALIEN_PRESETS[0];
+    const target = selectedAliens[0] || contestants[0] || BEN10_ALIEN_PRESETS[0];
     const splash = alienSplashMap[target.id] || target.splash_image_url || selectionSplashUrl || target.image_url;
     setAlienSplashTargetAlien({ ...target, splash_image_url: splash });
     setAlienSplashActive(true);
@@ -683,13 +692,8 @@ export default function GamePage() {
   ) => {
     if (!soundEnabled) return;
 
-    // Authentic Ben 10 voice and Omnitrix sound effects from user's audio files
+    // User requested: Ben's voice removed for Hero Time (text banner only)
     if (type === 'hero_time') {
-      try {
-        const audio = new Audio(`/audio/its_hero_time.mp3?v=${Date.now()}`);
-        audio.volume = Math.min(1, soundVolume * 1.0);
-        audio.play().catch(() => {});
-      } catch (e) {}
       return;
     }
 
@@ -1797,8 +1801,8 @@ export default function GamePage() {
       let visibleFighters: SimFighter[] = [];
       if (currentPhase === 'hero_time' || currentPhase === 'battling') {
         visibleFighters = fighters;
-      } else if (currentPhase === 'select_p2') {
-        visibleFighters = fighters.slice(0, 1);
+      } else if (currentPhase === 'selecting') {
+        visibleFighters = fighters.slice(0, selectedAliensRef.current.length);
       } else {
         visibleFighters = [];
       }
@@ -2815,8 +2819,10 @@ export default function GamePage() {
   const handleStartSelection = () => {
     if (selectionPhase === 'idle') {
       playSound('omnitrix_open');
-      setSelectionPhase('select_p1');
-      setP1Index(0);
+      setSelectionPhase('selecting');
+      setCurrentSelectingIndex(0);
+      setSelectedAliens([]);
+      setDialAlienIndex(0);
       setDialRotationAngle(0);
     }
   };
@@ -2826,105 +2832,82 @@ export default function GamePage() {
     playSound('omnitrix_turn');
     const roster = BEN10_ALIEN_PRESETS;
     const rosterLen = roster.length;
-    if (selectionPhase === 'select_p1') {
-      setP1Index((prev) => (direction === 'next' ? (prev + 1) % rosterLen : (prev - 1 + rosterLen) % rosterLen));
-      setDialRotationAngle((prev) => prev + (direction === 'next' ? 45 : -45));
-    } else if (selectionPhase === 'select_p2') {
-      setP2Index((prev) => (direction === 'next' ? (prev + 1) % rosterLen : (prev - 1 + rosterLen) % rosterLen));
-      setDialRotationAngle((prev) => prev + (direction === 'next' ? 45 : -45));
-    }
+    setDialAlienIndex((prev) => (direction === 'next' ? (prev + 1) % rosterLen : (prev - 1 + rosterLen) % rosterLen));
+    setDialRotationAngle((prev) => prev + (direction === 'next' ? 45 : -45));
   };
 
   const handleCenterSlam = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    if (selectionPhase !== 'selecting') return;
+
     playSound('omnitrix_slam');
     setGreenFlash(true);
 
     const roster = BEN10_ALIEN_PRESETS;
+    const chosen = roster[dialAlienIndex % roster.length];
+    const newSelected = [...selectedAliens, chosen];
+    setSelectedAliens(newSelected);
 
-    if (selectionPhase === 'select_p1') {
-      const chosen1 = roster[p1Index % roster.length];
-      setSelectedP1(chosen1);
-
-      if (chosen1.image_url) {
-        let img = loadedImagesRef.current.get(chosen1.image_url);
-        if (!img) {
-          img = new Image();
-          img.crossOrigin = 'anonymous';
-          img.onload = () => drawFrame();
-          img.src = chosen1.image_url;
-          loadedImagesRef.current.set(chosen1.image_url, img);
-        }
+    if (chosen.image_url) {
+      let img = loadedImagesRef.current.get(chosen.image_url);
+      if (!img) {
+        img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => drawFrame();
+        img.src = chosen.image_url;
+        loadedImagesRef.current.set(chosen.image_url, img);
       }
+    }
 
-      // Sync fighter 0 in current simulation so when select_p2 draws fighter 0 on canvas, it shows chosen1 immediately!
-      if (simResultRef.current) {
-        simResultRef.current.frames.forEach((fr) => {
-          if (fr.fighters[0]) {
-            fr.fighters[0].name = chosen1.name;
-            fr.fighters[0].color = chosen1.color;
-            fr.fighters[0].image_url = chosen1.image_url;
-            if (chosen1.special_ability) fr.fighters[0].specialAbility = chosen1.special_ability;
+    // Sync fighter at currentSelectingIndex in current simulation
+    if (simResultRef.current) {
+      simResultRef.current.frames.forEach((fr) => {
+        if (fr.fighters[currentSelectingIndex]) {
+          fr.fighters[currentSelectingIndex].name = chosen.name;
+          fr.fighters[currentSelectingIndex].color = chosen.color;
+          fr.fighters[currentSelectingIndex].image_url = chosen.image_url;
+          if (chosen.special_ability) {
+            fr.fighters[currentSelectingIndex].specialAbility = chosen.special_ability;
           }
-        });
-      }
+        }
+      });
+    }
 
-      // Show 1-Second Fullscreen Alien Splash Screen (per alien)
-      const splash1 = alienSplashMap[chosen1.id] || chosen1.splash_image_url || chosen1.image_url;
-      setAlienSplashTargetAlien({ ...chosen1, splash_image_url: splash1 });
-      setAlienSplashActive(true);
+    // Show 1-Second Fullscreen Alien Splash Screen (per alien)
+    const splash = alienSplashMap[chosen.id] || chosen.splash_image_url || chosen.image_url;
+    setAlienSplashTargetAlien({ ...chosen, splash_image_url: splash });
+    setAlienSplashActive(true);
 
-      setTimeout(() => {
-        setAlienSplashActive(false);
-        setGreenFlash(false);
-        setSelectionPhase('select_p2');
-        setP2Index((p1Index + 1) % roster.length);
+    const nextIndex = currentSelectingIndex + 1;
+
+    setTimeout(() => {
+      setAlienSplashActive(false);
+      setGreenFlash(false);
+
+      if (nextIndex < contestantCount) {
+        // More players to select (e.g. Player 2, Player 3, Player 4...)
+        setCurrentSelectingIndex(nextIndex);
+        setDialAlienIndex((prev) => (prev + 1) % roster.length);
         setDialRotationAngle(0);
         drawFrame();
-      }, 1000);
-    } else if (selectionPhase === 'select_p2') {
-      const chosen1 = selectedP1 || roster[p1Index % roster.length];
-      const chosen2 = roster[p2Index % roster.length];
-      setSelectedP2(chosen2);
+      } else {
+        // ALL contestantCount players have been selected!
+        const matchContestants: ContestantConfig[] = newSelected.map((chosenAlien, idx) => {
+          const custom = contestants.find((c) => c.id === chosenAlien.id || c.name === chosenAlien.name);
+          const slotAbility = contestants[idx]?.special_ability;
+          const ability = custom?.special_ability || (slotAbility && slotAbility.trigger_type !== 'charge' ? { ...(chosenAlien.special_ability || {}), ...slotAbility } : chosenAlien.special_ability);
+          return {
+            ...(custom || chosenAlien),
+            id: `fighter_${idx + 1}`,
+            name: chosenAlien.name,
+            color: chosenAlien.color,
+            image_url: chosenAlien.image_url,
+            special_ability: ability,
+          };
+        });
 
-      if (chosen2.image_url) {
-        let img = loadedImagesRef.current.get(chosen2.image_url);
-        if (!img) {
-          img = new Image();
-          img.crossOrigin = 'anonymous';
-          img.onload = () => drawFrame();
-          img.src = chosen2.image_url;
-          loadedImagesRef.current.set(chosen2.image_url, img);
-        }
-      }
-
-      // Show 1-Second Fullscreen Alien Splash Screen (per alien)
-      const splash2 = alienSplashMap[chosen2.id] || chosen2.splash_image_url || chosen2.image_url;
-      setAlienSplashTargetAlien({ ...chosen2, splash_image_url: splash2 });
-      setAlienSplashActive(true);
-
-      setTimeout(() => {
-        setAlienSplashActive(false);
-        setGreenFlash(false);
-        setSelectionPhase('hero_time');
-        setHeroTimeBanner(true);
-        playSound('hero_time');
-
-        const custom1 = contestants.find((c) => c.id === chosen1.id || c.name === chosen1.name);
-        const custom2 = contestants.find((c) => c.id === chosen2.id || c.name === chosen2.name);
-
-        const slot1Ability = contestants[0]?.special_ability;
-        const slot2Ability = contestants[1]?.special_ability;
-
-        const fighter1Ability = custom1?.special_ability || (slot1Ability && slot1Ability.trigger_type !== 'charge' ? { ...(chosen1.special_ability || {}), ...slot1Ability } : chosen1.special_ability);
-        const fighter2Ability = custom2?.special_ability || (slot2Ability && slot2Ability.trigger_type !== 'charge' ? { ...(chosen2.special_ability || {}), ...slot2Ability } : chosen2.special_ability);
-
-        const matchContestants: ContestantConfig[] = [
-          { ...(custom1 || chosen1), id: 'fighter_1', special_ability: fighter1Ability },
-          { ...(custom2 || chosen2), id: 'fighter_2', special_ability: fighter2Ability },
-        ];
         setContestants(matchContestants);
-        setContestantCount(2);
+        setAliveCount(matchContestants.length);
 
         const sim = generateArenaSimulation(
           matchContestants.map((c) => ({
@@ -2945,20 +2928,22 @@ export default function GamePage() {
         currentFrameRef.current = 0;
         lastSoundFrameRef.current = -1;
         setWinner(null);
-        setAliveCount(2);
 
-        // Start battle immediately with "It's Hero Time!" banner and start Background Music!
-        setSelectionPhase('battling');
-        setIsPlaying(true);
-        startBattleMusic();
+        // Show "It's Hero Time!" banner without Ben's voice!
+        setSelectionPhase('hero_time');
+        setHeroTimeBanner(true);
         drawFrame();
 
-        // Banner fades out smoothly after 1.2s while battle is active!
+        // User requirement: When the "It's Hero Time!" text leaves, start the battle!
         setTimeout(() => {
           setHeroTimeBanner(false);
-        }, 1200);
-      }, 1000);
-    }
+          setSelectionPhase('battling');
+          setIsPlaying(true);
+          startBattleMusic();
+          drawFrame();
+        }, 1500);
+      }
+    }, 1000);
   };
 
   const resetSimulation = () => {
@@ -2966,8 +2951,10 @@ export default function GamePage() {
     stopBattleMusic();
     setAlienSplashActive(false);
     setSelectionPhase('idle');
-    setSelectedP1(null);
-    setSelectedP2(null);
+    setSelectedAliens([]);
+    setCurrentSelectingIndex(0);
+    setDialAlienIndex(0);
+    setDialRotationAngle(0);
     setHeroTimeBanner(false);
     setGreenFlash(false);
     screenShakeRef.current = 0;
@@ -2979,7 +2966,7 @@ export default function GamePage() {
 
   const handlePlayToggle = () => {
     const sim = simResultRef.current;
-    if (selectionPhase === 'select_p1' || selectionPhase === 'select_p2') {
+    if (selectionPhase === 'selecting') {
       handleCenterSlam();
       return;
     }
@@ -3001,9 +2988,7 @@ export default function GamePage() {
   };
 
   const availableRoster = BEN10_ALIEN_PRESETS;
-  const currentDialAlien = selectionPhase === 'select_p1'
-    ? availableRoster[p1Index % availableRoster.length]
-    : availableRoster[p2Index % availableRoster.length];
+  const currentDialAlien = availableRoster[dialAlienIndex % availableRoster.length];
 
   const renderOmnitrixOverlay = () => {
     return (
@@ -3021,7 +3006,7 @@ export default function GamePage() {
         )}
 
         {/* Interactive Omnitrix Alien Selector (Popped up large in center of arena) */}
-        {(selectionPhase === 'select_p1' || selectionPhase === 'select_p2') && (
+        {selectionPhase === 'selecting' && (
           <div
             className="absolute flex flex-col items-center justify-center z-30 select-none animate-in zoom-in-75 duration-300"
             style={{
@@ -3076,7 +3061,7 @@ export default function GamePage() {
               <button
                 type="button"
                 onClick={(e) => handleCenterSlam(e)}
-                title="Click Center to Select Alien & Strike!"
+                title={`Click Center to Select Alien for Player ${currentSelectingIndex + 1}`}
                 className="absolute inset-10 rounded-full bg-gradient-to-b from-[#0a2211] via-black to-[#031107] border-4 border-emerald-400 shadow-[0_0_30px_rgba(0,255,102,0.9),inset_0_0_20px_rgba(0,255,102,0.5)] hover:border-white hover:shadow-[0_0_45px_#00ff66] transition active:scale-95 flex flex-col items-center justify-center overflow-hidden cursor-pointer group"
               >
                 {/* Green Hourglass Silhouette in Core */}
@@ -3108,10 +3093,15 @@ export default function GamePage() {
               </button>
             </div>
 
-            {/* Clean Alien Name Tag Below (No emoji, clean typography) */}
+            {/* Selecting Player Number Badge */}
+            <div className="mt-3 px-4 py-1 rounded-full bg-black/95 border-2 border-emerald-400 text-emerald-300 font-black text-xs tracking-widest uppercase shadow-[0_0_15px_rgba(0,255,102,0.5)] flex items-center gap-2">
+              <span>PLAYER {currentSelectingIndex + 1} OF {contestantCount}</span>
+            </div>
+
+            {/* Clean Alien Name Tag Below */}
             {currentDialAlien && (
               <div
-                className="mt-3 px-5 py-1.5 rounded-full bg-black/95 border-2 text-white font-black text-sm tracking-wider whitespace-nowrap shadow-2xl flex items-center gap-2"
+                className="mt-1.5 px-5 py-1.5 rounded-full bg-black/95 border-2 text-white font-black text-sm tracking-wider whitespace-nowrap shadow-2xl flex items-center gap-2"
                 style={{
                   borderColor: currentDialAlien.color || '#00ff66',
                   boxShadow: `0 0 20px ${currentDialAlien.color || '#00ff66'}90`,
@@ -3120,6 +3110,22 @@ export default function GamePage() {
                 <span>{currentDialAlien.name}</span>
               </div>
             )}
+
+            {/* Player Selection Progress Dots */}
+            <div className="flex items-center gap-2 mt-2">
+              {Array.from({ length: contestantCount }).map((_, i) => (
+                <div
+                  key={i}
+                  className={`w-2.5 h-2.5 rounded-full transition-all ${
+                    i < currentSelectingIndex
+                      ? 'bg-emerald-400 shadow-[0_0_8px_#00ff66]'
+                      : i === currentSelectingIndex
+                      ? 'bg-white border-2 border-emerald-400 scale-125 animate-pulse'
+                      : 'bg-slate-700'
+                  }`}
+                />
+              ))}
+            </div>
           </div>
         )}
 
@@ -3565,7 +3571,10 @@ export default function GamePage() {
                   {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((num) => (
                     <button
                       key={num}
-                      onClick={() => setContestantCount(num)}
+                      onClick={() => {
+                        setContestantCount(num);
+                        resetSimulation();
+                      }}
                       className={`w-7 h-7 rounded-lg text-xs font-black transition ${
                         contestantCount === num
                           ? 'bg-cyan-500 text-slate-950 shadow-md'
