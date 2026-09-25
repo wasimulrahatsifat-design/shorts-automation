@@ -251,11 +251,22 @@ export default function GamePage() {
     try {
       localStorage.setItem(key, value);
     } catch (e) {
-      console.warn(`localStorage quota exceeded for ${key}`);
+      console.warn(`localStorage quota warning for ${key}, cleaning up old cache...`);
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k !== key && k.startsWith('temp_')) {
+            localStorage.removeItem(k);
+          }
+        }
+        localStorage.setItem(key, value);
+      } catch (e2) {
+        console.error(`Unable to save ${key} to localStorage`, e2);
+      }
     }
   };
 
-  // Restore saved splash image & BGM settings
+  // Restore saved splash image, BGM settings, custom alien stats & ball images
   useEffect(() => {
     try {
       const savedMap = localStorage.getItem('arena_alien_splash_map');
@@ -289,38 +300,79 @@ export default function GamePage() {
         setBgMusicVolume(Number(savedBgmVolume));
       }
 
-      // Restore custom uploaded / cropped ball images per alien from localStorage
+      // Restore custom uploaded / cropped ball images & stats per alien from localStorage
       const savedBallImages = localStorage.getItem('arena_alien_ball_images');
-      if (savedBallImages) {
+      const savedCustoms = localStorage.getItem('arena_alien_customizations');
+      const customsMap: Record<string, Partial<ContestantConfig>> = savedCustoms ? JSON.parse(savedCustoms) : {};
+      const imgMap: Record<string, string> = savedBallImages ? JSON.parse(savedBallImages) : {};
+
+      // 1. Update in-memory BEN10_ALIEN_PRESETS so Omnitrix selector has custom stats & ball images
+      BEN10_ALIEN_PRESETS.forEach((preset, pIdx) => {
+        const keyByName = preset.name.toLowerCase().replace(/\s+/g, '_');
+        const customImg = imgMap[preset.id] || imgMap[keyByName] || imgMap[`alien_${pIdx}`];
+        if (customImg) {
+          preset.image_url = customImg;
+        }
+        const saved = customsMap[preset.id] || customsMap[keyByName] || customsMap[`fighter_${pIdx}`];
+        if (saved) {
+          if (saved.starting_health !== undefined) preset.starting_health = saved.starting_health;
+          if (saved.damage !== undefined) preset.damage = saved.damage;
+          if (saved.speed !== undefined) preset.speed = saved.speed;
+          if (saved.special_power !== undefined) preset.special_power = saved.special_power;
+          if (saved.special_ability) preset.special_ability = { ...preset.special_ability, ...saved.special_ability };
+          if (saved.image_url) preset.image_url = saved.image_url;
+        }
+      });
+
+      // 2. Pre-cache into loadedImagesRef
+      Object.values(imgMap).forEach((url) => {
+        if (url) {
+          const im = new Image();
+          im.onload = () => drawFrame();
+          im.src = url;
+          loadedImagesRef.current.set(url, im);
+        }
+      });
+
+      // 3. Restore contestants with full persistence
+      const savedActiveContestants = localStorage.getItem('arena_active_contestants');
+      let baseList: ContestantConfig[] = [];
+      if (savedActiveContestants) {
         try {
-          const imgMap: Record<string, string> = JSON.parse(savedBallImages);
-          // 1. Update BEN10_ALIEN_PRESETS so Omnitrix selector has the custom ball images
-          BEN10_ALIEN_PRESETS.forEach((preset, pIdx) => {
-            const keyByName = preset.name.toLowerCase().replace(/\s+/g, '_');
-            const customImg = imgMap[preset.id] || imgMap[keyByName] || imgMap[`alien_${pIdx}`];
-            if (customImg) {
-              preset.image_url = customImg;
-            }
-          });
-          // 2. Pre-cache into loadedImagesRef
-          Object.values(imgMap).forEach((url) => {
-            if (url) {
-              const im = new Image();
-              im.onload = () => drawFrame();
-              im.src = url;
-              loadedImagesRef.current.set(url, im);
-            }
-          });
-          // 3. Update contestants
-          setContestants((prev) =>
-            prev.map((c, cIdx) => {
-              const keyByName = c.name.toLowerCase().replace(/\s+/g, '_');
-              const customImg = imgMap[c.id] || imgMap[keyByName] || imgMap[`alien_${cIdx}`];
-              return customImg ? { ...c, image_url: customImg } : c;
-            })
-          );
+          const parsed = JSON.parse(savedActiveContestants);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            baseList = parsed;
+          }
         } catch {}
       }
+
+      if (baseList.length === 0) {
+        baseList = BEN10_ALIEN_PRESETS.slice(0, 4).map((a) => ({ ...a }));
+      }
+
+      const restoredContestants = baseList.map((c, cIdx) => {
+        const keyByName = c.name.toLowerCase().replace(/\s+/g, '_');
+        const customImg = imgMap[c.id] || imgMap[keyByName] || imgMap[`alien_${cIdx}`] || c.image_url;
+        const saved = customsMap[c.id] || customsMap[keyByName];
+        return {
+          ...c,
+          ...(saved || {}),
+          image_url: customImg || c.image_url,
+          special_ability: saved?.special_ability ? { ...c.special_ability, ...saved.special_ability } : c.special_ability,
+        };
+      });
+
+      setContestantCount(restoredContestants.length);
+      setContestants(restoredContestants);
+
+      restoredContestants.forEach((c) => {
+        if (c.image_url) {
+          const im = new Image();
+          im.onload = () => drawFrame();
+          im.src = c.image_url;
+          loadedImagesRef.current.set(c.image_url, im);
+        }
+      });
     } catch {}
   }, []);
 
@@ -669,6 +721,11 @@ export default function GamePage() {
           });
         }
       }
+      try {
+        if (updated.length > 0) {
+          safeSaveLocalStorage('arena_active_contestants', JSON.stringify(updated));
+        }
+      } catch {}
       return updated;
     });
   }, [contestantCount]);
@@ -2521,18 +2578,46 @@ export default function GamePage() {
         // --- GREY MATTER: GALVAN INTELLECT CIRCLING PULSES & SUN GUN ---
         else if (aType === 'grey_matter') {
           ctx.save();
-          // Miniature Galvan scale and neural brainwaves
+          // Inner revolving Galvan tech circuit ring (Emerald Green)
+          ctx.save();
+          ctx.rotate(curFrame * 0.04);
           ctx.beginPath();
-          ctx.arc(0, 0, half + 10, 0, Math.PI * 2);
-          ctx.strokeStyle = 'rgba(250, 204, 21, 0.7)';
+          ctx.arc(0, 0, half + 8, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(16, 185, 129, 0.75)';
           ctx.lineWidth = 2.5;
-          ctx.setLineDash([8, 6]);
+          ctx.setLineDash([10, 8]);
+          ctx.shadowColor = '#10b981';
+          ctx.shadowBlur = 14;
+          ctx.stroke();
+
+          // 3 orbiting Galvan intellect micro-nodes
+          for (let m = 0; m < 3; m++) {
+            const ang = (m / 3) * Math.PI * 2;
+            const nx = Math.cos(ang) * (half + 8);
+            const ny = Math.sin(ang) * (half + 8);
+            ctx.beginPath();
+            ctx.arc(nx, ny, 3.5, 0, Math.PI * 2);
+            ctx.fillStyle = '#6ee7b7';
+            ctx.shadowColor = '#10b981';
+            ctx.shadowBlur = 10;
+            ctx.fill();
+          }
+          ctx.restore();
+
+          // Outer counter-revolving Solar Intellect ring (Golden Yellow)
+          ctx.save();
+          ctx.rotate(-curFrame * 0.03);
+          ctx.beginPath();
+          ctx.arc(0, 0, half + 16, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(250, 204, 21, 0.65)';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([6, 6]);
           ctx.shadowColor = '#eab308';
           ctx.shadowBlur = 12;
           ctx.stroke();
-          ctx.setLineDash([]);
+          ctx.restore();
 
-          // Solar focus death ray halo when active!
+          // Solar focus death ray halo & concentrated beam when active!
           if (f.abilityAuraTimer > 0) {
             ctx.save();
             ctx.beginPath();
@@ -2540,7 +2625,26 @@ export default function GamePage() {
             ctx.strokeStyle = '#facc15';
             ctx.lineWidth = 6;
             ctx.shadowColor = '#eab308';
-            ctx.shadowBlur = 30;
+            ctx.shadowBlur = 32;
+            ctx.stroke();
+
+            // Concentrated Galvan Solar Beam ahead
+            const moveAng = Math.atan2(f.vy, f.vx) || 0;
+            ctx.rotate(moveAng);
+            ctx.beginPath();
+            ctx.moveTo(half, 0);
+            ctx.lineTo(half + 160, 0);
+            ctx.strokeStyle = '#facc15';
+            ctx.lineWidth = 8;
+            ctx.shadowColor = '#fde047';
+            ctx.shadowBlur = 25;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(half, 0);
+            ctx.lineTo(half + 160, 0);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3;
             ctx.stroke();
             ctx.restore();
           }
@@ -2931,7 +3035,9 @@ export default function GamePage() {
       } else {
         // ALL contestantCount players have been selected!
         const matchContestants: ContestantConfig[] = newSelected.map((chosenAlien, idx) => {
-          const custom = contestants.find((c) => c.id === chosenAlien.id || c.name === chosenAlien.name);
+          const custom =
+            contestants.find((c) => c.id === chosenAlien.id || c.name === chosenAlien.name) ||
+            BEN10_ALIEN_PRESETS.find((p) => p.id === chosenAlien.id || p.name === chosenAlien.name);
           const slotAbility = contestants[idx]?.special_ability;
           const ability = custom?.special_ability || (slotAbility && slotAbility.trigger_type !== 'charge' ? { ...(chosenAlien.special_ability || {}), ...slotAbility } : chosenAlien.special_ability);
           return {
@@ -2945,6 +3051,9 @@ export default function GamePage() {
         });
 
         setContestants(matchContestants);
+        try {
+          safeSaveLocalStorage('arena_active_contestants', JSON.stringify(matchContestants));
+        } catch {}
         setAliveCount(matchContestants.length);
 
         const sim = generateArenaSimulation(
@@ -3357,7 +3466,7 @@ export default function GamePage() {
     const img = new Image();
     img.onload = () => {
       const VIEWPORT = 280;
-      const OUTPUT_SIZE = 400; // 400x400 high-res square avatar
+      const OUTPUT_SIZE = 160; // 160x160 is lightweight (~12KB) & ultra-crisp for ball avatars
       const canvas = document.createElement('canvas');
       canvas.width = OUTPUT_SIZE;
       canvas.height = OUTPUT_SIZE;
@@ -3376,7 +3485,7 @@ export default function GamePage() {
 
       ctx.drawImage(img, posX, posY, scaledW, scaledH);
 
-      const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+      const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
 
       // Pre-cache in loadedImagesRef immediately so Canvas can draw it with 0 delay
       const cachedImg = new Image();
@@ -3387,17 +3496,28 @@ export default function GamePage() {
       cachedImg.src = croppedDataUrl;
       loadedImagesRef.current.set(croppedDataUrl, cachedImg);
 
-      // Update contestant
+      // Update contestant in state and persist active list
       setContestants((prev) => {
         const copy = [...prev];
         if (copy[cropTargetIndex]) {
           copy[cropTargetIndex] = { ...copy[cropTargetIndex], image_url: croppedDataUrl };
         }
+        try {
+          safeSaveLocalStorage('arena_active_contestants', JSON.stringify(copy));
+        } catch (e) {}
         return copy;
       });
 
       // Also update BEN10_ALIEN_PRESETS so preset persistence works
       const targetFighter = contestants[cropTargetIndex] || BEN10_ALIEN_PRESETS[cropTargetIndex];
+      if (targetFighter) {
+        const preset = BEN10_ALIEN_PRESETS.find(
+          (p) => p.id === targetFighter.id || p.name === targetFighter.name
+        );
+        if (preset) {
+          preset.image_url = croppedDataUrl;
+        }
+      }
       if (BEN10_ALIEN_PRESETS[cropTargetIndex]) {
         BEN10_ALIEN_PRESETS[cropTargetIndex].image_url = croppedDataUrl;
       }
@@ -3411,6 +3531,14 @@ export default function GamePage() {
           savedBallImages[targetFighter.name.toLowerCase().replace(/\s+/g, '_')] = croppedDataUrl;
         }
         safeSaveLocalStorage('arena_alien_ball_images', JSON.stringify(savedBallImages));
+
+        const savedCustoms = JSON.parse(localStorage.getItem('arena_alien_customizations') || '{}');
+        savedCustoms[targetId] = { ...(savedCustoms[targetId] || {}), image_url: croppedDataUrl };
+        if (targetFighter?.name) {
+          const keyByName = targetFighter.name.toLowerCase().replace(/\s+/g, '_');
+          savedCustoms[keyByName] = { ...(savedCustoms[keyByName] || {}), image_url: croppedDataUrl };
+        }
+        safeSaveLocalStorage('arena_alien_customizations', JSON.stringify(savedCustoms));
       } catch (e) {}
 
       setCropModalOpen(false);
@@ -3424,6 +3552,9 @@ export default function GamePage() {
     setContestants((prev) => {
       const copy = [...prev];
       copy[index] = { ...copy[index], ...updates };
+      try {
+        safeSaveLocalStorage('arena_active_contestants', JSON.stringify(copy));
+      } catch (e) {}
       return copy;
     });
 
@@ -3446,6 +3577,24 @@ export default function GamePage() {
       if (preset) {
         Object.assign(preset, updates);
       }
+
+      // Persist all stat edits (Damage, PWR, HP, Speed, Special Ability) in localStorage!
+      try {
+        const savedCustoms = JSON.parse(localStorage.getItem('arena_alien_customizations') || '{}');
+        const targetId = targetFighter.id || `alien_${index}`;
+        savedCustoms[targetId] = {
+          ...(savedCustoms[targetId] || {}),
+          ...updates,
+        };
+        if (targetFighter.name) {
+          const keyByName = targetFighter.name.toLowerCase().replace(/\s+/g, '_');
+          savedCustoms[keyByName] = {
+            ...(savedCustoms[keyByName] || {}),
+            ...updates,
+          };
+        }
+        safeSaveLocalStorage('arena_alien_customizations', JSON.stringify(savedCustoms));
+      } catch (e) {}
     }
 
     if (updates.image_url !== undefined) {

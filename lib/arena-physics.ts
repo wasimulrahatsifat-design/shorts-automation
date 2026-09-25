@@ -17,21 +17,39 @@ export type AlienType =
 export function getAlienType(f?: { id?: string; name?: string; special_power?: string; specialPower?: string; specialAbility?: { name?: string; icon?: string; description?: string } } | null): AlienType {
   if (!f) return 'normal';
   const ab = (f as any).specialAbility;
-  const str = `${f.id || ''} ${f.name || ''} ${f.special_power || ''} ${f.specialPower || ''} ${ab?.name || ''} ${ab?.icon || ''} ${ab?.description || ''}`
+
+  // 1. Direct ID & Name Matching (Exact & High-Priority)
+  const rawId = (f.id || '').toLowerCase().replace(/[\s_-]+/g, '');
+  const rawName = (f.name || '').toLowerCase().replace(/[\s_-]+/g, '');
+
+  if (rawId === 'greymatter' || rawId === 'graymatter' || rawName.includes('greymatter') || rawName.includes('graymatter')) return 'grey_matter';
+  if (rawId === 'heatblast' || rawName.includes('heatblast')) return 'heatblast';
+  if (rawId === 'fourarms' || rawName.includes('fourarms')) return 'four_arms';
+  if (rawId === 'xlr8' || rawName.includes('xlr8')) return 'xlr8';
+  if (rawId === 'diamondhead' || rawName.includes('diamondhead')) return 'diamondhead';
+  if (rawId === 'cannonbolt' || rawName.includes('cannonbolt')) return 'cannonbolt';
+  if (rawId === 'wildmutt' || rawName.includes('wildmutt')) return 'wildmutt';
+  if (rawId === 'ripjaws' || rawName.includes('ripjaw')) return 'ripjaws';
+  if (rawId === 'upgrade' || rawName.includes('upgrade')) return 'upgrade';
+  if (rawId === 'ghostfreak' || rawName.includes('ghostfreak')) return 'ghostfreak';
+  if (rawId === 'stinkfly' || rawName.includes('stinkfly')) return 'stinkfly';
+
+  // 2. Secondary matching on abilities and powers
+  const str = `${rawId} ${rawName} ${f.special_power || ''} ${f.specialPower || ''} ${ab?.name || ''} ${ab?.icon || ''}`
     .toLowerCase()
     .replace(/[\s_-]+/g, '');
 
-  if (str.includes('heatblast') || str.includes('firewave') || str.includes('fireblast') || str.includes('fireball') || str.includes('fire') || str.includes('pyronite')) return 'heatblast';
-  if (str.includes('fourarms') || str.includes('four_arms') || str.includes('sonicclap') || str.includes('tetramand')) return 'four_arms';
+  if (str.includes('greymatter') || str.includes('graymatter') || str.includes('galvan') || str.includes('sungun') || str.includes('deathray')) return 'grey_matter';
+  if (str.includes('heatblast') || str.includes('firewave') || str.includes('fireblast') || str.includes('fireball') || str.includes('pyronite')) return 'heatblast';
+  if (str.includes('fourarms') || str.includes('sonicclap') || str.includes('tetramand')) return 'four_arms';
   if (str.includes('xlr8') || str.includes('windfunnel') || str.includes('tornado') || str.includes('cyclone') || str.includes('speedster') || str.includes('kineceleran')) return 'xlr8';
   if (str.includes('diamondhead') || str.includes('crystalwall') || str.includes('crystal') || str.includes('taydenite') || str.includes('petrosapien')) return 'diamondhead';
-  if (str.includes('cannonbolt') || str.includes('armoredroll') || str.includes('cannon') || str.includes('arburian')) return 'cannonbolt';
+  if (str.includes('cannonbolt') || str.includes('armoredroll') || str.includes('arburian')) return 'cannonbolt';
   if (str.includes('wildmutt') || str.includes('predator') || str.includes('vulpimancer')) return 'wildmutt';
-  if (str.includes('ripjaws') || str.includes('steeljaw') || str.includes('ripjaw') || str.includes('piscciss')) return 'ripjaws';
+  if (str.includes('ripjaws') || str.includes('steeljaw') || str.includes('piscciss')) return 'ripjaws';
   if (str.includes('upgrade') || str.includes('opticlaser') || str.includes('plasma') || str.includes('mechamorph')) return 'upgrade';
-  if (str.includes('ghostfreak') || str.includes('ghost') || str.includes('ectoneurite')) return 'ghostfreak';
-  if (str.includes('greymatter') || str.includes('graymatter') || str.includes('deathray') || str.includes('galvan')) return 'grey_matter';
-  if (str.includes('stinkfly') || str.includes('acid') || str.includes('slime') || str.includes('stink') || str.includes('lepidopterran')) return 'stinkfly';
+  if (str.includes('ghostfreak') || str.includes('ectoneurite')) return 'ghostfreak';
+  if (str.includes('stinkfly') || str.includes('acidgoop') || str.includes('lepidopterran')) return 'stinkfly';
   return 'normal';
 }
 
@@ -428,7 +446,7 @@ export const BEN10_DEFAULT_ABILITIES: Record<string, SpecialAbility> = {
     trigger_type: 'charge',
     trigger_value: 100,
     weapon_type: 'none',
-    description: 'Galvan genius fires a concentrated solar laser beam from an engineered device!',
+    description: 'Galvan genius unleashes a concentrated solar laser beam from an engineered device!',
   },
   stinkfly: {
     name: 'Acid Goop Spray',
