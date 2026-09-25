@@ -325,13 +325,137 @@ export default function GamePage() {
     return audioCtxRef.current;
   };
 
-  const playSound = (type: 'bounce' | 'hit' | 'heal' | 'item' | 'gun' | 'explosion' | 'victory' | 'ability') => {
+  const playSound = (
+    type:
+      | 'bounce'
+      | 'hit'
+      | 'heal'
+      | 'item'
+      | 'gun'
+      | 'explosion'
+      | 'victory'
+      | 'ability'
+      | 'omnitrix_open'
+      | 'omnitrix_turn'
+      | 'omnitrix_slam'
+  ) => {
     if (!soundEnabled) return;
+
+    // Fast-path HTML5 audio for authentic Ben 10 WAV sound effects
+    if (type === 'omnitrix_open' || type === 'omnitrix_turn' || type === 'omnitrix_slam') {
+      try {
+        const audio = new Audio(`/audio/${type}.wav`);
+        audio.volume = Math.min(1, soundVolume * 1.0);
+        audio.play().catch(() => {});
+      } catch (e) {}
+    }
+
     try {
       const ctx = getAudioContext();
       if (!ctx) return;
 
-      if (type === 'bounce') {
+      if (type === 'omnitrix_open') {
+        // 1. Mechanical spring pop click (480Hz -> 60Hz)
+        const oscPop = ctx.createOscillator();
+        const gainPop = ctx.createGain();
+        oscPop.type = 'triangle';
+        oscPop.frequency.setValueAtTime(480, ctx.currentTime);
+        oscPop.frequency.exponentialRampToValueAtTime(60, ctx.currentTime + 0.04);
+        gainPop.gain.setValueAtTime(0.6 * soundVolume, ctx.currentTime);
+        gainPop.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
+        oscPop.connect(gainPop);
+        gainPop.connect(ctx.destination);
+        oscPop.start();
+        oscPop.stop(ctx.currentTime + 0.04);
+
+        // 2. Iconic rising futuristic servo energy whine (340Hz -> 1550Hz)
+        const oscServo = ctx.createOscillator();
+        const oscHarmonic = ctx.createOscillator();
+        const gainServo = ctx.createGain();
+        oscServo.type = 'sine';
+        oscHarmonic.type = 'triangle';
+        oscServo.frequency.setValueAtTime(340, ctx.currentTime + 0.02);
+        oscServo.frequency.exponentialRampToValueAtTime(1550, ctx.currentTime + 0.38);
+        oscHarmonic.frequency.setValueAtTime(550, ctx.currentTime + 0.02);
+        oscHarmonic.frequency.exponentialRampToValueAtTime(2500, ctx.currentTime + 0.38);
+        gainServo.gain.setValueAtTime(0.001, ctx.currentTime);
+        gainServo.gain.linearRampToValueAtTime(0.55 * soundVolume, ctx.currentTime + 0.1);
+        gainServo.gain.setValueAtTime(0.55 * soundVolume, ctx.currentTime + 0.32);
+        gainServo.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.42);
+        oscServo.connect(gainServo);
+        oscHarmonic.connect(gainServo);
+        gainServo.connect(ctx.destination);
+        oscServo.start(ctx.currentTime + 0.02);
+        oscHarmonic.start(ctx.currentTime + 0.02);
+        oscServo.stop(ctx.currentTime + 0.42);
+        oscHarmonic.stop(ctx.currentTime + 0.42);
+
+        // 3. Activation lock chime
+        [1550, 2280].forEach((freq) => {
+          const oscChime = ctx.createOscillator();
+          const gainChime = ctx.createGain();
+          oscChime.type = 'sine';
+          oscChime.frequency.setValueAtTime(freq, ctx.currentTime + 0.28);
+          gainChime.gain.setValueAtTime(0.4 * soundVolume, ctx.currentTime + 0.28);
+          gainChime.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.46);
+          oscChime.connect(gainChime);
+          gainChime.connect(ctx.destination);
+          oscChime.start(ctx.currentTime + 0.28);
+          oscChime.stop(ctx.currentTime + 0.46);
+        });
+      } else if (type === 'omnitrix_turn') {
+        // Classic Ben 10 Ratchet Dial Click
+        const oscSnap = ctx.createOscillator();
+        const gainSnap = ctx.createGain();
+        oscSnap.type = 'sawtooth';
+        oscSnap.frequency.setValueAtTime(2400, ctx.currentTime);
+        oscSnap.frequency.exponentialRampToValueAtTime(750, ctx.currentTime + 0.025);
+        gainSnap.gain.setValueAtTime(0.5 * soundVolume, ctx.currentTime);
+        gainSnap.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.025);
+        oscSnap.connect(gainSnap);
+        gainSnap.connect(ctx.destination);
+        oscSnap.start();
+        oscSnap.stop(ctx.currentTime + 0.025);
+
+        // Resonant body click
+        const oscBody = ctx.createOscillator();
+        const gainBody = ctx.createGain();
+        oscBody.type = 'triangle';
+        oscBody.frequency.setValueAtTime(1100, ctx.currentTime + 0.006);
+        oscBody.frequency.exponentialRampToValueAtTime(320, ctx.currentTime + 0.08);
+        gainBody.gain.setValueAtTime(0.45 * soundVolume, ctx.currentTime + 0.006);
+        gainBody.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+        oscBody.connect(gainBody);
+        gainBody.connect(ctx.destination);
+        oscBody.start(ctx.currentTime + 0.006);
+        oscBody.stop(ctx.currentTime + 0.08);
+      } else if (type === 'omnitrix_slam') {
+        // Heavy mechanical core slam
+        const oscSlam = ctx.createOscillator();
+        const gainSlam = ctx.createGain();
+        oscSlam.type = 'triangle';
+        oscSlam.frequency.setValueAtTime(160, ctx.currentTime);
+        oscSlam.frequency.exponentialRampToValueAtTime(45, ctx.currentTime + 0.18);
+        gainSlam.gain.setValueAtTime(0.7 * soundVolume, ctx.currentTime);
+        gainSlam.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+        oscSlam.connect(gainSlam);
+        gainSlam.connect(ctx.destination);
+        oscSlam.start();
+        oscSlam.stop(ctx.currentTime + 0.18);
+
+        // Alien energy surge
+        const oscEnergy = ctx.createOscillator();
+        const gainEnergy = ctx.createGain();
+        oscEnergy.type = 'sawtooth';
+        oscEnergy.frequency.setValueAtTime(440, ctx.currentTime + 0.02);
+        oscEnergy.frequency.exponentialRampToValueAtTime(110, ctx.currentTime + 0.35);
+        gainEnergy.gain.setValueAtTime(0.4 * soundVolume, ctx.currentTime + 0.02);
+        gainEnergy.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+        oscEnergy.connect(gainEnergy);
+        gainEnergy.connect(ctx.destination);
+        oscEnergy.start(ctx.currentTime + 0.02);
+        oscEnergy.stop(ctx.currentTime + 0.35);
+      } else if (type === 'bounce') {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'sine';
@@ -2085,7 +2209,7 @@ export default function GamePage() {
   // 8. Handlers & Interactive Selection Controls
   const handleStartSelection = () => {
     if (selectionPhase === 'idle') {
-      playSound('ability');
+      playSound('omnitrix_open');
       setSelectionPhase('select_p1');
       setP1Index(0);
       setDialRotationAngle(0);
@@ -2094,7 +2218,7 @@ export default function GamePage() {
 
   const handleRotateAlien = (direction: 'next' | 'prev', e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    playSound('bounce');
+    playSound('omnitrix_turn');
     const roster = BEN10_ALIEN_PRESETS;
     const rosterLen = roster.length;
     if (selectionPhase === 'select_p1') {
@@ -2108,8 +2232,7 @@ export default function GamePage() {
 
   const handleCenterSlam = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    playSound('hit');
-    playSound('item');
+    playSound('omnitrix_slam');
     setGreenFlash(true);
 
     const roster = BEN10_ALIEN_PRESETS;

@@ -141,7 +141,7 @@ export interface SimParticle {
 
 export interface SoundEvent {
   frame: number;
-  sound: 'hit' | 'bounce' | 'item' | 'gun' | 'explosion' | 'winner' | 'ability';
+  sound: 'hit' | 'bounce' | 'item' | 'gun' | 'explosion' | 'winner' | 'ability' | 'omnitrix_open' | 'omnitrix_turn' | 'omnitrix_slam';
   abilityType?: string;
   volume?: number;
 }
@@ -457,11 +457,11 @@ export function generateArenaSimulation(
     let selectionDialScale = 1.0;
     let selectedAlienName = '';
     let selectedAlienColor = '#00ff66';
-    const isOvertime = !isSelectionIntro && frame >= 1050 && aliveFighters.length > 1;
+    const isOvertime = !isSelectionIntro && frame >= 1800 && aliveFighters.length > 1;
 
     if (isSelectionIntro) {
       if (frame === 0) {
-        soundEvents.push({ frame: 0, sound: 'ability', abilityType: 'speed', volume: 0.8 });
+        soundEvents.push({ frame: 0, sound: 'omnitrix_open', volume: 0.9 });
       }
 
       // 1. Dial Scale Expansion & Slam-down
@@ -490,7 +490,7 @@ export function generateArenaSimulation(
 
       // Slam down impact at frame 85: Shockwave particle burst + slam sound!
       if (frame === 85) {
-        soundEvents.push({ frame: 85, sound: 'hit', volume: 1.0 });
+        soundEvents.push({ frame: 85, sound: 'omnitrix_slam', volume: 1.0 });
         for (let pIdx = 0; pIdx < 28; pIdx++) {
           const pAngle = (pIdx / 28) * Math.PI * 2;
           const pSpeed = 6 + rng() * 9;
@@ -516,7 +516,7 @@ export function generateArenaSimulation(
         });
       }
     } else {
-      // Sudden death / overtime after 35s (frame 1050) if match is still ongoing
+      // Sudden death / overtime after 60s (frame 1800) if match is still ongoing
       if (isOvertime && !announcedOvertime) {
         announcedOvertime = true;
         floatingTexts.push({

@@ -62,6 +62,12 @@ const resolveSoundUrl = (sound: string, abilityType?: string) => {
       return staticFile('audio/explosion.wav');
     case 'winner':
       return staticFile('audio/item.wav');
+    case 'omnitrix_open':
+      return staticFile('audio/omnitrix_open.wav');
+    case 'omnitrix_turn':
+      return staticFile('audio/omnitrix_turn.wav');
+    case 'omnitrix_slam':
+      return staticFile('audio/omnitrix_slam.wav');
     case 'ability':
       if (abilityType === 'damage') return staticFile('audio/explosion.wav');
       if (abilityType === 'freeze') return staticFile('audio/bounce.wav');
