@@ -40,7 +40,17 @@ export interface AbilityStatus {
 export function getAbilityStatus(f: SimFighter): AbilityStatus {
   const ab = f.specialAbility;
   const triggerType = ab?.trigger_type || 'charge';
-  const triggerVal = ab?.trigger_value !== undefined ? ab.trigger_value : (triggerType === 'charge' ? 100 : triggerType === 'hp_threshold' ? 50 : 4);
+
+  let triggerVal = ab?.trigger_value;
+  if (triggerType === 'hit_combo') {
+    triggerVal = (triggerVal !== undefined && triggerVal > 0 && triggerVal <= 20) ? triggerVal : 4;
+  } else if (triggerType === 'hp_threshold') {
+    triggerVal = (triggerVal !== undefined && triggerVal > 0 && triggerVal < 100) ? triggerVal : 50;
+  } else if (triggerType === 'charge') {
+    triggerVal = 100;
+  } else {
+    triggerVal = triggerVal || 5;
+  }
 
   let label = 'CHARGE';
   let progress = 0;
@@ -58,7 +68,7 @@ export function getAbilityStatus(f: SimFighter): AbilityStatus {
         progress = 100;
         isReady = true;
       } else {
-        const cdMax = f.abilityCooldownMax || 150;
+        const cdMax = Math.max(30, Math.round((f.abilityCooldownMax || 150) * 0.5));
         progress = Math.min(99, Math.round(((cdMax - f.abilityCooldownTimer) / cdMax) * 100));
         isReady = false;
       }
@@ -69,12 +79,13 @@ export function getAbilityStatus(f: SimFighter): AbilityStatus {
       isReady = false;
     }
   } else if (triggerType === 'hit_combo') {
-    label = `COMBO ${f.hitCombo || 0}/${triggerVal}`;
-    if ((f.hitCombo || 0) >= triggerVal && f.abilityCooldownTimer <= 0) {
+    label = `COMBO ${Math.min(triggerVal, f.hitCombo || 0)}/${triggerVal}`;
+    const comboHits = f.hitCombo || 0;
+    if (comboHits >= triggerVal) {
       progress = 100;
       isReady = true;
     } else {
-      progress = Math.min(99, Math.round(((f.hitCombo || 0) / triggerVal) * 100));
+      progress = Math.min(99, Math.round((comboHits / triggerVal) * 100));
       isReady = false;
     }
   } else if (triggerType === 'cooldown') {
@@ -158,6 +169,7 @@ export interface SimFighter {
   gunBullets: number;
   speedBoostTimer: number;
   specialMoveReady: boolean;
+  rageModeActivated?: boolean;
 }
 
 export interface SimItem {
@@ -437,7 +449,7 @@ export function generateArenaSimulation(
     }
 
     // Resolve Special Ability
-    const ability: SpecialAbility = c.special_ability ||
+    const baseAbility = c.special_ability ||
       BEN10_DEFAULT_ABILITIES[alienType] ||
       BEN10_DEFAULT_ABILITIES[c.special_power || 'none'] ||
       BEN10_DEFAULT_ABILITIES['four_arms'] || {
@@ -450,8 +462,29 @@ export function generateArenaSimulation(
         trigger_value: 100,
       };
 
+    const abilityType = baseAbility.trigger_type || 'charge';
+    let abilityTriggerVal = baseAbility.trigger_value;
+    if (abilityType === 'hit_combo') {
+      abilityTriggerVal = (abilityTriggerVal !== undefined && abilityTriggerVal > 0 && abilityTriggerVal <= 20) ? abilityTriggerVal : 4;
+    } else if (abilityType === 'hp_threshold') {
+      abilityTriggerVal = (abilityTriggerVal !== undefined && abilityTriggerVal > 0 && abilityTriggerVal < 100) ? abilityTriggerVal : 50;
+    } else if (abilityType === 'charge') {
+      abilityTriggerVal = 100;
+    } else {
+      abilityTriggerVal = abilityTriggerVal || 5;
+    }
+
+    const ability: SpecialAbility = {
+      ...baseAbility,
+      trigger_type: abilityType,
+      trigger_value: abilityTriggerVal,
+    };
+
     const cooldownFrames = Math.max(60, Math.round(ability.cooldown_seconds * 30));
-    const initialCooldown = Math.round(cooldownFrames * (0.3 + rng() * 0.4));
+    // hp_threshold and hit_combo should never start on cooldown
+    const initialCooldown = (ability.trigger_type === 'hp_threshold' || ability.trigger_type === 'hit_combo')
+      ? 0
+      : Math.round(cooldownFrames * (0.3 + rng() * 0.4));
 
     return {
       id: c.id || `fighter_${idx + 1}`,
@@ -489,6 +522,7 @@ export function generateArenaSimulation(
       gunBullets: 0,
       speedBoostTimer: 0,
       specialMoveReady: false,
+      rageModeActivated: false,
     };
   });
 
@@ -635,10 +669,26 @@ export function generateArenaSimulation(
 
         const ab = f.specialAbility;
         const triggerType = ab.trigger_type || 'charge';
-        const triggerVal = ab.trigger_value !== undefined ? ab.trigger_value : (triggerType === 'charge' ? 100 : triggerType === 'hp_threshold' ? 50 : 4);
+        let triggerVal = ab.trigger_value;
+        if (triggerType === 'hit_combo') {
+          triggerVal = (triggerVal !== undefined && triggerVal > 0 && triggerVal <= 20) ? triggerVal : 4;
+        } else if (triggerType === 'hp_threshold') {
+          triggerVal = (triggerVal !== undefined && triggerVal > 0 && triggerVal < 100) ? triggerVal : 50;
+        } else if (triggerType === 'charge') {
+          triggerVal = 100;
+        } else {
+          triggerVal = triggerVal || 5;
+        }
 
         if (!f.isDead && (f.energyCharge || 0) < 100) {
           f.energyCharge = Math.min(100, (f.energyCharge || 0) + 0.15);
+        }
+
+        // Low HP Rage instant activation on first drop below threshold
+        const thresholdHp = (f.maxHealth * triggerVal) / 100;
+        if (triggerType === 'hp_threshold' && f.health <= thresholdHp && !f.rageModeActivated) {
+          f.rageModeActivated = true;
+          f.abilityCooldownTimer = 0; // Trigger immediately upon entering Rage!
         }
 
         // Check if criteria is satisfied
@@ -646,9 +696,9 @@ export function generateArenaSimulation(
         if (triggerType === 'charge') {
           isTriggerReady = f.energyCharge >= 100;
         } else if (triggerType === 'hp_threshold') {
-          isTriggerReady = f.health <= (f.maxHealth * triggerVal) / 100 && f.abilityCooldownTimer <= 0;
+          isTriggerReady = f.health <= thresholdHp && f.abilityCooldownTimer <= 0;
         } else if (triggerType === 'hit_combo') {
-          isTriggerReady = f.hitCombo >= triggerVal && f.abilityCooldownTimer <= 0;
+          isTriggerReady = (f.hitCombo || 0) >= triggerVal;
         } else if (triggerType === 'cooldown') {
           isTriggerReady = f.abilityCooldownTimer <= 0;
         }
@@ -671,26 +721,34 @@ export function generateArenaSimulation(
           }
 
           // Special Move Announcement Banner (NO EMOJIS)
+          const bannerText = triggerType === 'hp_threshold'
+            ? `${f.name.toUpperCase()}: RAGE ${ab.name.toUpperCase()}!`
+            : triggerType === 'hit_combo'
+            ? `${f.name.toUpperCase()}: 4X COMBO ${ab.name.toUpperCase()}!`
+            : `${f.name.toUpperCase()}: ${ab.name.toUpperCase()}!`;
+
           floatingTexts.push({
             id: `ab_banner_${frame}_${f.id}`,
             x: f.x,
             y: f.y - (f.size / 2 + 35),
-            text: `${f.name.toUpperCase()}: ${ab.name.toUpperCase()}!`,
-            color: '#00ff66',
+            text: bannerText,
+            color: triggerType === 'hp_threshold' ? '#ef4444' : '#00ff66',
             alpha: 1,
             vy: -2.8,
             scale: 1.4,
           });
 
-          f.abilityAuraTimer = 45;
+          f.abilityAuraTimer = 60;
           f.abilityAuraIcon = ab.icon;
-          f.abilityAuraColor = '#00ff66';
+          f.abilityAuraColor = triggerType === 'hp_threshold' ? '#ef4444' : '#00ff66';
 
           // Reset trigger gauges
           f.energyCharge = 0;
           f.hitCombo = 0;
           f.specialMoveReady = false;
-          f.abilityCooldownTimer = isOvertime
+          f.abilityCooldownTimer = triggerType === 'hp_threshold'
+            ? Math.round(f.abilityCooldownMax * 0.5)
+            : isOvertime
             ? Math.round(f.abilityCooldownMax * 0.6)
             : f.abilityCooldownMax;
 
@@ -1155,6 +1213,9 @@ export function generateArenaSimulation(
 
           if (it.type === 'health') {
             f.health = Math.min(f.maxHealth, f.health + 30);
+            if (f.health > (f.maxHealth * (f.specialAbility?.trigger_value || 50)) / 100) {
+              f.rageModeActivated = false;
+            }
             floatingTexts.push({ id: `ft_${frame}_${i}`, x: f.x, y: f.y - 50, text: '+30 HP', color: '#22c55e', alpha: 1, vy: -2.5, scale: 1.3 });
           } else if (it.type === 'dagger') {
             f.hasDagger = true;
@@ -1203,6 +1264,13 @@ export function generateArenaSimulation(
         if (Math.hypot(t.x - b.x, t.y - b.y) < t.size / 2 + (b.size ? b.size / 3 : 5)) {
           t.health = Math.max(0, t.health - b.damage);
           t.hitFlash = 14;
+
+          // Credit shooter with hit combo and energy charge
+          const shooter = aliveFighters.find((sf) => sf.id === b.ownerId);
+          if (shooter) {
+            shooter.hitCombo = (shooter.hitCombo || 0) + 1;
+            shooter.energyCharge = Math.min(100, (shooter.energyCharge || 0) + 10);
+          }
 
           // Kinetic knockback in bullet's flight direction
           const bDist = Math.hypot(b.vx, b.vy) || 1;
@@ -1351,6 +1419,14 @@ export function generateArenaSimulation(
             if (isOvertime) { dmgA *= 1.5; dmgB *= 1.5; }
             if (A.hasDagger) { dmgA *= 2; A.daggerActivated = true; }
             if (A.specialPower === 'berserker' && A.health / A.maxHealth <= 0.2) dmgA *= 2;
+
+            // Low HP Rage damage boost (+35%)
+            if (A.specialAbility?.trigger_type === 'hp_threshold' && A.health <= (A.maxHealth * (A.specialAbility.trigger_value || 50)) / 100) {
+              dmgA = Math.round(dmgA * 1.35);
+            }
+            if (B.specialAbility?.trigger_type === 'hp_threshold' && B.health <= (B.maxHealth * (B.specialAbility.trigger_value || 50)) / 100) {
+              dmgB = Math.round(dmgB * 1.35);
+            }
 
             // Check B shield
             if (B.bonusShield > 0) {

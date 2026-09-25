@@ -2343,9 +2343,16 @@ export default function GamePage() {
 
         const custom1 = contestants.find((c) => c.id === chosen1.id || c.name === chosen1.name);
         const custom2 = contestants.find((c) => c.id === chosen2.id || c.name === chosen2.name);
+
+        const slot1Ability = contestants[0]?.special_ability;
+        const slot2Ability = contestants[1]?.special_ability;
+
+        const fighter1Ability = custom1?.special_ability || (slot1Ability && slot1Ability.trigger_type !== 'charge' ? { ...(chosen1.special_ability || {}), ...slot1Ability } : chosen1.special_ability);
+        const fighter2Ability = custom2?.special_ability || (slot2Ability && slot2Ability.trigger_type !== 'charge' ? { ...(chosen2.special_ability || {}), ...slot2Ability } : chosen2.special_ability);
+
         const matchContestants: ContestantConfig[] = [
-          { ...(custom1 || chosen1), id: 'fighter_1' },
-          { ...(custom2 || chosen2), id: 'fighter_2' },
+          { ...(custom1 || chosen1), id: 'fighter_1', special_ability: fighter1Ability },
+          { ...(custom2 || chosen2), id: 'fighter_2', special_ability: fighter2Ability },
         ];
         setContestants(matchContestants);
         setContestantCount(2);
@@ -3158,8 +3165,16 @@ export default function GamePage() {
                           <select
                             value={fighter.special_ability?.trigger_type || 'charge'}
                             onChange={(e) => {
+                              const newType = e.target.value as any;
                               const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30 };
-                              updateContestant(idx, { special_ability: { ...cur, trigger_type: e.target.value as any } });
+                              const defaultVal = newType === 'hit_combo' ? 4 : newType === 'hp_threshold' ? 50 : 100;
+                              updateContestant(idx, {
+                                special_ability: {
+                                  ...cur,
+                                  trigger_type: newType,
+                                  trigger_value: defaultVal,
+                                },
+                              });
                             }}
                             className="bg-transparent text-emerald-400 font-bold focus:outline-none flex-1 text-[10px]"
                           >
