@@ -4300,20 +4300,6 @@ export default function GamePage() {
       setIsRecording(true);
       victoryTriggeredRef.current = false;
       setRecordingStatusMsg('Recording active... Will auto-stop 0.5s after Victory.');
-
-      // If game is not playing or in idle, initiate playback
-      if (winner || (simResultRef.current && currentFrameRef.current >= simResultRef.current.frames.length - 1)) {
-        currentFrameRef.current = 0;
-        lastSoundFrameRef.current = -1;
-        setWinner(null);
-      }
-      if (!isPlaying) {
-        if (selectionPhase === 'idle') {
-          setSelectionPhase('battling');
-        }
-        setIsPlaying(true);
-        startBattleMusic();
-      }
     } catch (err: any) {
       console.error('Failed to start MediaRecorder:', err);
       alert('Recording failed: ' + (err?.message || err));
