@@ -466,12 +466,23 @@ export default function GamePage() {
           bgmAudioRef.current.pause();
         }
         const audio = new Audio(targetUrl);
+        audio.crossOrigin = 'anonymous';
         audio.loop = true;
         audio.volume = Math.min(1, Math.max(0, bgMusicVolume));
         bgmAudioRef.current = audio;
       } else {
         bgmAudioRef.current.volume = Math.min(1, Math.max(0, bgMusicVolume));
       }
+
+      const ctx = getAudioContext();
+      if (ctx && bgmAudioRef.current && !bgmSourceRef.current && masterGainRef.current) {
+        try {
+          const source = ctx.createMediaElementSource(bgmAudioRef.current);
+          source.connect(masterGainRef.current);
+          bgmSourceRef.current = source;
+        } catch (e) {}
+      }
+
       bgmAudioRef.current.play().catch(() => {});
     } catch (err) {}
   };
@@ -738,8 +749,23 @@ export default function GamePage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fullscreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const masterGainRef = useRef<GainNode | null>(null);
+  const audioStreamDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+  const audioBuffersRef = useRef<Map<string, AudioBuffer>>(new Map());
+  const bgmSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const animFrameIdRef = useRef<number | null>(null);
   const loadedImagesRef = useRef<Map<string, HTMLImageElement>>(new Map());
+
+  // Screen Video Recording State Refs
+  const isRecordingRef = useRef<boolean>(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const recordedVideoUrlRef = useRef<string | null>(null);
+  const victoryTriggeredRef = useRef<boolean>(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);
+  const [showRecordedModal, setShowRecordedModal] = useState(false);
+  const [recordingStatusMsg, setRecordingStatusMsg] = useState<string | null>(null);
 
   // Simulation State Refs
   const battleSeedRef = useRef<number>(Math.floor(Math.random() * 1000000));
@@ -830,13 +856,60 @@ export default function GamePage() {
   const getAudioContext = () => {
     if (!audioCtxRef.current && typeof window !== 'undefined') {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioCtx) audioCtxRef.current = new AudioCtx();
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        audioCtxRef.current = ctx;
+
+        try {
+          const master = ctx.createGain();
+          master.gain.value = 1.0;
+          master.connect(ctx.destination);
+          masterGainRef.current = master;
+
+          const dest = ctx.createMediaStreamDestination();
+          master.connect(dest);
+          audioStreamDestRef.current = dest;
+        } catch (e) {}
+      }
     }
     if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
       audioCtxRef.current.resume();
     }
     return audioCtxRef.current;
   };
+
+  // Preload and decode sound effect audio files into Web Audio buffers
+  useEffect(() => {
+    const sfxList = [
+      'omnitrix_open',
+      'omnitrix_turn',
+      'omnitrix_slam',
+      'fireblast',
+      'cannon_roll',
+      'steel_bite',
+      'predator_roar',
+      'acid_splatter',
+    ];
+
+    const preloadAudioBuffers = async () => {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      for (const name of sfxList) {
+        if (!audioBuffersRef.current.has(name)) {
+          try {
+            const res = await fetch(`/audio/${name}.wav`);
+            if (res.ok) {
+              const arrayBuf = await res.arrayBuffer();
+              const decoded = await ctx.decodeAudioData(arrayBuf);
+              audioBuffersRef.current.set(name, decoded);
+            }
+          } catch (e) {}
+        }
+      }
+    };
+
+    preloadAudioBuffers();
+  }, []);
 
   const playSound = (
     type:
@@ -893,6 +966,10 @@ export default function GamePage() {
       }
     }
 
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const audioDest = masterGainRef.current || ctx.destination;
+
     if (
       type === 'omnitrix_open' ||
       type === 'omnitrix_turn' ||
@@ -903,17 +980,30 @@ export default function GamePage() {
       type === 'predator_roar' ||
       type === 'acid_splatter'
     ) {
-      try {
-        const audio = new Audio(`/audio/${type}.wav?v=${Date.now()}`);
-        audio.volume = Math.min(1, soundVolume * 1.0);
-        audio.play().catch(() => {});
-      } catch (e) {}
-      if (type !== 'fireblast' && type !== 'cannon_roll') return;
+      if (audioBuffersRef.current.has(type)) {
+        try {
+      const audioDest = masterGainRef.current || ctx.destination;
+          const buf = audioBuffersRef.current.get(type)!;
+          const source = ctx.createBufferSource();
+          source.buffer = buf;
+          const gain = ctx.createGain();
+          gain.gain.setValueAtTime(Math.min(1, soundVolume * 1.0), ctx.currentTime);
+          source.connect(gain);
+          gain.connect(audioDest);
+          source.start();
+          if (type !== 'fireblast' && type !== 'cannon_roll') return;
+        } catch (e) {}
+      } else {
+        try {
+          const audio = new Audio(`/audio/${type}.wav?v=${Date.now()}`);
+          audio.volume = Math.min(1, soundVolume * 1.0);
+          audio.play().catch(() => {});
+        } catch (e) {}
+        if (type !== 'fireblast' && type !== 'cannon_roll') return;
+      }
     }
 
     try {
-      const ctx = getAudioContext();
-      if (!ctx) return;
 
       if (type === 'bounce') {
         const osc = ctx.createOscillator();
@@ -924,7 +1014,7 @@ export default function GamePage() {
         gain.gain.setValueAtTime(0.25 * soundVolume, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(audioDest);
         osc.start();
         osc.stop(ctx.currentTime + 0.08);
       } else if (type === 'hit') {
@@ -936,7 +1026,7 @@ export default function GamePage() {
         gain.gain.setValueAtTime(0.5 * soundVolume, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(audioDest);
         osc.start();
         osc.stop(ctx.currentTime + 0.12);
       } else if (type === 'item') {
@@ -948,7 +1038,7 @@ export default function GamePage() {
           gain.gain.setValueAtTime(0.3 * soundVolume, ctx.currentTime + idx * 0.05);
           gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.05 + 0.12);
           osc.connect(gain);
-          gain.connect(ctx.destination);
+          gain.connect(audioDest);
           osc.start(ctx.currentTime + idx * 0.05);
           osc.stop(ctx.currentTime + idx * 0.05 + 0.12);
         });
@@ -961,7 +1051,7 @@ export default function GamePage() {
         gain.gain.setValueAtTime(0.4 * soundVolume, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(audioDest);
         osc.start();
         osc.stop(ctx.currentTime + 0.1);
       } else if (type === 'heal') {
@@ -973,7 +1063,7 @@ export default function GamePage() {
           gain.gain.setValueAtTime(0.3 * soundVolume, ctx.currentTime + idx * 0.08);
           gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.08 + 0.2);
           osc.connect(gain);
-          gain.connect(ctx.destination);
+          gain.connect(audioDest);
           osc.start(ctx.currentTime + idx * 0.08);
           osc.stop(ctx.currentTime + idx * 0.08 + 0.2);
         });
@@ -993,7 +1083,7 @@ export default function GamePage() {
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
         noise.connect(filter);
         filter.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(audioDest);
         noise.start();
         noise.stop(ctx.currentTime + 0.35);
       } else if (type === 'victory') {
@@ -1005,7 +1095,7 @@ export default function GamePage() {
           gain.gain.setValueAtTime(0.4 * soundVolume, ctx.currentTime + i * 0.1);
           gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.1 + 0.35);
           osc.connect(gain);
-          gain.connect(ctx.destination);
+          gain.connect(audioDest);
           osc.start(ctx.currentTime + i * 0.1);
           osc.stop(ctx.currentTime + i * 0.1 + 0.35);
         });
@@ -1021,7 +1111,7 @@ export default function GamePage() {
         gainCrack.gain.setValueAtTime(0.85 * soundVolume, ctx.currentTime);
         gainCrack.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
         oscCrack.connect(gainCrack);
-        gainCrack.connect(ctx.destination);
+        gainCrack.connect(audioDest);
         oscCrack.start();
         oscCrack.stop(ctx.currentTime + 0.05);
 
@@ -1033,7 +1123,7 @@ export default function GamePage() {
         gainBoom.gain.setValueAtTime(1.0 * soundVolume, ctx.currentTime);
         gainBoom.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55);
         oscBoom.connect(gainBoom);
-        gainBoom.connect(ctx.destination);
+        gainBoom.connect(audioDest);
         oscBoom.start();
         oscBoom.stop(ctx.currentTime + 0.55);
       } else if (type === 'fireblast') {
@@ -1063,7 +1153,7 @@ export default function GamePage() {
 
         noiseSource.connect(filter);
         filter.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(audioDest);
         noiseSource.start();
         noiseSource.stop(ctx.currentTime + 0.85);
 
@@ -1076,7 +1166,7 @@ export default function GamePage() {
         gainSub.gain.setValueAtTime(0.4 * soundVolume, ctx.currentTime);
         gainSub.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
         oscSub.connect(gainSub);
-        gainSub.connect(ctx.destination);
+        gainSub.connect(audioDest);
         oscSub.start();
         oscSub.stop(ctx.currentTime + 0.6);
       } else if (type === 'wind_tornado') {
@@ -1111,7 +1201,7 @@ export default function GamePage() {
 
         noise.connect(bpFilter);
         bpFilter.connect(windGain);
-        windGain.connect(ctx.destination);
+        windGain.connect(audioDest);
         noise.start();
         noise.stop(ctx.currentTime + 0.85);
 
@@ -1125,7 +1215,7 @@ export default function GamePage() {
         rumbleGain.gain.setValueAtTime(0.5 * soundVolume, ctx.currentTime);
         rumbleGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
         rumbleOsc.connect(rumbleGain);
-        rumbleGain.connect(ctx.destination);
+        rumbleGain.connect(audioDest);
         rumbleOsc.start();
         rumbleOsc.stop(ctx.currentTime + 0.8);
       } else if (type === 'crystal_shatter') {
@@ -1138,7 +1228,7 @@ export default function GamePage() {
           gain.gain.setValueAtTime(0.5 * soundVolume, ctx.currentTime + idx * 0.02);
           gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.02 + 0.35);
           osc.connect(gain);
-          gain.connect(ctx.destination);
+          gain.connect(audioDest);
           osc.start(ctx.currentTime + idx * 0.02);
           osc.stop(ctx.currentTime + idx * 0.02 + 0.35);
         });
@@ -1152,7 +1242,7 @@ export default function GamePage() {
         gainLaser.gain.setValueAtTime(0.6 * soundVolume, ctx.currentTime);
         gainLaser.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.16);
         oscLaser.connect(gainLaser);
-        gainLaser.connect(ctx.destination);
+        gainLaser.connect(audioDest);
         oscLaser.start();
         oscLaser.stop(ctx.currentTime + 0.16);
       } else if (type === 'cannon_roll') {
@@ -1165,7 +1255,7 @@ export default function GamePage() {
         gainRoll.gain.setValueAtTime(0.75 * soundVolume, ctx.currentTime);
         gainRoll.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
         oscRoll.connect(gainRoll);
-        gainRoll.connect(ctx.destination);
+        gainRoll.connect(audioDest);
         oscRoll.start();
         oscRoll.stop(ctx.currentTime + 0.45);
 
@@ -1177,7 +1267,7 @@ export default function GamePage() {
         gainClang.gain.setValueAtTime(0.55 * soundVolume, ctx.currentTime);
         gainClang.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
         oscClang.connect(gainClang);
-        gainClang.connect(ctx.destination);
+        gainClang.connect(audioDest);
         oscClang.start();
         oscClang.stop(ctx.currentTime + 0.22);
       } else if (type === 'ghost_wail') {
@@ -1190,7 +1280,7 @@ export default function GamePage() {
         gainGhost.gain.setValueAtTime(0.55 * soundVolume, ctx.currentTime);
         gainGhost.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
         oscGhost.connect(gainGhost);
-        gainGhost.connect(ctx.destination);
+        gainGhost.connect(audioDest);
         oscGhost.start();
         oscGhost.stop(ctx.currentTime + 0.5);
       } else if (type === 'acid_splatter') {
@@ -1203,10 +1293,10 @@ export default function GamePage() {
         gainAcid.gain.setValueAtTime(0.45 * soundVolume, ctx.currentTime);
         gainAcid.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
         oscAcid.connect(gainAcid);
-        gainAcid.connect(ctx.destination);
+        gainAcid.connect(audioDest);
         oscAcid.start();
         oscAcid.stop(ctx.currentTime + 0.15);
-      } else if (type === 'ability') {
+      } else if ((type as string) === 'ability') {
         const oscPwr = ctx.createOscillator();
         const gainPwr = ctx.createGain();
         oscPwr.type = 'triangle';
@@ -1215,7 +1305,7 @@ export default function GamePage() {
         gainPwr.gain.setValueAtTime(0.6 * soundVolume, ctx.currentTime);
         gainPwr.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
         oscPwr.connect(gainPwr);
-        gainPwr.connect(ctx.destination);
+        gainPwr.connect(audioDest);
         oscPwr.start();
         oscPwr.stop(ctx.currentTime + 0.3);
       }
@@ -1698,8 +1788,32 @@ export default function GamePage() {
       }
 
       // Ben 10 Omnitrix Center Dial on floor
-      const dialRadius = 135;
+      const isSelecting = selectionPhase === 'selecting';
+      const dialRadius = isSelecting ? 210 : 135;
       drawOmnitrixDial(ctx, cx, cy, dialRadius);
+
+      // If interactive selection is active, render the rotating alien avatar in the center
+      if (isSelecting) {
+        const roster = BEN10_ALIEN_PRESETS;
+        const currentAlien = roster[dialAlienIndex % roster.length];
+        if (currentAlien && currentAlien.image_url) {
+          let aImg = loadedImagesRef.current.get(currentAlien.image_url);
+          if (!aImg) {
+            aImg = new Image();
+            aImg.crossOrigin = 'anonymous';
+            aImg.src = currentAlien.image_url;
+            loadedImagesRef.current.set(currentAlien.image_url, aImg);
+          }
+          if (aImg && aImg.complete && aImg.naturalWidth > 0) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(cx, cy, 70, 0, Math.PI * 2);
+            ctx.clip();
+            ctx.drawImage(aImg, cx - 70, cy - 70, 140, 140);
+            ctx.restore();
+          }
+        }
+      }
 
       // Render Active Arena Ground Hazards (Heatblast 3s Arena Fire, etc.)
       if (current.hazardZones && current.hazardZones.length > 0) {
@@ -3194,6 +3308,44 @@ export default function GamePage() {
 
         ctx.restore();
       }
+
+      // Render Hero Time Banner on canvas if active
+      if (heroTimeBanner) {
+        ctx.save();
+        ctx.font = '900 64px "Montserrat", sans-serif';
+        ctx.fillStyle = '#00ff66';
+        ctx.shadowColor = '#00ff66';
+        ctx.shadowBlur = 35;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText("It's Hero Time!", width / 2, ARENA_CENTER.y - 120);
+        ctx.restore();
+      }
+
+      // Render Fullscreen Alien Splash on canvas if active
+      if (alienSplashActive && alienSplashTargetAlien) {
+        const splashImgUrl =
+          alienSplashTargetAlien.splash_image_url ||
+          alienSplashMap[alienSplashTargetAlien.id] ||
+          selectionSplashUrl ||
+          alienSplashTargetAlien.image_url;
+        if (splashImgUrl) {
+          let sImg = loadedImagesRef.current.get(splashImgUrl);
+          if (!sImg) {
+            sImg = new Image();
+            sImg.crossOrigin = 'anonymous';
+            sImg.src = splashImgUrl;
+            loadedImagesRef.current.set(splashImgUrl, sImg);
+          }
+          if (sImg && sImg.complete && sImg.naturalWidth > 0) {
+            ctx.save();
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(sImg, 0, 0, width, height);
+            ctx.restore();
+          }
+        }
+      }
     });
   };
 
@@ -3228,15 +3380,27 @@ export default function GamePage() {
         const curFrameState = sim.frames[nextFrame];
         if (curFrameState) {
           setAliveCount(curFrameState.aliveCount);
-          if (curFrameState.winner && !winner) {
+          if (curFrameState.winner && !victoryTriggeredRef.current) {
+            victoryTriggeredRef.current = true;
             setWinner(curFrameState.winner as any);
             pauseBattleMusic();
+            if (isRecordingRef.current) {
+              setTimeout(() => {
+                stopRecording();
+              }, 500);
+            }
           }
         }
 
         if (nextFrame >= sim.frames.length - 1) {
           setIsPlaying(false);
           pauseBattleMusic();
+          if (isRecordingRef.current && !victoryTriggeredRef.current) {
+            victoryTriggeredRef.current = true;
+            setTimeout(() => {
+              stopRecording();
+            }, 500);
+          }
         }
       }
 
@@ -3420,6 +3584,7 @@ export default function GamePage() {
     screenShakeRef.current = 0;
     currentFrameRef.current = 0;
     lastSoundFrameRef.current = -1;
+    victoryTriggeredRef.current = false;
     setWinner(null);
     initSimulation(true);
   };
@@ -4052,6 +4217,115 @@ export default function GamePage() {
     } finally {
       setQueueLoading(false);
     }
+  };
+
+  // 10. Live Canvas Video Recording with Web Audio Mix
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (e) {}
+      setRecordingStatusMsg('Record complete! Click "Render full game" to view.');
+    }
+    isRecordingRef.current = false;
+    setIsRecording(false);
+  };
+
+  const handleStartRecording = () => {
+    if (isRecording) {
+      stopRecording();
+      return;
+    }
+
+    const canvas = isFullscreen ? (fullscreenCanvasRef.current || canvasRef.current) : canvasRef.current;
+    if (!canvas) {
+      alert('Canvas viewport is not available.');
+      return;
+    }
+
+    try {
+      const ctx = getAudioContext();
+      const canvasStream = canvas.captureStream(30);
+      const audioStream = audioStreamDestRef.current?.stream;
+
+      const tracks: MediaStreamTrack[] = [...canvasStream.getVideoTracks()];
+      if (audioStream && audioStream.getAudioTracks().length > 0) {
+        tracks.push(...audioStream.getAudioTracks());
+      }
+
+      const combinedStream = new MediaStream(tracks);
+
+      let mimeType = 'video/webm;codecs=vp9,opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'video/webm;codecs=vp8,opus';
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'video/webm';
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'video/mp4';
+      }
+
+      recordedChunksRef.current = [];
+      const recorder = new MediaRecorder(combinedStream, {
+        mimeType: MediaRecorder.isTypeSupported(mimeType) ? mimeType : undefined,
+        videoBitsPerSecond: 8000000,
+      });
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          recordedChunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const finalType = recorder.mimeType || 'video/webm';
+        const blob = new Blob(recordedChunksRef.current, { type: finalType });
+        if (blob.size > 0) {
+          if (recordedVideoUrlRef.current) {
+            URL.revokeObjectURL(recordedVideoUrlRef.current);
+          }
+          const url = URL.createObjectURL(blob);
+          recordedVideoUrlRef.current = url;
+          setRecordedVideoUrl(url);
+          setRecordingStatusMsg('Record complete! Click "Render full game" to view.');
+        }
+        isRecordingRef.current = false;
+        setIsRecording(false);
+      };
+
+      recorder.start(100);
+      mediaRecorderRef.current = recorder;
+      isRecordingRef.current = true;
+      setIsRecording(true);
+      victoryTriggeredRef.current = false;
+      setRecordingStatusMsg('Recording active... Will auto-stop 0.5s after Victory.');
+
+      // If game is not playing or in idle, initiate playback
+      if (winner || (simResultRef.current && currentFrameRef.current >= simResultRef.current.frames.length - 1)) {
+        currentFrameRef.current = 0;
+        lastSoundFrameRef.current = -1;
+        setWinner(null);
+      }
+      if (!isPlaying) {
+        if (selectionPhase === 'idle') {
+          setSelectionPhase('battling');
+        }
+        setIsPlaying(true);
+        startBattleMusic();
+      }
+    } catch (err: any) {
+      console.error('Failed to start MediaRecorder:', err);
+      alert('Recording failed: ' + (err?.message || err));
+    }
+  };
+
+  const handleRenderFullGame = () => {
+    if (!recordedVideoUrl && !recordedVideoUrlRef.current) {
+      alert('Please click "Start Video Recording" first to record the battle.');
+      return;
+    }
+    setShowRecordedModal(true);
   };
 
   return (
@@ -4760,13 +5034,37 @@ export default function GamePage() {
                 </div>
               </div>
 
-              {/* Queue Video for YouTube Shorts */}
+              {/* Start Video Recording Button */}
               <button
-                onClick={handleQueueVideo}
-                disabled={queueLoading}
-                className="w-full py-2.5 bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 hover:opacity-95 text-white rounded-xl font-bold text-xs transition disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-md"
+                onClick={handleStartRecording}
+                className={`w-full py-3 rounded-xl font-black text-xs uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-lg border ${
+                  isRecording
+                    ? 'bg-rose-600 hover:bg-rose-500 text-white border-rose-400 animate-pulse ring-2 ring-rose-500/50'
+                    : 'bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:opacity-95 text-white border-rose-500/40'
+                }`}
               >
-                <span>{queueLoading ? 'Queuing Video...' : 'Queue as YouTube Short (Render Full Game)'}</span>
+                <span className={`w-2.5 h-2.5 rounded-full ${isRecording ? 'bg-white animate-ping' : 'bg-red-300'}`} />
+                <span>{isRecording ? 'Recording in Progress... (Auto-stop 0.5s after victory)' : 'Start Video Recording'}</span>
+              </button>
+
+              {/* Status Message */}
+              {recordingStatusMsg && (
+                <div className="text-[11px] font-medium text-center px-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800 text-slate-300">
+                  {recordingStatusMsg}
+                </div>
+              )}
+
+              {/* Render Full Game Button */}
+              <button
+                onClick={handleRenderFullGame}
+                className={`w-full py-2.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 border ${
+                  recordedVideoUrl
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-400 shadow-lg shadow-emerald-950/50'
+                    : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700'
+                }`}
+              >
+                {recordedVideoUrl && <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-950 text-emerald-300 border border-emerald-400">READY</span>}
+                <span>Render full game</span>
               </button>
             </div>
           </div>
@@ -4785,7 +5083,24 @@ export default function GamePage() {
                 </span>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleStartRecording}
+                  className={`px-3 py-1 rounded-lg text-xs font-black transition flex items-center gap-1.5 ${
+                    isRecording ? 'bg-rose-600 text-white animate-pulse' : 'bg-rose-700 hover:bg-rose-600 text-white'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${isRecording ? 'bg-white' : 'bg-rose-300'}`} />
+                  <span>{isRecording ? 'RECORDING' : 'RECORD'}</span>
+                </button>
+                {recordedVideoUrl && (
+                  <button
+                    onClick={handleRenderFullGame}
+                    className="px-3 py-1 rounded-lg text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white transition"
+                  >
+                    RENDER FULL GAME
+                  </button>
+                )}
                 <button
                   onClick={handlePlayToggle}
                   className={`px-3 py-1 rounded-lg text-xs font-black transition ${
@@ -4972,6 +5287,72 @@ export default function GamePage() {
                 >
                   <span>Save & Apply</span>
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ================= RECORDED GAME VIDEO (RENDER FULL GAME) MODAL ================= */}
+        {showRecordedModal && (
+          <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-slate-900 border border-slate-700 rounded-3xl p-5 max-w-md w-full shadow-2xl space-y-4 max-h-[95vh] flex flex-col">
+              {/* Header */}
+              <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                    Rendered Full Game Video
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Exact live screen recording with identical animations, effects & audio
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowRecordedModal(false)}
+                  className="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-xs font-bold transition"
+                >
+                  X
+                </button>
+              </div>
+
+              {/* Video Player */}
+              <div className="flex-1 flex flex-col items-center justify-center min-h-0 py-2">
+                {recordedVideoUrl ? (
+                  <video
+                    src={recordedVideoUrl}
+                    controls
+                    autoPlay
+                    loop
+                    playsInline
+                    className="max-h-[60vh] w-auto aspect-[9/16] rounded-2xl bg-black shadow-2xl border-2 border-slate-800 object-contain"
+                  />
+                ) : (
+                  <div className="p-8 text-center text-xs text-slate-400">
+                    No recorded video found yet. Start recording first.
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col gap-2 pt-1 border-t border-slate-800">
+                <div className="flex gap-2">
+                  {recordedVideoUrl && (
+                    <a
+                      href={recordedVideoUrl}
+                      download={`Ben10_Battle_${Date.now()}.webm`}
+                      className="flex-1 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs rounded-xl text-center transition flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-500/20"
+                    >
+                      <span>Download Video</span>
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowRecordedModal(false)}
+                    className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition"
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
             </div>
           </div>
