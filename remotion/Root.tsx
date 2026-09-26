@@ -161,7 +161,7 @@ export const RemotionRoot: React.FC = () => {
           const contestants = props.data_json?.contestants || [];
           const seed = props.data_json?.seed || 42;
           if (contestants.length >= 2) {
-            const sim = generateArenaSimulation(contestants, 10800, seed);
+            const sim = generateArenaSimulation(contestants, 3600, seed);
             return {
               durationInFrames: sim.totalSeconds * 30
             };

@@ -127,7 +127,7 @@ export async function POST(request: Request) {
       }
       finalDuration = Math.round(totalSeconds + (hasOutro ? 2.8 : 0));
     } else if (data_json.format === 'Arena Clash' && data_json.contestants) {
-      const sim = generateArenaSimulation(data_json.contestants, 10800, data_json.seed || 42);
+      const sim = generateArenaSimulation(data_json.contestants, 3600, data_json.seed || 42);
       finalDuration = sim.totalSeconds;
     } else if (data_json.format === 'Arena Clash' && data_json.duration_seconds) {
       finalDuration = data_json.duration_seconds;

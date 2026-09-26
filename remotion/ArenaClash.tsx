@@ -208,7 +208,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
 
   // Run 100% deterministic simulation until winner is crowned
   const simResult = useMemo(() => {
-    return generateArenaSimulation(contestants, 10800, seed);
+    return generateArenaSimulation(contestants, 3600, seed);
   }, [contestants, seed]);
 
   const { frames, soundEvents } = simResult;

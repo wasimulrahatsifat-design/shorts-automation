@@ -1262,7 +1262,7 @@ export default function GamePage() {
         special_power: c.special_power,
         special_ability: c.special_ability,
       })),
-      10800,
+      7200,
       battleSeedRef.current
     );
 
@@ -1699,37 +1699,7 @@ export default function GamePage() {
 
       // Ben 10 Omnitrix Center Dial on floor
       const dialRadius = 135;
-      const dialScale = current.isSelectionIntro ? (current.selectionDialScale || 1.0) : 1.0;
-      drawOmnitrixDial(ctx, cx, cy, dialRadius * dialScale);
-
-      // Holographic Alien Selection Badge during intro
-      if (current.isSelectionIntro && current.selectedAlienName) {
-        ctx.save();
-        ctx.font = '900 28px "Montserrat", sans-serif';
-        const badgeText = current.selectedAlienName;
-        const textMetrics = ctx.measureText(badgeText);
-        const bw = textMetrics.width + 48;
-        const bh = 54;
-        const bx = cx - bw / 2;
-        const by = cy + (dialRadius * dialScale) + 30;
-
-        ctx.fillStyle = 'rgba(2, 9, 4, 0.95)';
-        ctx.strokeStyle = current.selectedAlienColor || '#00ff66';
-        ctx.lineWidth = 3;
-        ctx.shadowColor = current.selectedAlienColor || '#00ff66';
-        ctx.shadowBlur = 25;
-        ctx.beginPath();
-        ctx.roundRect(bx, by, bw, bh, 14);
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.fillStyle = '#ffffff';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.shadowBlur = 0;
-        ctx.fillText(badgeText, cx, by + bh / 2);
-        ctx.restore();
-      }
+      drawOmnitrixDial(ctx, cx, cy, dialRadius);
 
       // Render Active Arena Ground Hazards (Heatblast 3s Arena Fire, etc.)
       if (current.hazardZones && current.hazardZones.length > 0) {
@@ -3411,7 +3381,7 @@ export default function GamePage() {
             special_power: c.special_power,
             special_ability: c.special_ability,
           })),
-          10800,
+          7200,
           battleSeedRef.current
         );
         simResultRef.current = sim;
@@ -4024,7 +3994,7 @@ export default function GamePage() {
           special_power: c.special_power,
           special_ability: c.special_ability,
         })),
-        10800,
+        7200,
         currentSeed
       );
 
