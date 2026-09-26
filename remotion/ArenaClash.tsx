@@ -88,8 +88,9 @@ const resolveSoundUrl = (sound: string, abilityType?: string) => {
       return staticFile('audio/bounce.wav');
     case 'crystal_shatter':
       return staticFile('audio/item.wav');
-    case 'laser_beam':
     case 'acid_splatter':
+      return staticFile('audio/acid_splatter.wav');
+    case 'laser_beam':
       return staticFile('audio/gun.wav');
     case 'ability':
       if (abilityType === 'damage') return staticFile('audio/explosion.wav');
@@ -952,7 +953,8 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
         if (f.hasDagger) itemBadge += ' [2X DMG]';
         if (f.gunBullets > 0) itemBadge += ` [BLASTER x${f.gunBullets}]`;
         if (f.speedBoostTimer > 0) itemBadge += ' [SPEED]';
-        if (f.frozenTimer > 0) itemBadge += ' [FROZEN]';
+        if (f.goopTrappedTimer && f.goopTrappedTimer > 0) itemBadge += ' [GOOP TRAPPED]';
+        else if (f.frozenTimer > 0) itemBadge += ' [FROZEN]';
         if (f.bleedTimer && f.bleedTimer > 0) itemBadge += ' [BLEEDING]';
 
         const isAbilityActive = f.abilityAuraTimer > 0;
@@ -1251,7 +1253,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
               )}
 
               {/* Frozen Ice Tint Overlay (NO EMOJIS) */}
-              {isFrozen && (
+              {isFrozen && !f.goopTrappedTimer && (
                 <div
                   style={{
                     position: 'absolute',
@@ -1260,6 +1262,21 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                     border: '3px solid #38bdf8',
                     borderRadius: '50%',
                     zIndex: 3,
+                  }}
+                />
+              )}
+
+              {/* Goop Slime Trap Overlay */}
+              {f.goopTrappedTimer !== undefined && f.goopTrappedTimer > 0 && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: -5,
+                    borderRadius: '50%',
+                    border: '4px solid #84cc16',
+                    boxShadow: '0 0 22px #84cc16, inset 0 0 14px rgba(132, 204, 22, 0.6)',
+                    backgroundColor: 'rgba(132, 204, 22, 0.35)',
+                    zIndex: 4,
                   }}
                 />
               )}

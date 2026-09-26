@@ -884,6 +884,8 @@ export default function GamePage() {
         type = 'steel_bite';
       } else if (alienType === 'wildmutt') {
         type = 'predator_roar';
+      } else if (alienType === 'stinkfly') {
+        type = 'acid_splatter';
       } else {
         type = 'fireblast';
       }
@@ -895,7 +897,8 @@ export default function GamePage() {
       type === 'omnitrix_slam' ||
       type === 'fireblast' ||
       type === 'steel_bite' ||
-      type === 'predator_roar'
+      type === 'predator_roar' ||
+      type === 'acid_splatter'
     ) {
       try {
         const audio = new Audio(`/audio/${type}.wav?v=${Date.now()}`);
@@ -2904,7 +2907,8 @@ export default function GamePage() {
         if (f.hasDagger) itemBadge += '2X DMG ';
         if (f.gunBullets > 0) itemBadge += `BLASTER x${f.gunBullets} `;
         if (f.speedBoostTimer > 0) itemBadge += 'SPEED ';
-        if (f.frozenTimer > 0) itemBadge += 'FROZEN ';
+        if (f.goopTrappedTimer && f.goopTrappedTimer > 0) itemBadge += 'GOOP TRAPPED ';
+        else if (f.frozenTimer > 0) itemBadge += 'FROZEN ';
         if (f.bleedTimer && f.bleedTimer > 0) itemBadge += 'BLEEDING ';
         if (isCharged) itemBadge += 'READY';
 
@@ -2926,6 +2930,30 @@ export default function GamePage() {
           ctx.shadowColor = '#7f1d1d';
           ctx.shadowBlur = 8;
           ctx.fill();
+          ctx.restore();
+        }
+
+        if (f.goopTrappedTimer && f.goopTrappedTimer > 0) {
+          ctx.save();
+          const goopPulse = 0.5 + 0.5 * Math.sin(curFrame * 0.35);
+          ctx.beginPath();
+          ctx.arc(0, 0, half + 5, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(132, 204, 22, ${0.6 + goopPulse * 0.4})`;
+          ctx.lineWidth = 5;
+          ctx.shadowColor = '#84cc16';
+          ctx.shadowBlur = 18;
+          ctx.stroke();
+
+          // Sticky slime drops on ball perimeter
+          for (let s = 0; s < 4; s++) {
+            const sAng = (s / 4) * Math.PI * 2 + curFrame * 0.05;
+            ctx.beginPath();
+            ctx.arc(Math.cos(sAng) * (half + 4), Math.sin(sAng) * (half + 4), 4.5, 0, Math.PI * 2);
+            ctx.fillStyle = '#bef264';
+            ctx.shadowColor = '#84cc16';
+            ctx.shadowBlur = 10;
+            ctx.fill();
+          }
           ctx.restore();
         }
 

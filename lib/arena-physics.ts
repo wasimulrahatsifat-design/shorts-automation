@@ -214,6 +214,10 @@ export interface SimFighter {
   specialMoveReady: boolean;
   rageModeActivated?: boolean;
   crystalTrapCount?: number;
+  goopTrapCount?: number;
+  goopTrappedTimer?: number;
+  goopDamageTicksRemaining?: number;
+  goopDamageIntervalTimer?: number;
   bleedTimer?: number;
   bleedTicksRemaining?: number;
   bleedIntervalTimer?: number;
@@ -483,7 +487,7 @@ export const BEN10_DEFAULT_ABILITIES: Record<string, SpecialAbility> = {
     trigger_type: 'charge',
     trigger_value: 100,
     weapon_type: 'none',
-    description: 'Sprays sticky corrosive acid slime that slows down enemy balls and corrodes armor!',
+    description: 'Sprays sticky acid goop in the arena trapping enemies for 2s (1 dmg/s) and unleashing an acid barrage on the 3rd trap!',
   },
   // Generic fallbacks
   iron_shield: { name: 'Iron Bastion', icon: 'IRON SHIELD', type: 'shield', cooldown_seconds: 6, power_value: 40, trigger_type: 'charge', trigger_value: 100 },
@@ -611,6 +615,10 @@ export function generateArenaSimulation(
       specialMoveReady: false,
       rageModeActivated: false,
       crystalTrapCount: 0,
+      goopTrapCount: 0,
+      goopTrappedTimer: 0,
+      goopDamageTicksRemaining: 0,
+      goopDamageIntervalTimer: 0,
       bleedTimer: 0,
       bleedTicksRemaining: 0,
       bleedIntervalTimer: 0,
@@ -1085,9 +1093,9 @@ export function generateArenaSimulation(
               type: 'acid',
               x: nearestOpp.x,
               y: nearestOpp.y,
-              radius: 90,
-              remainingFrames: 90,
-              maxFrames: 90,
+              radius: 95,
+              remainingFrames: 180,
+              maxFrames: 180,
               color: '#84cc16',
               ownerId: f.id,
               damagePerFrame: 0.25,
@@ -1287,6 +1295,63 @@ export function generateArenaSimulation(
                 scale: 1.3,
               });
               soundEvents.push({ frame, sound: 'explosion', volume: 0.9 });
+            }
+          }
+        }
+      }
+
+      // Stinkfly Goop Trapped & Damage-Over-Time (DoT: 2s trap with 1 dmg per second = 2 dmg total)
+      if (f.goopTrappedTimer && f.goopTrappedTimer > 0) {
+        f.goopTrappedTimer--;
+        // Dripping acidic lime slime droplets
+        if (frame % 3 === 0) {
+          particles.push({
+            x: f.x + (rng() - 0.5) * (f.size * 0.5),
+            y: f.y + (rng() - 0.5) * (f.size * 0.5),
+            vx: (rng() - 0.5) * 1.5,
+            vy: rng() * 2 + 1,
+            color: rng() > 0.4 ? '#84cc16' : '#a3e635',
+            radius: rng() * 3 + 2,
+            alpha: 0.9,
+          });
+        }
+      }
+
+      if (f.goopDamageTicksRemaining && f.goopDamageTicksRemaining > 0 && !f.isDead) {
+        if (f.goopDamageIntervalTimer !== undefined) {
+          f.goopDamageIntervalTimer--;
+          if (f.goopDamageIntervalTimer <= 0) {
+            f.health = Math.max(0, f.health - 1);
+            f.hitFlash = 6;
+            f.goopDamageTicksRemaining--;
+            f.goopDamageIntervalTimer = 30; // 30 frames = 1 second
+
+            floatingTexts.push({
+              id: `goop_dot_${frame}_${f.id}`,
+              x: f.x,
+              y: f.y - 30,
+              text: '-1 GOOP',
+              color: '#84cc16',
+              alpha: 1,
+              vy: -2,
+              scale: 1.1,
+            });
+
+            for (let k = 0; k < 6; k++) {
+              particles.push({
+                x: f.x + (rng() - 0.5) * 15,
+                y: f.y + (rng() - 0.5) * 15,
+                vx: (rng() - 0.5) * 3,
+                vy: (rng() - 0.5) * 3,
+                color: '#84cc16',
+                radius: rng() * 3 + 1.5,
+                alpha: 0.85,
+              });
+            }
+
+            if (f.health <= 0 && !f.isDead) {
+              f.isDead = true;
+              soundEvents.push({ frame, sound: 'explosion', volume: 1.0 });
             }
           }
         }
@@ -1536,10 +1601,11 @@ export function generateArenaSimulation(
           t.vy += (b.vy / bDist) * 8;
 
           const isFireBullet = shooter && getAlienType(shooter) === 'heatblast';
+          const isAcidBullet = b.bulletType === 'acid' || (shooter && getAlienType(shooter) === 'stinkfly');
           soundEvents.push({
             frame,
-            sound: isFireBullet ? 'fireblast' : 'hit',
-            alienType: isFireBullet ? 'heatblast' : undefined,
+            sound: isAcidBullet ? 'acid_splatter' : isFireBullet ? 'fireblast' : 'hit',
+            alienType: isAcidBullet ? 'stinkfly' : isFireBullet ? 'heatblast' : undefined,
             volume: 0.85,
           });
           floatingTexts.push({
@@ -1958,21 +2024,85 @@ export function generateArenaSimulation(
         }
       } else if (hz.type === 'acid') {
         for (const opp of aliveFighters) {
-          if (opp.id !== hz.ownerId) {
+          if (opp.id !== hz.ownerId && opp.health > 0) {
             const d = Math.hypot(opp.x - hz.x, opp.y - hz.y);
-            if (d <= hz.radius) {
-              let hzDmg = hz.damagePerFrame || 0.25;
-              if (getAlienType(opp) === 'xlr8' && (opp.abilityAuraTimer > 0 || opp.speedBoostTimer > 0)) {
-                hzDmg *= 0.5; // XLR8 in wind funnel takes 50% less hazard damage
+            if (d <= hz.radius + opp.size / 2) {
+              // Enemy touches the goop spray in the arena!
+              hz.remainingFrames = 0; // Splatters and traps enemy
+              soundEvents.push({ frame, sound: 'acid_splatter', alienType: 'stinkfly', volume: 1.0 });
+
+              // Sticky lime slime splatter particles
+              for (let k = 0; k < 24; k++) {
+                const ang = rng() * Math.PI * 2;
+                const spd = rng() * 10 + 3;
+                particles.push({
+                  x: opp.x,
+                  y: opp.y,
+                  vx: Math.cos(ang) * spd,
+                  vy: Math.sin(ang) * spd,
+                  color: rng() > 0.4 ? '#84cc16' : '#a3e635',
+                  radius: rng() * 5 + 3,
+                  alpha: 1,
+                });
               }
-              if (getAlienType(opp) === 'cannonbolt' && opp.abilityAuraTimer > 0) {
-                hzDmg *= 0.4;
+
+              // Trap / immobilize enemy for 2 seconds (60 frames at 30 fps)
+              opp.frozenTimer = 60;
+              opp.goopTrappedTimer = 60;
+
+              // Over these 2 seconds, 1 damage per second (total 2 damage)
+              opp.goopDamageTicksRemaining = 2;
+              opp.goopDamageIntervalTimer = 30; // 1st tick at 30f (1s), 2nd tick at 60f (2s)
+
+              floatingTexts.push({
+                id: `goop_trp_${frame}_${opp.id}`,
+                x: opp.x,
+                y: opp.y - 45,
+                text: 'GOOP TRAPPED! (2s)',
+                color: '#84cc16',
+                alpha: 1,
+                vy: -2,
+                scale: 1.3,
+              });
+
+              // Track goop traps for Stinkfly (3rd touch execution barrage, identical to Diamondhead)
+              const owner = aliveFighters.find((f) => f.id === hz.ownerId);
+              if (owner) {
+                owner.goopTrapCount = (owner.goopTrapCount || 0) + 1;
+                // On the 3rd time (or multiples of 3), Stinkfly shoots goop at the trapped enemy!
+                if (owner.goopTrapCount % 3 === 0) {
+                  const aimAng = Math.atan2(opp.y - owner.y, opp.x - owner.x);
+                  floatingTexts.push({
+                    id: `goop_exec_${frame}_${owner.id}`,
+                    x: owner.x,
+                    y: owner.y - 45,
+                    text: 'GOOP BARRAGE!',
+                    color: '#84cc16',
+                    alpha: 1,
+                    vy: -2.5,
+                    scale: 1.4,
+                  });
+                  soundEvents.push({ frame, sound: 'acid_splatter', alienType: 'stinkfly', volume: 1.0 });
+
+                  // Fire 5 concentrated acidic goop projectiles directly at the trapped enemy
+                  for (let s = -2; s <= 2; s++) {
+                    const spread = s * 0.08;
+                    bullets.push({
+                      x: owner.x + Math.cos(aimAng + spread) * (owner.size / 2 + 15),
+                      y: owner.y + Math.sin(aimAng + spread) * (owner.size / 2 + 15),
+                      vx: Math.cos(aimAng + spread) * 24,
+                      vy: Math.sin(aimAng + spread) * 24,
+                      ownerId: owner.id,
+                      color: '#84cc16',
+                      damage: Math.max(14, Math.round((owner.damage || 25) * 0.75)),
+                      life: 45,
+                      bulletType: 'acid',
+                      size: 28,
+                    });
+                  }
+                }
               }
-              if (getAlienType(opp) === 'diamondhead' && rng() < 0.10) {
-                hzDmg = 0;
-              }
-              opp.health = Math.max(0, opp.health - hzDmg);
-              opp.hitFlash = Math.max(opp.hitFlash, 3);
+              break;
             }
           }
         }

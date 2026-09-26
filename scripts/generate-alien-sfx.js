@@ -219,3 +219,93 @@ console.log('Successfully generated public/audio/steel_bite.wav (' + biteBuf.len
 const roarBuf = createWavBuffer(generatePredatorRoar());
 fs.writeFileSync(path.join(audioDir, 'predator_roar.wav'), roarBuf);
 console.log('Successfully generated public/audio/predator_roar.wav (' + roarBuf.length + ' bytes)');
+
+/**
+ * 3. Stinkfly: Acid Splatter & Slime Squelch (acid_splatter.wav)
+ * Characteristics:
+ * - Viscous wet slime spray transient with downward squelching pitch sweep (580Hz down to 130Hz)
+ * - Rapid bubbling acidic froth and bursting viscous droplets
+ * - Caustic acidic sizzle / foaming hiss simulating burning acid corrosion
+ * - Heavy wet slap & splatter impact at t=0.06s with gooey slime resonance
+ */
+function generateAcidSplatter() {
+  const duration = 0.65;
+  const numSamples = Math.floor(sampleRate * duration);
+  const samples = new Float32Array(numSamples);
+
+  let phaseSquelch = 0;
+  let phaseBubble = 0;
+  let phaseSlosh = 0;
+  let filterHissState = 0;
+
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+
+    // 1. Initial High-Velocity Goop Spray Squirt (0 to 0.14s)
+    let squirt = 0;
+    if (t < 0.14) {
+      const sqEnv = Math.sin((t / 0.14) * Math.PI);
+      const sqFreq = 620 * Math.exp(-t / 0.04) + 140;
+      phaseSquelch += (2 * Math.PI * sqFreq) / sampleRate;
+      const tone = Math.sin(phaseSquelch);
+      const squelchNoise = (Math.random() * 2 - 1) * 0.45;
+      squirt = (tone * 0.65 + squelchNoise) * sqEnv * 0.85;
+    }
+
+    // 2. Viscous Slime Slap & Wet Splatter Impact (0.04s to 0.38s)
+    let splatter = 0;
+    if (t >= 0.04 && t < 0.38) {
+      const spT = t - 0.04;
+      const spEnv = Math.exp(-spT / 0.065);
+      const thudFreq = 160 * Math.exp(-spT / 0.03) + 55;
+      phaseSlosh += (2 * Math.PI * thudFreq) / sampleRate;
+      const thud = Math.sin(phaseSlosh) * 0.75;
+      const wetNoise = (Math.random() * 2 - 1) * (0.5 + 0.5 * Math.sin(spT * 120));
+      splatter = (thud * 0.7 + wetNoise * 0.6) * spEnv * 0.95;
+    }
+
+    // 3. Bubbling & Boiling Acid Foam (0.06s to 0.60s)
+    let bubbling = 0;
+    if (t >= 0.06) {
+      const bT = t - 0.06;
+      const bEnv = Math.exp(-bT / 0.18);
+      const bubbleLFO1 = Math.sin(2 * Math.PI * 26 * bT);
+      const bubbleLFO2 = Math.cos(2 * Math.PI * 41 * bT);
+      const bubblePitch = 340 + bubbleLFO1 * 180 + bubbleLFO2 * 90;
+      phaseBubble += (2 * Math.PI * bubblePitch) / sampleRate;
+      const bubbleTone = Math.sin(phaseBubble);
+
+      let dropletClicks = 0;
+      for (const popTime of [0.08, 0.15, 0.22, 0.29, 0.38, 0.46]) {
+        if (Math.abs(t - popTime) < 0.008) {
+          const dt = (t - popTime) / 0.008;
+          dropletClicks += (Math.random() * 2 - 1) * (1 - Math.abs(dt)) * 0.6;
+        }
+      }
+      bubbling = (bubbleTone * 0.45 + dropletClicks * 0.55) * bEnv * 0.8;
+    }
+
+    // 4. Acidic Corrosive Sizzle / Foaming Hiss (0.05s to 0.62s)
+    let hiss = 0;
+    if (t >= 0.05) {
+      const hT = t - 0.05;
+      const hEnv = Math.exp(-hT / 0.22);
+      const rawNoise = Math.random() * 2 - 1;
+      filterHissState += 0.25 * (rawNoise - filterHissState);
+      const bandNoise = rawNoise - filterHissState;
+      const hissMod = 0.5 + 0.5 * Math.sin(2 * Math.PI * 32 * hT);
+      hiss = bandNoise * hissMod * hEnv * 0.45;
+    }
+
+    const mixed = squirt + splatter + bubbling + hiss;
+    samples[i] = Math.tanh(mixed * 1.4) * 0.95;
+  }
+
+  return samples;
+}
+
+// Generate Stinkfly acid splatter
+const acidBuf = createWavBuffer(generateAcidSplatter());
+fs.writeFileSync(path.join(audioDir, 'acid_splatter.wav'), acidBuf);
+console.log('Successfully generated public/audio/acid_splatter.wav (' + acidBuf.length + ' bytes)');
+
