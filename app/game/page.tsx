@@ -231,9 +231,29 @@ export default function GamePage() {
   }, [selectedAliens]);
 
   const [dialAlienIndex, setDialAlienIndex] = useState<number>(0);
+  const dialAlienIndexRef = useRef<number>(0);
+  useEffect(() => {
+    dialAlienIndexRef.current = dialAlienIndex;
+  }, [dialAlienIndex]);
+
   const [dialRotationAngle, setDialRotationAngle] = useState<number>(0);
+  const dialRotationAngleRef = useRef<number>(0);
+  useEffect(() => {
+    dialRotationAngleRef.current = dialRotationAngle;
+  }, [dialRotationAngle]);
+
   const [greenFlash, setGreenFlash] = useState<boolean>(false);
+  const greenFlashRef = useRef<boolean>(false);
+  const greenFlashStartTimeRef = useRef<number>(0);
+  useEffect(() => {
+    greenFlashRef.current = greenFlash;
+  }, [greenFlash]);
+
   const [heroTimeBanner, setHeroTimeBanner] = useState<boolean>(false);
+  const heroTimeBannerRef = useRef<boolean>(false);
+  useEffect(() => {
+    heroTimeBannerRef.current = heroTimeBanner;
+  }, [heroTimeBanner]);
 
   // Alien Selection 1.5s Splash Screen State (Per Alien and Global)
   const [alienSplashMap, setAlienSplashMap] = useState<Record<string, string>>({});
@@ -241,7 +261,16 @@ export default function GamePage() {
   const [selectionSplashUrl, setSelectionSplashUrl] = useState<string | null>(null);
   const [selectionSplashName, setSelectionSplashName] = useState<string | null>(null);
   const [alienSplashActive, setAlienSplashActive] = useState<boolean>(false);
+  const alienSplashActiveRef = useRef<boolean>(false);
+  useEffect(() => {
+    alienSplashActiveRef.current = alienSplashActive;
+  }, [alienSplashActive]);
+
   const [alienSplashTargetAlien, setAlienSplashTargetAlien] = useState<ContestantConfig | null>(null);
+  const alienSplashTargetAlienRef = useRef<ContestantConfig | null>(null);
+  useEffect(() => {
+    alienSplashTargetAlienRef.current = alienSplashTargetAlien;
+  }, [alienSplashTargetAlien]);
 
   // Battle Background Music (BGM) State
   const [bgMusicUrl, setBgMusicUrl] = useState<string>('/audio/battle_bgm.mp3');
@@ -685,21 +714,47 @@ export default function GamePage() {
       BEN10_ALIEN_PRESETS[0];
 
     const splash = alienSplashMap[target.id] || target.splash_image_url || target.image_url;
-    setAlienSplashTargetAlien({ ...target, splash_image_url: splash });
+    const targetWithSplash = { ...target, splash_image_url: splash };
+    setAlienSplashTargetAlien(targetWithSplash);
+    alienSplashTargetAlienRef.current = targetWithSplash;
     setAlienSplashActive(true);
+    alienSplashActiveRef.current = true;
+    if (splash && !loadedImagesRef.current.has(splash)) {
+      const sImg = new Image();
+      sImg.crossOrigin = 'anonymous';
+      sImg.onload = () => drawFrame();
+      sImg.src = splash;
+      loadedImagesRef.current.set(splash, sImg);
+    }
+    drawFrame();
     setTimeout(() => {
       setAlienSplashActive(false);
-    }, 1000);
+      alienSplashActiveRef.current = false;
+      drawFrame();
+    }, 1200);
   };
 
   const triggerSplashPreview = () => {
     const target = selectedAliens[0] || contestants[0] || BEN10_ALIEN_PRESETS[0];
     const splash = alienSplashMap[target.id] || target.splash_image_url || selectionSplashUrl || target.image_url;
-    setAlienSplashTargetAlien({ ...target, splash_image_url: splash });
+    const targetWithSplash = { ...target, splash_image_url: splash };
+    setAlienSplashTargetAlien(targetWithSplash);
+    alienSplashTargetAlienRef.current = targetWithSplash;
     setAlienSplashActive(true);
+    alienSplashActiveRef.current = true;
+    if (splash && !loadedImagesRef.current.has(splash)) {
+      const sImg = new Image();
+      sImg.crossOrigin = 'anonymous';
+      sImg.onload = () => drawFrame();
+      sImg.src = splash;
+      loadedImagesRef.current.set(splash, sImg);
+    }
+    drawFrame();
     setTimeout(() => {
       setAlienSplashActive(false);
-    }, 1000);
+      alienSplashActiveRef.current = false;
+      drawFrame();
+    }, 1200);
   };
 
   // Sync BGM with battle play state (Pauses immediately on victory)
@@ -1788,32 +1843,8 @@ export default function GamePage() {
       }
 
       // Ben 10 Omnitrix Center Dial on floor
-      const isSelecting = selectionPhase === 'selecting';
-      const dialRadius = isSelecting ? 210 : 135;
+      const dialRadius = 135;
       drawOmnitrixDial(ctx, cx, cy, dialRadius);
-
-      // If interactive selection is active, render the rotating alien avatar in the center
-      if (isSelecting) {
-        const roster = BEN10_ALIEN_PRESETS;
-        const currentAlien = roster[dialAlienIndex % roster.length];
-        if (currentAlien && currentAlien.image_url) {
-          let aImg = loadedImagesRef.current.get(currentAlien.image_url);
-          if (!aImg) {
-            aImg = new Image();
-            aImg.crossOrigin = 'anonymous';
-            aImg.src = currentAlien.image_url;
-            loadedImagesRef.current.set(currentAlien.image_url, aImg);
-          }
-          if (aImg && aImg.complete && aImg.naturalWidth > 0) {
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(cx, cy, 70, 0, Math.PI * 2);
-            ctx.clip();
-            ctx.drawImage(aImg, cx - 70, cy - 70, 140, 140);
-            ctx.restore();
-          }
-        }
-      }
 
       // Render Active Arena Ground Hazards (Heatblast 3s Arena Fire, etc.)
       if (current.hazardZones && current.hazardZones.length > 0) {
@@ -3309,41 +3340,332 @@ export default function GamePage() {
         ctx.restore();
       }
 
-      // Render Hero Time Banner on canvas if active
-      if (heroTimeBanner) {
+      // 1. Omnitrix Alien Selection Overlay on Canvas
+      if (selectionPhaseRef.current === 'selecting') {
         ctx.save();
-        ctx.font = '900 64px "Montserrat", sans-serif';
+        // Translucent dark veil over arena
+        ctx.fillStyle = 'rgba(2, 8, 4, 0.72)';
+        ctx.fillRect(0, 0, width, height);
+
+        const cx = width / 2;
+        const cy = ARENA_CENTER.y;
+        const roster = BEN10_ALIEN_PRESETS;
+        const curIdx = dialAlienIndexRef.current % roster.length;
+        const curAlien = roster[curIdx];
+        const alienColor = curAlien?.color || '#00ff66';
+
+        // Title Header
+        ctx.font = '900 32px "Montserrat", sans-serif';
         ctx.fillStyle = '#00ff66';
         ctx.shadowColor = '#00ff66';
-        ctx.shadowBlur = 35;
+        ctx.shadowBlur = 18;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText("It's Hero Time!", width / 2, ARENA_CENTER.y - 120);
+        ctx.fillText('OMNITRIX CALIBRATION', cx, cy - 310);
+        ctx.shadowBlur = 0;
+
+        // Outer Metallic Dial
+        const dialRadius = 210;
+        drawOmnitrixDial(ctx, cx, cy, dialRadius);
+
+        // Rotating Bezel Ring
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate((dialRotationAngleRef.current * Math.PI) / 180);
+        ctx.strokeStyle = 'rgba(0, 255, 102, 0.4)';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([12, 12]);
+        ctx.beginPath();
+        ctx.arc(0, 0, dialRadius - 20, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 4 Bezel dots
+        const dotDist = dialRadius - 20;
+        [[0, -dotDist], [0, dotDist], [-dotDist, 0], [dotDist, 0]].forEach(([dx, dy]) => {
+          ctx.beginPath();
+          ctx.arc(dx, dy, 7, 0, Math.PI * 2);
+          ctx.fillStyle = '#00ff66';
+          ctx.shadowColor = '#00ff66';
+          ctx.shadowBlur = 12;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        });
+        ctx.restore();
+
+        // Left & Right Arrow buttons
+        ctx.save();
+        // Left ◀
+        ctx.beginPath();
+        ctx.arc(cx - 245, cy, 32, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(10, 30, 18, 0.9)';
+        ctx.fill();
+        ctx.strokeStyle = '#00ff66';
+        ctx.lineWidth = 3;
+        ctx.shadowColor = '#00ff66';
+        ctx.shadowBlur = 10;
+        ctx.stroke();
+        ctx.font = '900 28px sans-serif';
+        ctx.fillStyle = '#00ff66';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('◀', cx - 245, cy);
+
+        // Right ▶
+        ctx.beginPath();
+        ctx.arc(cx + 245, cy, 32, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(10, 30, 18, 0.9)';
+        ctx.fill();
+        ctx.strokeStyle = '#00ff66';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.fillText('▶', cx + 245, cy);
+        ctx.restore();
+
+        // Center Alien Core Avatar (Radius 78)
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, 78, 0, Math.PI * 2);
+        ctx.fillStyle = '#000000';
+        ctx.fill();
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = '#00ff66';
+        ctx.shadowColor = '#00ff66';
+        ctx.shadowBlur = 25;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.clip();
+
+        if (curAlien && curAlien.image_url) {
+          let aImg = loadedImagesRef.current.get(curAlien.image_url);
+          if (!aImg) {
+            aImg = new Image();
+            aImg.crossOrigin = 'anonymous';
+            aImg.onload = () => drawFrame();
+            aImg.src = curAlien.image_url;
+            loadedImagesRef.current.set(curAlien.image_url, aImg);
+          }
+          if (aImg && aImg.complete && aImg.naturalWidth > 0) {
+            ctx.drawImage(aImg, cx - 78, cy - 78, 156, 156);
+          } else {
+            ctx.fillStyle = alienColor;
+            ctx.fillRect(cx - 78, cy - 78, 156, 156);
+            ctx.font = '900 60px "Montserrat", sans-serif';
+            ctx.fillStyle = '#000000';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(curAlien.name.charAt(0), cx, cy);
+          }
+        } else if (curAlien) {
+          ctx.fillStyle = alienColor;
+          ctx.fillRect(cx - 78, cy - 78, 156, 156);
+          ctx.font = '900 60px "Montserrat", sans-serif';
+          ctx.fillStyle = '#000000';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(curAlien.name.charAt(0), cx, cy);
+        }
+        ctx.restore();
+
+        // Player Badge Pill
+        const playerText = `PLAYER ${currentSelectingIndexRef.current + 1} OF ${contestantCount}`;
+        ctx.save();
+        ctx.font = '900 20px "Montserrat", sans-serif';
+        const pMetrics = ctx.measureText(playerText);
+        const pBadgeW = pMetrics.width + 36;
+        ctx.beginPath();
+        ctx.roundRect(cx - pBadgeW / 2, cy + 245, pBadgeW, 38, 19);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.95)';
+        ctx.fill();
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = '#00ff66';
+        ctx.shadowColor = '#00ff66';
+        ctx.shadowBlur = 12;
+        ctx.stroke();
+        ctx.fillStyle = '#00ff66';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(playerText, cx, cy + 264);
+        ctx.restore();
+
+        // Alien Name Badge Pill
+        if (curAlien) {
+          ctx.save();
+          ctx.font = '900 28px "Montserrat", sans-serif';
+          const aMetrics = ctx.measureText(curAlien.name.toUpperCase());
+          const aBadgeW = aMetrics.width + 48;
+          ctx.beginPath();
+          ctx.roundRect(cx - aBadgeW / 2, cy + 300, aBadgeW, 48, 24);
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.95)';
+          ctx.fill();
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = alienColor;
+          ctx.shadowColor = alienColor;
+          ctx.shadowBlur = 18;
+          ctx.stroke();
+          ctx.fillStyle = '#ffffff';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(curAlien.name.toUpperCase(), cx, cy + 324);
+          ctx.restore();
+        }
+
+        // Player progress dots
+        ctx.save();
+        const dotRadius = 7;
+        const dotGap = 26;
+        const totalDotW = (contestantCount - 1) * dotGap;
+        const dotStartX = cx - totalDotW / 2;
+        const dotY = cy + 375;
+        for (let i = 0; i < contestantCount; i++) {
+          const dx = dotStartX + i * dotGap;
+          ctx.beginPath();
+          ctx.arc(dx, dotY, dotRadius, 0, Math.PI * 2);
+          if (i < currentSelectingIndexRef.current) {
+            ctx.fillStyle = '#00ff66';
+            ctx.shadowColor = '#00ff66';
+            ctx.shadowBlur = 8;
+          } else if (i === currentSelectingIndexRef.current) {
+            ctx.fillStyle = '#ffffff';
+            ctx.shadowColor = '#00ff66';
+            ctx.shadowBlur = 12;
+          } else {
+            ctx.fillStyle = '#334155';
+            ctx.shadowBlur = 0;
+          }
+          ctx.fill();
+        }
+        ctx.restore();
+
         ctx.restore();
       }
 
-      // Render Fullscreen Alien Splash on canvas if active
-      if (alienSplashActive && alienSplashTargetAlien) {
+      // 2. Fullscreen Alien Splash Screen on Canvas
+      if (alienSplashActiveRef.current && alienSplashTargetAlienRef.current) {
+        const targetAlien = alienSplashTargetAlienRef.current;
+        const alienColor = targetAlien.color || '#00ff66';
         const splashImgUrl =
-          alienSplashTargetAlien.splash_image_url ||
-          alienSplashMap[alienSplashTargetAlien.id] ||
+          targetAlien.splash_image_url ||
+          alienSplashMap[targetAlien.id] ||
           selectionSplashUrl ||
-          alienSplashTargetAlien.image_url;
+          targetAlien.image_url;
+
+        ctx.save();
+        // Deep cosmic black background
+        ctx.fillStyle = '#030805';
+        ctx.fillRect(0, 0, width, height);
+
+        // Radiant energy aura in alien's color
+        const auraGrad = ctx.createRadialGradient(width / 2, height / 2, 40, width / 2, height / 2, width * 0.7);
+        auraGrad.addColorStop(0, `${alienColor}90`);
+        auraGrad.addColorStop(0.4, `${alienColor}40`);
+        auraGrad.addColorStop(0.8, `${alienColor}10`);
+        auraGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = auraGrad;
+        ctx.fillRect(0, 0, width, height);
+
+        // Splash Image
+        let drawnImage = false;
         if (splashImgUrl) {
           let sImg = loadedImagesRef.current.get(splashImgUrl);
           if (!sImg) {
             sImg = new Image();
             sImg.crossOrigin = 'anonymous';
+            sImg.onload = () => drawFrame();
             sImg.src = splashImgUrl;
             loadedImagesRef.current.set(splashImgUrl, sImg);
           }
           if (sImg && sImg.complete && sImg.naturalWidth > 0) {
-            ctx.save();
-            ctx.fillStyle = '#000000';
-            ctx.fillRect(0, 0, width, height);
-            ctx.drawImage(sImg, 0, 0, width, height);
-            ctx.restore();
+            const imgAspect = sImg.naturalWidth / sImg.naturalHeight;
+            const canvasAspect = width / height;
+            let dw = width, dh = height, dx = 0, dy = 0;
+            if (imgAspect > canvasAspect) {
+              dh = height;
+              dw = height * imgAspect;
+              dx = (width - dw) / 2;
+            } else {
+              dw = width;
+              dh = width / imgAspect;
+              dy = (height - dh) / 2;
+            }
+            ctx.drawImage(sImg, dx, dy, dw, dh);
+            drawnImage = true;
           }
+        }
+
+        // Fallback stylized crest if image is not loaded yet
+        if (!drawnImage) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(width / 2, height / 2 - 40, 160, 0, Math.PI * 2);
+          ctx.fillStyle = `${alienColor}20`;
+          ctx.fill();
+          ctx.lineWidth = 8;
+          ctx.strokeStyle = alienColor;
+          ctx.shadowColor = alienColor;
+          ctx.shadowBlur = 45;
+          ctx.stroke();
+          ctx.font = '900 130px "Montserrat", sans-serif';
+          ctx.fillStyle = alienColor;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(targetAlien.name.charAt(0), width / 2, height / 2 - 40);
+          ctx.restore();
+        }
+
+        // Bold Glowing Alien Name at Bottom
+        ctx.save();
+        ctx.font = '900 68px "Montserrat", sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = alienColor;
+        ctx.shadowBlur = 40;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(targetAlien.name.toUpperCase(), width / 2, height - 180);
+        ctx.restore();
+
+        ctx.restore();
+      }
+
+      // 3. Hero Time Banner on Canvas
+      if (heroTimeBannerRef.current) {
+        ctx.save();
+        const cx = width / 2;
+        const cy = ARENA_CENTER.y - 40;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+        ctx.beginPath();
+        ctx.roundRect(cx - 330, cy - 65, 660, 130, 32);
+        ctx.fill();
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = '#00ff66';
+        ctx.shadowColor = '#00ff66';
+        ctx.shadowBlur = 40;
+        ctx.stroke();
+
+        ctx.font = '900 62px "Montserrat", sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText("IT'S HERO TIME!", cx, cy);
+        ctx.restore();
+      }
+
+      // 4. Omnitrix Green Flash on Canvas
+      if (greenFlashRef.current) {
+        const elapsed = performance.now() - greenFlashStartTimeRef.current;
+        if (elapsed < 480) {
+          const alpha = Math.max(0, 1 - elapsed / 480);
+          ctx.save();
+          ctx.fillStyle = `rgba(0, 255, 102, ${0.98 * alpha})`;
+          ctx.fillRect(0, 0, width, height);
+
+          const flashGlow = ctx.createRadialGradient(width / 2, height / 2, 50, width / 2, height / 2, width);
+          flashGlow.addColorStop(0, `rgba(255, 255, 255, ${0.98 * alpha})`);
+          flashGlow.addColorStop(0.35, `rgba(0, 255, 102, ${0.9 * alpha})`);
+          flashGlow.addColorStop(1, `rgba(0, 40, 15, ${0.85 * alpha})`);
+          ctx.fillStyle = flashGlow;
+          ctx.fillRect(0, 0, width, height);
+          ctx.restore();
         }
       }
     });
@@ -3418,13 +3740,19 @@ export default function GamePage() {
 
   // 8. Handlers & Interactive Selection Controls
   const handleStartSelection = () => {
-    if (selectionPhase === 'idle') {
+    if (selectionPhaseRef.current === 'idle') {
       playSound('omnitrix_open');
       setSelectionPhase('selecting');
+      selectionPhaseRef.current = 'selecting';
       setCurrentSelectingIndex(0);
+      currentSelectingIndexRef.current = 0;
       setSelectedAliens([]);
+      selectedAliensRef.current = [];
       setDialAlienIndex(0);
+      dialAlienIndexRef.current = 0;
       setDialRotationAngle(0);
+      dialRotationAngleRef.current = 0;
+      drawFrame();
     }
   };
 
@@ -3433,21 +3761,38 @@ export default function GamePage() {
     playSound('omnitrix_turn');
     const roster = BEN10_ALIEN_PRESETS;
     const rosterLen = roster.length;
-    setDialAlienIndex((prev) => (direction === 'next' ? (prev + 1) % rosterLen : (prev - 1 + rosterLen) % rosterLen));
-    setDialRotationAngle((prev) => prev + (direction === 'next' ? 45 : -45));
+    const nextIdx = direction === 'next' ? (dialAlienIndexRef.current + 1) % rosterLen : (dialAlienIndexRef.current - 1 + rosterLen) % rosterLen;
+    const nextAngle = dialRotationAngleRef.current + (direction === 'next' ? 45 : -45);
+    setDialAlienIndex(nextIdx);
+    dialAlienIndexRef.current = nextIdx;
+    setDialRotationAngle(nextAngle);
+    dialRotationAngleRef.current = nextAngle;
+
+    const curAlien = roster[nextIdx];
+    if (curAlien && curAlien.image_url && !loadedImagesRef.current.has(curAlien.image_url)) {
+      const aImg = new Image();
+      aImg.crossOrigin = 'anonymous';
+      aImg.onload = () => drawFrame();
+      aImg.src = curAlien.image_url;
+      loadedImagesRef.current.set(curAlien.image_url, aImg);
+    }
+    drawFrame();
   };
 
   const handleCenterSlam = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (selectionPhase !== 'selecting') return;
+    if (selectionPhaseRef.current !== 'selecting') return;
 
     playSound('omnitrix_slam');
     setGreenFlash(true);
+    greenFlashRef.current = true;
+    greenFlashStartTimeRef.current = performance.now();
 
     const roster = BEN10_ALIEN_PRESETS;
-    const chosen = roster[dialAlienIndex % roster.length];
-    const newSelected = [...selectedAliens, chosen];
+    const chosen = roster[dialAlienIndexRef.current % roster.length];
+    const newSelected = [...selectedAliensRef.current, chosen];
     setSelectedAliens(newSelected);
+    selectedAliensRef.current = newSelected;
 
     if (chosen.image_url) {
       let img = loadedImagesRef.current.get(chosen.image_url);
@@ -3467,34 +3812,57 @@ export default function GamePage() {
       const baseSize = getFighterSize(contestantCount);
       const individualSize = Math.round(baseSize * sizeMultiplier);
       simResultRef.current.frames.forEach((fr) => {
-        if (fr.fighters[currentSelectingIndex]) {
-          fr.fighters[currentSelectingIndex].name = chosen.name;
-          fr.fighters[currentSelectingIndex].color = chosen.color;
-          fr.fighters[currentSelectingIndex].image_url = chosen.image_url;
-          fr.fighters[currentSelectingIndex].size = individualSize;
+        if (fr.fighters[currentSelectingIndexRef.current]) {
+          fr.fighters[currentSelectingIndexRef.current].name = chosen.name;
+          fr.fighters[currentSelectingIndexRef.current].color = chosen.color;
+          fr.fighters[currentSelectingIndexRef.current].image_url = chosen.image_url;
+          fr.fighters[currentSelectingIndexRef.current].size = individualSize;
           if (chosen.special_ability) {
-            fr.fighters[currentSelectingIndex].specialAbility = chosen.special_ability;
+            fr.fighters[currentSelectingIndexRef.current].specialAbility = chosen.special_ability;
           }
         }
       });
     }
 
-    // Show 1-Second Fullscreen Alien Splash Screen (per alien)
+    // Show Fullscreen Alien Splash Screen (per alien)
     const splash = alienSplashMap[chosen.id] || chosen.splash_image_url || chosen.image_url;
-    setAlienSplashTargetAlien({ ...chosen, splash_image_url: splash });
+    const targetWithSplash = { ...chosen, splash_image_url: splash };
+    setAlienSplashTargetAlien(targetWithSplash);
+    alienSplashTargetAlienRef.current = targetWithSplash;
     setAlienSplashActive(true);
+    alienSplashActiveRef.current = true;
 
-    const nextIndex = currentSelectingIndex + 1;
+    if (splash && !loadedImagesRef.current.has(splash)) {
+      const sImg = new Image();
+      sImg.crossOrigin = 'anonymous';
+      sImg.onload = () => drawFrame();
+      sImg.src = splash;
+      loadedImagesRef.current.set(splash, sImg);
+    }
+    drawFrame();
+
+    const nextIndex = currentSelectingIndexRef.current + 1;
+
+    // Green flash turns off after 450ms
+    setTimeout(() => {
+      setGreenFlash(false);
+      greenFlashRef.current = false;
+      drawFrame();
+    }, 450);
 
     setTimeout(() => {
       setAlienSplashActive(false);
-      setGreenFlash(false);
+      alienSplashActiveRef.current = false;
 
       if (nextIndex < contestantCount) {
         // More players to select (e.g. Player 2, Player 3, Player 4...)
         setCurrentSelectingIndex(nextIndex);
-        setDialAlienIndex((prev) => (prev + 1) % roster.length);
+        currentSelectingIndexRef.current = nextIndex;
+        const nextDial = (dialAlienIndexRef.current + 1) % roster.length;
+        setDialAlienIndex(nextDial);
+        dialAlienIndexRef.current = nextDial;
         setDialRotationAngle(0);
+        dialRotationAngleRef.current = 0;
         drawFrame();
       } else {
         // ALL contestantCount players have been selected!
@@ -3555,38 +3923,51 @@ export default function GamePage() {
 
         // Show "It's Hero Time!" banner without Ben's voice!
         setSelectionPhase('hero_time');
+        selectionPhaseRef.current = 'hero_time';
         setHeroTimeBanner(true);
+        heroTimeBannerRef.current = true;
         drawFrame();
 
         // User requirement: When the "It's Hero Time!" text leaves, start the battle!
         setTimeout(() => {
           setHeroTimeBanner(false);
+          heroTimeBannerRef.current = false;
           setSelectionPhase('battling');
+          selectionPhaseRef.current = 'battling';
           setIsPlaying(true);
           startBattleMusic();
           drawFrame();
         }, 1500);
       }
-    }, 1000);
+    }, 1200);
   };
 
   const resetSimulation = () => {
     setIsPlaying(false);
     stopBattleMusic();
     setAlienSplashActive(false);
+    alienSplashActiveRef.current = false;
     setSelectionPhase('idle');
+    selectionPhaseRef.current = 'idle';
     setSelectedAliens([]);
+    selectedAliensRef.current = [];
     setCurrentSelectingIndex(0);
+    currentSelectingIndexRef.current = 0;
     setDialAlienIndex(0);
+    dialAlienIndexRef.current = 0;
     setDialRotationAngle(0);
+    dialRotationAngleRef.current = 0;
     setHeroTimeBanner(false);
+    heroTimeBannerRef.current = false;
     setGreenFlash(false);
+    greenFlashRef.current = false;
     screenShakeRef.current = 0;
     currentFrameRef.current = 0;
     lastSoundFrameRef.current = -1;
     victoryTriggeredRef.current = false;
     setWinner(null);
     initSimulation(true);
+    drawFrame();
   };
 
   const handlePlayToggle = () => {
