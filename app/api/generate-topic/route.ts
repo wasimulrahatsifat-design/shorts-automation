@@ -250,7 +250,7 @@ Your scripts ALWAYS hook viewers in the first 2 seconds, keep them glued until t
       }
       finalDuration = Math.round(totalSeconds + (hasOutro ? 2.8 : 0));
     } else if (videoFormat === 'Arena Clash' && dataPayload.contestants) {
-      const sim = generateArenaSimulation(dataPayload.contestants, 3600, dataPayload.seed || 42);
+      const sim = generateArenaSimulation(dataPayload.contestants, 10800, dataPayload.seed || 42);
       finalDuration = sim.totalSeconds;
     }
 

@@ -544,7 +544,7 @@ function getEstimatedClashDamage(attacker: SimFighter, defender: SimFighter, isO
 
 export function generateArenaSimulation(
   contestants: FighterInput[],
-  maxFrames = 7200, // Safe upper limit (4 minutes), battle stops when winner emerges!
+  maxFrames = 10800, // Safe upper limit (6 minutes), battle runs continuously until winner emerges!
   seed = 42
 ): SimulationResult {
   const rng = createSeededRng(seed);
@@ -691,8 +691,8 @@ export function generateArenaSimulation(
     { type: 'speed', icon: 'SPEED', name: 'Hyper Speed', color: '#eab308' },
   ];
 
-  // Interactive selection is handled on screen before battle, so physics simulation starts immediately at frame 0
-  const SELECTION_INTRO_FRAMES = 0;
+  // Ben 10 Omnitrix Selection Dial intro animation (95 frames = ~3.1 seconds)
+  const SELECTION_INTRO_FRAMES = 95;
 
 interface ActiveCinematicState {
   reason: 'first_ability' | 'elimination';
@@ -755,7 +755,7 @@ for (let frame = 0; frame < maxFrames; frame++) {
   let currentCinematicZoom: SimCinematicZoom | undefined = undefined;
 
   // 1. Advance anticipation check: Detect lethal attack before impact in 1v1 final showdown
-  if (aliveFighters.length === 2 && !lethalFinisher && !winner) {
+  if (aliveFighters.length === 2 && !lethalFinisher && !winner && !isSelectionIntro) {
     const fA = aliveFighters[0];
     const fB = aliveFighters[1];
 
@@ -1056,10 +1056,19 @@ for (let frame = 0; frame < maxFrames; frame++) {
       }
 
       // 2. Selection cycle text & sound: clean without emoji, only It's Hero Time! at the end
-      selectedAlienName = '';
-      if (frame >= 85) {
+      if (frame >= 18 && frame < 72) {
+        const cycleIdx = Math.floor((frame - 18) / 14) % fighters.length;
+        const currentCycling = fighters[cycleIdx];
+        selectedAlienName = currentCycling ? currentCycling.name : '';
+        selectedAlienColor = currentCycling ? (currentCycling.color || '#00ff66') : '#00ff66';
+        if ((frame - 18) % 14 === 0) {
+          soundEvents.push({ frame, sound: 'omnitrix_turn', volume: 0.7 });
+        }
+      } else if (frame >= 85) {
         selectedAlienName = "It's Hero Time!";
         selectedAlienColor = '#00ff66';
+      } else {
+        selectedAlienName = '';
       }
 
       // Slam down impact at frame 85: Shockwave particle burst + slam sound + It's Hero Time voice!
@@ -1134,7 +1143,7 @@ for (let frame = 0; frame < maxFrames; frame++) {
       // items array remains empty throughout the battle.
 
     // Process Ben 10 Special Moves with specific Trigger Criteria for each alive fighter
-    if (!winner && timeScale > 0) {
+    if (!winner && timeScale > 0 && !isSelectionIntro) {
       aliveFighters.forEach((f) => {
         if (f.frozenTimer > 0) {
           f.frozenTimer--;
@@ -1613,8 +1622,9 @@ for (let frame = 0; frame < maxFrames; frame++) {
     }
 
     // Move Spherical Balls & 4-Wall Bounces inside ARENA_BOX
-    aliveFighters.forEach((f) => {
-      if (f.invulnerableTimer > 0) f.invulnerableTimer--;
+    if (!isSelectionIntro) {
+      aliveFighters.forEach((f) => {
+        if (f.invulnerableTimer > 0) f.invulnerableTimer--;
       if (f.hitFlash > 0) f.hitFlash--;
 
       if (f.frozenTimer > 0) {
@@ -2485,6 +2495,7 @@ for (let frame = 0; frame < maxFrames; frame++) {
       }
     }
   }
+  }
 
     // Decay Particles & Floating Texts
     for (let i = particles.length - 1; i >= 0; i--) {
@@ -2501,7 +2512,7 @@ for (let frame = 0; frame < maxFrames; frame++) {
     }
 
     // Update active ground hazard zones
-    if (timeScale > 0) {
+    if (timeScale > 0 && !isSelectionIntro) {
       activeHazardZones.forEach((hz) => {
         if (hz.maxFrames < 99999) {
         hz.remainingFrames--;
