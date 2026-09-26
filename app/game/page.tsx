@@ -5772,7 +5772,7 @@ export default function GamePage() {
                 ) : dashboardVideoId ? (
                   <div className="flex items-center justify-between w-full">
                     <span className="text-emerald-400 font-bold flex items-center gap-1.5">
-                      <span>✓</span> Saved to Dashboard (Completed)
+                      <span>✓</span> Saved to Dashboard (Ready)
                     </span>
                     <a
                       href="/?step=3"

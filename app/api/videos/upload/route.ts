@@ -44,7 +44,7 @@ export async function POST(request: Request) {
         .insert([
           {
             topic: topic,
-            status: 'Completed',
+            status: 'Needs_Approval',
             video_url: publicUrl,
             data_json: {
               ...parsedData,
