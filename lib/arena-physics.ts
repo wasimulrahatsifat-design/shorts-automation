@@ -222,6 +222,7 @@ export interface SimFighter {
   bleedTicksRemaining?: number;
   bleedIntervalTimer?: number;
   bleedSource?: 'ripjaws' | 'wildmutt';
+  hasUsedFirstAbility?: boolean;
 }
 
 export interface SimItem {
@@ -311,6 +312,19 @@ export interface SoundEvent {
   volume?: number;
 }
 
+export interface SimCinematicZoom {
+  active: boolean;
+  scale: number;
+  focusX: number;
+  focusY: number;
+  reason: 'first_ability' | 'elimination';
+  title: string;
+  subTitle: string;
+  fighterName: string;
+  fighterColor: string;
+  progress: number;
+}
+
 export interface SimFrameState {
   fighters: SimFighter[];
   items: SimItem[];
@@ -326,6 +340,7 @@ export interface SimFrameState {
   selectionDialScale?: number;
   selectedAlienName?: string;
   selectedAlienColor?: string;
+  cinematicZoom?: SimCinematicZoom;
 }
 
 export interface SimulationResult {
@@ -622,6 +637,7 @@ export function generateArenaSimulation(
       bleedTimer: 0,
       bleedTicksRemaining: 0,
       bleedIntervalTimer: 0,
+      hasUsedFirstAbility: false,
     };
   });
 
@@ -652,14 +668,87 @@ export function generateArenaSimulation(
   // Interactive selection is handled on screen before battle, so physics simulation starts immediately at frame 0
   const SELECTION_INTRO_FRAMES = 0;
 
-  for (let frame = 0; frame < maxFrames; frame++) {
-    currentFrameScreenShake = 0;
-    const aliveFighters = fighters.filter((f) => !f.isDead);
-    const isSelectionIntro = frame < SELECTION_INTRO_FRAMES;
-    let selectionDialScale = 1.0;
-    let selectedAlienName = '';
-    let selectedAlienColor = '#00ff66';
-    const isOvertime = !isSelectionIntro && frame >= 5400 && aliveFighters.length > 1;
+interface ActiveCinematicState {
+  reason: 'first_ability' | 'elimination';
+  focusX: number;
+  focusY: number;
+  targetFighterId: string;
+  fighterName: string;
+  fighterColor: string;
+  title: string;
+  subTitle: string;
+  startFrame: number;
+  duration: number;
+}
+
+let activeCinematic: ActiveCinematicState | null = null;
+
+function triggerEliminationCinematic(currentFrame: number, victim: SimFighter, killer?: SimFighter) {
+  if (activeCinematic && activeCinematic.reason === 'elimination' && (currentFrame - activeCinematic.startFrame) < 18) {
+    return;
+  }
+  activeCinematic = {
+    reason: 'elimination',
+    focusX: victim.x,
+    focusY: victim.y,
+    targetFighterId: victim.id,
+    fighterName: victim.name,
+    fighterColor: victim.color || '#ef4444',
+    title: 'FATAL IMPACT',
+    subTitle: `${victim.name.toUpperCase()} ELIMINATED!`,
+    startFrame: currentFrame,
+    duration: 38,
+  };
+}
+
+for (let frame = 0; frame < maxFrames; frame++) {
+  currentFrameScreenShake = 0;
+  const aliveFighters = fighters.filter((f) => !f.isDead);
+  const isSelectionIntro = frame < SELECTION_INTRO_FRAMES;
+  let selectionDialScale = 1.0;
+  let selectedAlienName = '';
+  let selectedAlienColor = '#00ff66';
+  const isOvertime = !isSelectionIntro && frame >= 5400 && aliveFighters.length > 1;
+
+  let timeScale = 1.0;
+  let currentCinematicZoom: SimCinematicZoom | undefined = undefined;
+
+    const currentCinematic: ActiveCinematicState | null = activeCinematic as (ActiveCinematicState | null);
+    if (Boolean(currentCinematic)) {
+      const cin = currentCinematic as ActiveCinematicState;
+      const elapsed = frame - cin.startFrame;
+      if (elapsed < cin.duration) {
+        const p = elapsed / cin.duration; // 0 to 1
+        const peakZoom = cin.reason === 'elimination' ? 1.70 : 1.62;
+        const zoomAmount = Math.sin(p * Math.PI); // 0 -> 1 -> 0
+        const scale = 1.0 + zoomAmount * (peakZoom - 1.0);
+
+        // Physical slow motion: drops down to 0.28x speed at the peak of the action
+        timeScale = Math.max(0.28, 1.0 - zoomAmount * 0.72);
+
+        // Dynamically track target fighter if still available
+        const targetFighter = fighters.find((f) => f.id === cin.targetFighterId);
+        if (targetFighter) {
+          cin.focusX = targetFighter.x;
+          cin.focusY = targetFighter.y;
+        }
+
+        currentCinematicZoom = {
+          active: true,
+          scale,
+          focusX: Math.max(ARENA_BOX.left + 150, Math.min(ARENA_BOX.right - 150, cin.focusX)),
+          focusY: Math.max(ARENA_BOX.top + 150, Math.min(ARENA_BOX.bottom - 150, cin.focusY)),
+          reason: cin.reason,
+          title: cin.title,
+          subTitle: cin.subTitle,
+          fighterName: cin.fighterName,
+          fighterColor: cin.fighterColor,
+          progress: p,
+        };
+      } else {
+        activeCinematic = null;
+      }
+    }
 
     if (isSelectionIntro) {
       if (frame === 0) {
@@ -808,6 +897,23 @@ export function generateArenaSimulation(
         if (isTriggerReady) {
           const otherFighters = aliveFighters.filter((opp) => opp.id !== f.id);
           if (otherFighters.length === 0) return;
+
+          // Check if this alien is using their special ability for the FIRST time in this match
+          if (!f.hasUsedFirstAbility) {
+            f.hasUsedFirstAbility = true;
+            activeCinematic = {
+              reason: 'first_ability',
+              focusX: f.x,
+              focusY: f.y,
+              targetFighterId: f.id,
+              fighterName: f.name,
+              fighterColor: f.color || '#00ff66',
+              title: 'SPECIAL ABILITY',
+              subTitle: `${f.name.toUpperCase()} - ${ab.name.toUpperCase()}`,
+              startFrame: frame,
+              duration: 36,
+            };
+          }
 
           // Find nearest target
           let nearestOpp = otherFighters[0];
@@ -1284,6 +1390,7 @@ export function generateArenaSimulation(
 
             if (f.health <= 0 && !f.isDead) {
               f.isDead = true;
+              triggerEliminationCinematic(frame, f);
               floatingTexts.push({
                 id: `rip_bleed_${frame}_${f.id}`,
                 x: f.x,
@@ -1351,6 +1458,7 @@ export function generateArenaSimulation(
 
             if (f.health <= 0 && !f.isDead) {
               f.isDead = true;
+              triggerEliminationCinematic(frame, f);
               soundEvents.push({ frame, sound: 'explosion', volume: 1.0 });
             }
           }
@@ -1368,13 +1476,13 @@ export function generateArenaSimulation(
       }
 
       const overtimeSpeed = isOvertime ? 1.5 : 1.0;
-      const spdMult = (f.speedBoostTimer > 0 ? 1.6 : 1.0) * overtimeSpeed;
+      const spdMult = (f.speedBoostTimer > 0 ? 1.6 : 1.0) * overtimeSpeed * timeScale;
       f.x += f.vx * spdMult;
       f.y += f.vy * spdMult;
 
       // Ball rolling rotation angle
       const rollSpeed = Math.hypot(f.vx, f.vy) / (f.size / 2);
-      f.angle = (f.angle || 0) + (f.vx >= 0 ? rollSpeed : -rollSpeed) * 0.4;
+      f.angle = (f.angle || 0) + (f.vx >= 0 ? rollSpeed : -rollSpeed) * 0.4 * timeScale;
 
       const r = f.size / 2;
       let bounced = false;
@@ -1543,8 +1651,8 @@ export function generateArenaSimulation(
     // Bullets Hit & Square Arena Boundary
     for (let i = bullets.length - 1; i >= 0; i--) {
       const b = bullets[i];
-      b.x += b.vx;
-      b.y += b.vy;
+      b.x += b.vx * timeScale;
+      b.y += b.vy * timeScale;
       b.life--;
 
       if (
@@ -1634,6 +1742,7 @@ export function generateArenaSimulation(
 
           if (t.health <= 0 && !t.isDead) {
             t.isDead = true;
+            triggerEliminationCinematic(frame, t, shooter);
             soundEvents.push({ frame, sound: 'explosion', volume: 1.0 });
           }
           bullets.splice(i, 1);
@@ -1943,10 +2052,12 @@ export function generateArenaSimulation(
             // Check eliminations
             if (A.health <= 0 && !A.isDead) {
               A.isDead = true;
+              triggerEliminationCinematic(frame, A, B);
               soundEvents.push({ frame, sound: 'explosion', volume: 1.0 });
             }
             if (B.health <= 0 && !B.isDead) {
               B.isDead = true;
+              triggerEliminationCinematic(frame, B, A);
               soundEvents.push({ frame, sound: 'explosion', volume: 1.0 });
             }
 
@@ -1972,15 +2083,15 @@ export function generateArenaSimulation(
 
     // Decay Particles & Floating Texts
     for (let i = particles.length - 1; i >= 0; i--) {
-      particles[i].x += particles[i].vx;
-      particles[i].y += particles[i].vy;
-      particles[i].alpha -= 0.04;
+      particles[i].x += particles[i].vx * timeScale;
+      particles[i].y += particles[i].vy * timeScale;
+      particles[i].alpha -= 0.04 * timeScale;
       if (particles[i].alpha <= 0) particles.splice(i, 1);
     }
 
     for (let i = floatingTexts.length - 1; i >= 0; i--) {
-      floatingTexts[i].y += floatingTexts[i].vy;
-      floatingTexts[i].alpha -= 0.03;
+      floatingTexts[i].y += floatingTexts[i].vy * timeScale;
+      floatingTexts[i].alpha -= 0.03 * timeScale;
       if (floatingTexts[i].alpha <= 0) floatingTexts.splice(i, 1);
     }
 
@@ -2205,6 +2316,7 @@ export function generateArenaSimulation(
       selectionDialScale,
       selectedAlienName,
       selectedAlienColor,
+      cinematicZoom: currentCinematicZoom ? { ...currentCinematicZoom } : undefined,
     });
   }
 

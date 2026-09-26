@@ -1648,6 +1648,20 @@ export default function GamePage() {
         ctx.translate(ox, oy);
       }
 
+      // Camera Zoom & Arena Clipping for Cinematic Slow Motion
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(ARENA_BOX.left, ARENA_BOX.top, ARENA_BOX.width, ARENA_BOX.height);
+      ctx.clip();
+
+      const cz = current.cinematicZoom;
+      const isZoomActive = cz && cz.active && cz.scale > 1.0;
+      if (isZoomActive) {
+        ctx.translate(cz.focusX, cz.focusY);
+        ctx.scale(cz.scale, cz.scale);
+        ctx.translate(-cz.focusX, -cz.focusY);
+      }
+
       // Ben 10 Square Arena Floor (ARENA_BOX: 900x900)
       ctx.fillStyle = '#030c06';
       ctx.fillRect(ARENA_BOX.left, ARENA_BOX.top, ARENA_BOX.width, ARENA_BOX.height);
@@ -1781,44 +1795,6 @@ export default function GamePage() {
           }
         });
       }
-
-      // Glowing Neon Omnitrix Square Wall
-      ctx.beginPath();
-      ctx.rect(ARENA_BOX.left, ARENA_BOX.top, ARENA_BOX.width, ARENA_BOX.height);
-      ctx.lineWidth = 8;
-      ctx.strokeStyle = '#00ff66';
-      ctx.shadowColor = '#00ff66';
-      ctx.shadowBlur = 28;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-
-      // 4 Corner Sci-Fi Brackets
-      ctx.lineWidth = 6;
-      ctx.strokeStyle = '#00ff66';
-      // Top-Left
-      ctx.beginPath();
-      ctx.moveTo(ARENA_BOX.left + 35, ARENA_BOX.top);
-      ctx.lineTo(ARENA_BOX.left, ARENA_BOX.top);
-      ctx.lineTo(ARENA_BOX.left, ARENA_BOX.top + 35);
-      ctx.stroke();
-      // Top-Right
-      ctx.beginPath();
-      ctx.moveTo(ARENA_BOX.right - 35, ARENA_BOX.top);
-      ctx.lineTo(ARENA_BOX.right, ARENA_BOX.top);
-      ctx.lineTo(ARENA_BOX.right, ARENA_BOX.top + 35);
-      ctx.stroke();
-      // Bottom-Left
-      ctx.beginPath();
-      ctx.moveTo(ARENA_BOX.left + 35, ARENA_BOX.bottom);
-      ctx.lineTo(ARENA_BOX.left, ARENA_BOX.bottom);
-      ctx.lineTo(ARENA_BOX.left, ARENA_BOX.bottom - 35);
-      ctx.stroke();
-      // Bottom-Right
-      ctx.beginPath();
-      ctx.moveTo(ARENA_BOX.right - 35, ARENA_BOX.bottom);
-      ctx.lineTo(ARENA_BOX.right, ARENA_BOX.bottom);
-      ctx.lineTo(ARENA_BOX.right, ARENA_BOX.bottom - 35);
-      ctx.stroke();
 
       // Draw Items
       items.forEach((item) => {
@@ -2981,6 +2957,76 @@ export default function GamePage() {
         ctx.fillText(ft.text, ft.x, ft.y);
         ctx.restore();
       });
+
+      // End Zoom & Clipping inside Arena Box
+      ctx.restore();
+
+      // Glowing Neon Omnitrix Square Wall
+      ctx.beginPath();
+      ctx.rect(ARENA_BOX.left, ARENA_BOX.top, ARENA_BOX.width, ARENA_BOX.height);
+      ctx.lineWidth = 8;
+      ctx.strokeStyle = current.isOvertime ? '#ef4444' : '#00ff66';
+      ctx.shadowColor = current.isOvertime ? '#ef4444' : '#00ff66';
+      ctx.shadowBlur = 28;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // 4 Corner Sci-Fi Brackets
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = current.isOvertime ? '#ef4444' : '#00ff66';
+      // Top-Left
+      ctx.beginPath();
+      ctx.moveTo(ARENA_BOX.left + 35, ARENA_BOX.top);
+      ctx.lineTo(ARENA_BOX.left, ARENA_BOX.top);
+      ctx.lineTo(ARENA_BOX.left, ARENA_BOX.top + 35);
+      ctx.stroke();
+      // Top-Right
+      ctx.beginPath();
+      ctx.moveTo(ARENA_BOX.right - 35, ARENA_BOX.top);
+      ctx.lineTo(ARENA_BOX.right, ARENA_BOX.top);
+      ctx.lineTo(ARENA_BOX.right, ARENA_BOX.top + 35);
+      ctx.stroke();
+      // Bottom-Left
+      ctx.beginPath();
+      ctx.moveTo(ARENA_BOX.left + 35, ARENA_BOX.bottom);
+      ctx.lineTo(ARENA_BOX.left, ARENA_BOX.bottom);
+      ctx.lineTo(ARENA_BOX.left, ARENA_BOX.bottom - 35);
+      ctx.stroke();
+      // Bottom-Right
+      ctx.beginPath();
+      ctx.moveTo(ARENA_BOX.right - 35, ARENA_BOX.bottom);
+      ctx.lineTo(ARENA_BOX.right, ARENA_BOX.bottom);
+      ctx.lineTo(ARENA_BOX.right, ARENA_BOX.bottom - 35);
+      ctx.stroke();
+
+      // Movie Letterbox Bars & Cinematic Slow-Motion HUD during zoom
+      if (isZoomActive && cz) {
+        ctx.save();
+        // Top Letterbox Bar
+        ctx.fillStyle = 'rgba(2, 8, 4, 0.95)';
+        ctx.fillRect(ARENA_BOX.left, ARENA_BOX.top, ARENA_BOX.width, 54);
+        ctx.fillStyle = cz.fighterColor || '#00ff66';
+        ctx.fillRect(ARENA_BOX.left, ARENA_BOX.top + 52, ARENA_BOX.width, 2.5);
+
+        ctx.font = '900 13px "Montserrat", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#a7f3d0';
+        ctx.fillText('CINEMATIC SLOW-MOTION', ARENA_CENTER.x, ARENA_BOX.top + 28);
+
+        // Bottom Letterbox Bar
+        ctx.fillStyle = 'rgba(2, 8, 4, 0.95)';
+        ctx.fillRect(ARENA_BOX.left, ARENA_BOX.bottom - 54, ARENA_BOX.width, 54);
+        ctx.fillStyle = cz.fighterColor || '#00ff66';
+        ctx.fillRect(ARENA_BOX.left, ARENA_BOX.bottom - 54, ARENA_BOX.width, 2.5);
+
+        ctx.font = '900 18px "Montserrat", sans-serif';
+        ctx.fillStyle = cz.fighterColor || '#00ff66';
+        ctx.shadowColor = cz.fighterColor || '#00ff66';
+        ctx.shadowBlur = 16;
+        ctx.fillText(cz.subTitle.toUpperCase(), ARENA_CENTER.x, ARENA_BOX.bottom - 28);
+        ctx.restore();
+      }
 
       // End Arena Shake Section
       ctx.restore();

@@ -223,6 +223,11 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
   };
 
   const { fighters, items, bullets, floatingTexts, particles, winner: frameWinner } = current;
+  const cz = (current as any).cinematicZoom;
+  const isZoomActive = cz && cz.active && cz.scale > 1.0;
+  const originX = isZoomActive ? cz.focusX : ARENA_CENTER.x;
+  const originY = isZoomActive ? cz.focusY : ARENA_CENTER.y;
+  const zoomScale = isZoomActive ? cz.scale : 1.0;
 
   // Render Ben 10 Omnitrix Alien Dossier Status Cards below the Arena Box
   const renderHealthBars = () => {
@@ -580,14 +585,22 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
             : '0 0 45px rgba(0, 255, 102, 0.45), inset 0 0 80px rgba(0, 20, 10, 0.95)',
           backgroundColor: '#030c06',
           zIndex: 5,
+          overflow: 'hidden',
         }}
       >
-        {/* 4 Corner Sci-Fi Brackets */}
-        <div style={{ position: 'absolute', top: -4, left: -4, width: 34, height: 34, borderTop: '6px solid #00ff66', borderLeft: '6px solid #00ff66' }} />
-        <div style={{ position: 'absolute', top: -4, right: -4, width: 34, height: 34, borderTop: '6px solid #00ff66', borderRight: '6px solid #00ff66' }} />
-        <div style={{ position: 'absolute', bottom: -4, left: -4, width: 34, height: 34, borderBottom: '6px solid #00ff66', borderLeft: '6px solid #00ff66' }} />
-        <div style={{ position: 'absolute', bottom: -4, right: -4, width: 34, height: 34, borderBottom: '6px solid #00ff66', borderRight: '6px solid #00ff66' }} />
-
+        {/* Dynamic Zooming Camera Layer (clamped cleanly inside arena box) */}
+        <div
+          style={{
+            position: 'absolute',
+            left: -ARENA_BOX.left,
+            top: -ARENA_BOX.top,
+            width: width,
+            height: 1920,
+            transformOrigin: `${originX}px ${originY}px`,
+            transform: `scale(${zoomScale})`,
+            willChange: 'transform',
+          }}
+        >
         {/* Subtle Galvanic Mechamorph Grid Lines */}
         <div
           style={{
@@ -684,7 +697,6 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
         ) : (
           <OmnitrixDial size={280} opacity={0.92} />
         )}
-      </div>
 
       {/* 1-Second Fullscreen Alien Selection Splash in Render (frame 85 to 115 = 1.0s @ 30fps) */}
       {(() => {
@@ -1368,6 +1380,60 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
           {ft.text}
         </div>
       ))}
+        </div>
+
+        {/* 4 Corner Sci-Fi Brackets (Always fixed on the outer arena frame) */}
+        <div style={{ position: 'absolute', top: -4, left: -4, width: 34, height: 34, borderTop: '6px solid #00ff66', borderLeft: '6px solid #00ff66', zIndex: 30 }} />
+        <div style={{ position: 'absolute', top: -4, right: -4, width: 34, height: 34, borderTop: '6px solid #00ff66', borderRight: '6px solid #00ff66', zIndex: 30 }} />
+        <div style={{ position: 'absolute', bottom: -4, left: -4, width: 34, height: 34, borderBottom: '6px solid #00ff66', borderLeft: '6px solid #00ff66', zIndex: 30 }} />
+        <div style={{ position: 'absolute', bottom: -4, right: -4, width: 34, height: 34, borderBottom: '6px solid #00ff66', borderRight: '6px solid #00ff66', zIndex: 30 }} />
+
+        {/* Cinematic Movie Letterbox Bars & Slow-Motion HUD during zoom */}
+        {isZoomActive && cz && (
+          <>
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 52,
+                backgroundColor: 'rgba(2, 8, 4, 0.95)',
+                borderBottom: `2.5px solid ${cz.fighterColor || '#00ff66'}`,
+                boxShadow: `0 0 20px ${cz.fighterColor || '#00ff66'}`,
+                zIndex: 35,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <span style={{ fontSize: 13, fontWeight: 900, color: '#a7f3d0', letterSpacing: '2px', textTransform: 'uppercase' }}>
+                CINEMATIC SLOW-MOTION
+              </span>
+            </div>
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: 52,
+                backgroundColor: 'rgba(2, 8, 4, 0.95)',
+                borderTop: `2.5px solid ${cz.fighterColor || '#00ff66'}`,
+                boxShadow: `0 0 20px ${cz.fighterColor || '#00ff66'}`,
+                zIndex: 35,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <span style={{ fontSize: 16, fontWeight: 900, color: cz.fighterColor || '#00ff66', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                {cz.subTitle}
+              </span>
+            </div>
+          </>
+        )}
+      </div>
 
       {/* High-Tech Ben 10 Omnitrix Alien Dossier Health Cards */}
       {renderHealthBars()}
