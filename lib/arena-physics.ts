@@ -2056,12 +2056,11 @@ for (let frame = 0; frame < maxFrames; frame++) {
             t.vx += (b.vx / bDist) * 8;
             t.vy += (b.vy / bDist) * 8;
 
-            const isFireBullet = shooter && getAlienType(shooter) === 'heatblast';
             const isAcidBullet = b.bulletType === 'acid' || (shooter && getAlienType(shooter) === 'stinkfly');
             soundEvents.push({
               frame,
-              sound: isAcidBullet ? 'acid_splatter' : isFireBullet ? 'fireblast' : 'hit',
-              alienType: isAcidBullet ? 'stinkfly' : isFireBullet ? 'heatblast' : undefined,
+              sound: isAcidBullet ? 'acid_splatter' : 'hit',
+              alienType: isAcidBullet ? 'stinkfly' : undefined,
               volume: 0.85,
             });
             floatingTexts.push({
@@ -2156,7 +2155,7 @@ for (let frame = 0; frame < maxFrames; frame++) {
               if (aAlien === 'heatblast') {
                 dmgA += Math.round(A.damage * 0.6) || 20; // Burning impact
                 floatingTexts.push({ id: `fire_${frame}_${B.id}`, x: B.x, y: B.y - 45, text: 'FIRE BLAST!', color: '#ea580c', alpha: 1, vy: -2, scale: 1.1 });
-                soundEvents.push({ frame, sound: 'fireblast', alienType: 'heatblast', volume: 0.85 });
+                soundEvents.push({ frame, sound: 'hit', volume: 0.85 });
               } else if (aAlien === 'cannonbolt') {
                 dmgA += Math.round(A.damage * 0.75) || 25; // Armored kinetic impact
                 B.vx += nx * 14; B.vy += ny * 14;
@@ -2211,7 +2210,7 @@ for (let frame = 0; frame < maxFrames; frame++) {
               if (bAlien === 'heatblast') {
                 dmgB += Math.round(B.damage * 0.6) || 20;
                 floatingTexts.push({ id: `fire_${frame}_${A.id}`, x: A.x, y: A.y - 45, text: 'FIRE BLAST!', color: '#ea580c', alpha: 1, vy: -2, scale: 1.1 });
-                soundEvents.push({ frame, sound: 'fireblast', alienType: 'heatblast', volume: 0.85 });
+                soundEvents.push({ frame, sound: 'hit', volume: 0.85 });
               } else if (bAlien === 'cannonbolt') {
                 dmgB += Math.round(B.damage * 0.75) || 25;
                 A.vx -= nx * 14; A.vy -= ny * 14;

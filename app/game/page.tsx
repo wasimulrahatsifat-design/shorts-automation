@@ -818,6 +818,8 @@ export default function GamePage() {
   const recordedBlobRef = useRef<Blob | null>(null);
   const recordedVideoUrlRef = useRef<string | null>(null);
   const victoryTriggeredRef = useRef<boolean>(false);
+  const recordingStoppedRef = useRef<boolean>(false);
+  const winnerRef = useRef<ContestantConfig | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);
   const [showRecordedModal, setShowRecordedModal] = useState(false);
@@ -3278,69 +3280,80 @@ export default function GamePage() {
       // End Arena Shake Section
       ctx.restore();
 
-      // Victory Overlay: ONLY SHOWN WHEN frameWinner IS PRESENT AND NOT IN CINEMATIC CUTSCENE! (NO EMOJIS)
-      if (frameWinner && !isZoomActive) {
+      // Victory Overlay: ALWAYS SHOWN WHEN frameWinner OR winnerRef IS PRESENT! (NO EMOJIS)
+      const activeWinner: any = frameWinner || winnerRef.current || winner;
+      if (activeWinner) {
         pauseBattleMusic();
         ctx.save();
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.88)';
         ctx.fillRect(0, 0, width, height);
 
         // Golden Victory Crest (NO EMOJIS)
-        const crownY = height / 2 - 130;
+        const crownY = height / 2 - 140;
         ctx.beginPath();
-        ctx.arc(width / 2, crownY, 40, 0, Math.PI * 2);
+        ctx.arc(width / 2, crownY, 44, 0, Math.PI * 2);
         ctx.fillStyle = '#facc15';
         ctx.shadowColor = '#eab308';
         ctx.shadowBlur = 35;
         ctx.fill();
 
         ctx.beginPath();
-        ctx.arc(width / 2, crownY, 30, 0, Math.PI * 2);
+        ctx.arc(width / 2, crownY, 34, 0, Math.PI * 2);
         ctx.fillStyle = '#031408';
         ctx.fill();
 
-        ctx.font = '900 22px "Montserrat", sans-serif';
+        ctx.font = '900 24px "Montserrat", sans-serif';
         ctx.fillStyle = '#00ff66';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('WIN', width / 2, crownY);
 
-        const winHalf = 80;
+        const winHalf = 90;
         ctx.beginPath();
-        ctx.roundRect(width / 2 - winHalf, height / 2 - winHalf, 160, 160, 28);
-        ctx.fillStyle = frameWinner.color;
+        ctx.roundRect(width / 2 - winHalf, height / 2 - winHalf, 180, 180, 30);
+        ctx.fillStyle = activeWinner.color || '#00ff66';
         ctx.shadowColor = '#eab308';
         ctx.shadowBlur = 45;
         ctx.fill();
 
-        const winImg = frameWinner.image_url ? loadedImagesRef.current.get(frameWinner.image_url) : null;
+        let winImg = activeWinner.image_url ? loadedImagesRef.current.get(activeWinner.image_url) : null;
+        if (!winImg && activeWinner.image_url) {
+          winImg = new Image();
+          winImg.crossOrigin = 'anonymous';
+          winImg.onload = () => drawFrame();
+          winImg.src = activeWinner.image_url;
+          loadedImagesRef.current.set(activeWinner.image_url, winImg);
+        }
+
         if (winImg && winImg.complete && winImg.naturalWidth > 0) {
           ctx.save();
           ctx.clip();
-          ctx.drawImage(winImg, width / 2 - winHalf, height / 2 - winHalf, 160, 160);
+          ctx.drawImage(winImg, width / 2 - winHalf, height / 2 - winHalf, 180, 180);
           ctx.restore();
         } else {
-          ctx.fillStyle = frameWinner.color === '#ffffff' ? '#000' : '#fff';
-          ctx.font = '900 74px "Montserrat", sans-serif';
+          ctx.fillStyle = activeWinner.color === '#ffffff' ? '#000' : '#fff';
+          ctx.font = '900 80px "Montserrat", sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(frameWinner.name.charAt(0).toUpperCase(), width / 2, height / 2);
+          ctx.fillText(activeWinner.name.charAt(0).toUpperCase(), width / 2, height / 2);
         }
 
         ctx.lineWidth = 8;
         ctx.strokeStyle = '#facc15';
         ctx.stroke();
 
-        ctx.font = '900 76px "Montserrat", sans-serif';
+        ctx.font = '900 82px "Montserrat", sans-serif';
         ctx.fillStyle = '#facc15';
         ctx.shadowColor = '#ca8a04';
-        ctx.shadowBlur = 30;
+        ctx.shadowBlur = 35;
         ctx.textAlign = 'center';
-        ctx.fillText('VICTORY!', width / 2, height / 2 + 150);
+        ctx.fillText('VICTORY!', width / 2, height / 2 + 165);
 
-        ctx.font = '800 50px "Montserrat", sans-serif';
+        ctx.font = '800 52px "Montserrat", sans-serif';
         ctx.fillStyle = '#ffffff';
-        ctx.fillText(`${frameWinner.name} WINS!`, width / 2, height / 2 + 225);
+        ctx.shadowColor = activeWinner.color || '#00ff66';
+        ctx.shadowBlur = 25;
+        ctx.fillText(`${activeWinner.name.toUpperCase()} WINS!`, width / 2, height / 2 + 245);
 
         ctx.restore();
       }
@@ -3709,12 +3722,17 @@ export default function GamePage() {
           setAliveCount(curFrameState.aliveCount);
           if (curFrameState.winner && !victoryTriggeredRef.current) {
             victoryTriggeredRef.current = true;
+            winnerRef.current = curFrameState.winner as any;
             setWinner(curFrameState.winner as any);
             pauseBattleMusic();
+            // Safety timeout: If simulation doesn't reach the end in 4.5s, auto-stop recording
             if (isRecordingRef.current) {
               setTimeout(() => {
-                stopRecording();
-              }, 500);
+                if (isRecordingRef.current && !recordingStoppedRef.current) {
+                  recordingStoppedRef.current = true;
+                  stopRecording();
+                }
+              }, 4500);
             }
           }
         }
@@ -3722,8 +3740,8 @@ export default function GamePage() {
         if (nextFrame >= sim.frames.length - 1) {
           setIsPlaying(false);
           pauseBattleMusic();
-          if (isRecordingRef.current && !victoryTriggeredRef.current) {
-            victoryTriggeredRef.current = true;
+          if (isRecordingRef.current && !recordingStoppedRef.current) {
+            recordingStoppedRef.current = true;
             setTimeout(() => {
               stopRecording();
             }, 500);
@@ -3970,6 +3988,8 @@ export default function GamePage() {
     currentFrameRef.current = 0;
     lastSoundFrameRef.current = -1;
     victoryTriggeredRef.current = false;
+    recordingStoppedRef.current = false;
+    winnerRef.current = null;
     setWinner(null);
     setDashboardVideoId(null);
     setDashboardPublicUrl(null);
@@ -4689,6 +4709,8 @@ export default function GamePage() {
       isRecordingRef.current = true;
       setIsRecording(true);
       victoryTriggeredRef.current = false;
+      recordingStoppedRef.current = false;
+      winnerRef.current = null;
       setDashboardVideoId(null);
       setDashboardPublicUrl(null);
       setUploadDashboardError(null);
