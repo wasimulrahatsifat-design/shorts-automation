@@ -208,6 +208,7 @@ export default function GamePage() {
   const [isDraggingCrop, setIsDraggingCrop] = useState(false);
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const isStorageInitializedRef = useRef<boolean>(false);
 
   // Interactive Ben 10 Omnitrix Selection State (Supports N Players based on Fighter Count)
   type SelectionPhase = 'idle' | 'selecting' | 'hero_time' | 'battling';
@@ -349,25 +350,29 @@ export default function GamePage() {
         }
       } catch {}
 
-      // 6. Load Stat Customizations
+      // 6. Load Stat Customizations from both IndexedDB and localStorage
       let customsMap: Record<string, Partial<ContestantConfig>> = {};
       try {
-        const savedCustoms = localStorage.getItem('arena_alien_customizations');
-        if (savedCustoms) customsMap = JSON.parse(savedCustoms);
+        const idbCustoms = await idbGet<Record<string, Partial<ContestantConfig>>>('arena_alien_customizations');
+        const lsCustoms = localStorage.getItem('arena_alien_customizations');
+        const parsedLs = lsCustoms ? JSON.parse(lsCustoms) : null;
+        customsMap = { ...(parsedLs || {}), ...(idbCustoms || {}) };
       } catch {}
 
       // Update in-memory BEN10_ALIEN_PRESETS
-      BEN10_ALIEN_PRESETS.forEach((preset, pIdx) => {
+      BEN10_ALIEN_PRESETS.forEach((preset) => {
         const keyByName = preset.name.toLowerCase().replace(/\s+/g, '_');
-        const customImg = imgMap[preset.id] || imgMap[keyByName] || imgMap[`alien_${pIdx}`];
+        const customImg = imgMap[preset.id] || imgMap[keyByName];
         if (customImg) preset.image_url = customImg;
-        const saved = customsMap[preset.id] || customsMap[keyByName] || customsMap[`fighter_${pIdx}`];
+        const saved = customsMap[preset.id] || customsMap[keyByName];
         if (saved) {
           if (saved.starting_health !== undefined) preset.starting_health = saved.starting_health;
           if (saved.damage !== undefined) preset.damage = saved.damage;
           if (saved.speed !== undefined) preset.speed = saved.speed;
           if (saved.special_power !== undefined) preset.special_power = saved.special_power;
-          if (saved.special_ability) preset.special_ability = { ...preset.special_ability, ...saved.special_ability };
+          if (saved.special_ability) {
+            preset.special_ability = { ...preset.special_ability, ...saved.special_ability };
+          }
         }
       });
 
@@ -381,34 +386,62 @@ export default function GamePage() {
         }
       });
 
-      // 7. Restore active contestants
-      const savedActive = localStorage.getItem('arena_active_contestants');
+      // 7. Restore active contestants (from IndexedDB first, then localStorage)
       let baseList: ContestantConfig[] = [];
-      if (savedActive) {
-        try {
-          const parsed = JSON.parse(savedActive);
-          if (Array.isArray(parsed) && parsed.length > 0) baseList = parsed;
-        } catch {}
-      }
+      try {
+        const idbActive = await idbGet<ContestantConfig[]>('arena_active_contestants');
+        if (Array.isArray(idbActive) && idbActive.length > 0) {
+          baseList = idbActive;
+        } else {
+          const savedActive = localStorage.getItem('arena_active_contestants');
+          if (savedActive) {
+            const parsed = JSON.parse(savedActive);
+            if (Array.isArray(parsed) && parsed.length > 0) baseList = parsed;
+          }
+        }
+      } catch {}
 
       if (baseList.length === 0) {
         baseList = BEN10_ALIEN_PRESETS.slice(0, 4).map((a) => ({ ...a }));
       }
 
       const restoredContestants = baseList.map((c, cIdx) => {
-        const keyByName = c.name.toLowerCase().replace(/\s+/g, '_');
-        const customImg = imgMap[c.id] || imgMap[keyByName] || imgMap[`alien_${cIdx}`] || c.image_url;
-        const saved = customsMap[c.id] || customsMap[keyByName];
+        const keyByName = c.name ? c.name.toLowerCase().replace(/\s+/g, '_') : '';
+        const preset = BEN10_ALIEN_PRESETS.find(
+          (p) => p.name?.toLowerCase() === c.name?.toLowerCase() || p.id === c.id
+        );
+        const canonicalId = preset?.id || '';
+        const saved =
+          (canonicalId && customsMap[canonicalId]) ||
+          (keyByName && customsMap[keyByName]) ||
+          (!c.id?.startsWith('fighter_') && customsMap[c.id]) ||
+          null;
+
+        const customImg =
+          (canonicalId && imgMap[canonicalId]) ||
+          (keyByName && imgMap[keyByName]) ||
+          (!c.id?.startsWith('fighter_') && imgMap[c.id]) ||
+          c.image_url;
+
+        const mergedSpecial = saved?.special_ability
+          ? { ...(preset?.special_ability || c.special_ability || {}), ...saved.special_ability }
+          : (c.special_ability || preset?.special_ability);
+
         return {
           ...c,
           ...(saved || {}),
           image_url: customImg || c.image_url,
-          special_ability: saved?.special_ability ? { ...c.special_ability, ...saved.special_ability } : c.special_ability,
+          starting_health: saved?.starting_health ?? c.starting_health ?? preset?.starting_health ?? 100,
+          damage: saved?.damage ?? c.damage ?? preset?.damage ?? 25,
+          speed: saved?.speed ?? c.speed ?? preset?.speed ?? 6.0,
+          special_power: saved?.special_power ?? c.special_power ?? preset?.special_power ?? 'none',
+          special_ability: mergedSpecial,
         };
       });
 
       setContestantCount(restoredContestants.length);
       setContestants(restoredContestants);
+      isStorageInitializedRef.current = true;
 
       restoredContestants.forEach((c) => {
         if (c.image_url) {
@@ -749,6 +782,7 @@ export default function GamePage() {
   };
 
   useEffect(() => {
+    if (!isStorageInitializedRef.current) return;
     setContestants((prev) => {
       const updated: ContestantConfig[] = [];
 
@@ -772,7 +806,9 @@ export default function GamePage() {
       }
       try {
         if (updated.length > 0) {
-          safeSaveLocalStorage('arena_active_contestants', JSON.stringify(stripDataUrls(updated)));
+          const stripped = stripDataUrls(updated);
+          safeSaveLocalStorage('arena_active_contestants', JSON.stringify(stripped));
+          idbSet('arena_active_contestants', stripped).catch(() => {});
         }
       } catch {}
       return updated;
@@ -836,15 +872,6 @@ export default function GamePage() {
       return;
     }
 
-    if (type === 'omnitrix_open' || type === 'omnitrix_turn' || type === 'omnitrix_slam' || type === 'fireblast') {
-      try {
-        const audio = new Audio(`/audio/${type}.wav?v=${Date.now()}`);
-        audio.volume = Math.min(1, soundVolume * 1.0);
-        audio.play().catch(() => {});
-      } catch (e) {}
-      if (type !== 'fireblast') return;
-    }
-
     // Remap any generic ability event to authentic sound
     if (type === 'ability') {
       if (abilityType === 'speed' || alienType === 'xlr8') {
@@ -853,9 +880,29 @@ export default function GamePage() {
         type = 'crystal_shatter';
       } else if (abilityType === 'freeze' || alienType === 'ghostfreak') {
         type = 'ghost_wail';
+      } else if (alienType === 'ripjaws') {
+        type = 'steel_bite';
+      } else if (alienType === 'wildmutt') {
+        type = 'predator_roar';
       } else {
         type = 'fireblast';
       }
+    }
+
+    if (
+      type === 'omnitrix_open' ||
+      type === 'omnitrix_turn' ||
+      type === 'omnitrix_slam' ||
+      type === 'fireblast' ||
+      type === 'steel_bite' ||
+      type === 'predator_roar'
+    ) {
+      try {
+        const audio = new Audio(`/audio/${type}.wav?v=${Date.now()}`);
+        audio.volume = Math.min(1, soundVolume * 1.0);
+        audio.play().catch(() => {});
+      } catch (e) {}
+      if (type !== 'fireblast') return;
     }
 
     try {
@@ -1115,32 +1162,6 @@ export default function GamePage() {
         gainRoll.connect(ctx.destination);
         oscRoll.start();
         oscRoll.stop(ctx.currentTime + 0.45);
-      } else if (type === 'steel_bite') {
-        // RIPJAWS: STEEL JAW CLAMP & CRUNCH
-        const oscClamp = ctx.createOscillator();
-        const gainClamp = ctx.createGain();
-        oscClamp.type = 'sawtooth';
-        oscClamp.frequency.setValueAtTime(1250, ctx.currentTime);
-        oscClamp.frequency.exponentialRampToValueAtTime(160, ctx.currentTime + 0.09);
-        gainClamp.gain.setValueAtTime(0.75 * soundVolume, ctx.currentTime);
-        gainClamp.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.09);
-        oscClamp.connect(gainClamp);
-        gainClamp.connect(ctx.destination);
-        oscClamp.start();
-        oscClamp.stop(ctx.currentTime + 0.09);
-      } else if (type === 'predator_roar') {
-        // WILDMUTT: PREDATOR BEAST GROWL
-        const oscRoar = ctx.createOscillator();
-        const gainRoar = ctx.createGain();
-        oscRoar.type = 'sawtooth';
-        oscRoar.frequency.setValueAtTime(165, ctx.currentTime);
-        oscRoar.frequency.linearRampToValueAtTime(90, ctx.currentTime + 0.35);
-        gainRoar.gain.setValueAtTime(0.7 * soundVolume, ctx.currentTime);
-        gainRoar.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-        oscRoar.connect(gainRoar);
-        gainRoar.connect(ctx.destination);
-        oscRoar.start();
-        oscRoar.stop(ctx.currentTime + 0.35);
       } else if (type === 'ghost_wail') {
         // GHOSTFREAK: SPECTRAL PHANTOM WAIL
         const oscGhost = ctx.createOscillator();
@@ -3122,23 +3143,36 @@ export default function GamePage() {
         // ALL contestantCount players have been selected!
         const matchContestants: ContestantConfig[] = newSelected.map((chosenAlien, idx) => {
           const custom =
-            contestants.find((c) => c.id === chosenAlien.id || c.name === chosenAlien.name) ||
-            BEN10_ALIEN_PRESETS.find((p) => p.id === chosenAlien.id || p.name === chosenAlien.name);
-          const slotAbility = contestants[idx]?.special_ability;
-          const ability = custom?.special_ability || (slotAbility && slotAbility.trigger_type !== 'charge' ? { ...(chosenAlien.special_ability || {}), ...slotAbility } : chosenAlien.special_ability);
+            BEN10_ALIEN_PRESETS.find(
+              (p) => p.name?.toLowerCase() === chosenAlien.name?.toLowerCase() || p.id === chosenAlien.id
+            ) ||
+            contestants.find(
+              (c) => c.name?.toLowerCase() === chosenAlien.name?.toLowerCase() || c.id === chosenAlien.id
+            ) ||
+            chosenAlien;
+
+          const ability = custom?.special_ability || chosenAlien.special_ability;
+
           return {
-            ...(custom || chosenAlien),
+            ...chosenAlien,
+            ...custom,
             id: `fighter_${idx + 1}`,
             name: chosenAlien.name,
             color: chosenAlien.color,
-            image_url: chosenAlien.image_url,
+            image_url: chosenAlien.image_url || custom.image_url,
+            starting_health: custom.starting_health ?? chosenAlien.starting_health,
+            damage: custom.damage ?? chosenAlien.damage,
+            speed: custom.speed ?? chosenAlien.speed,
+            special_power: custom.special_power ?? chosenAlien.special_power,
             special_ability: ability,
           };
         });
 
         setContestants(matchContestants);
         try {
-          safeSaveLocalStorage('arena_active_contestants', JSON.stringify(stripDataUrls(matchContestants)));
+          const stripped = stripDataUrls(matchContestants);
+          safeSaveLocalStorage('arena_active_contestants', JSON.stringify(stripped));
+          idbSet('arena_active_contestants', stripped).catch(() => {});
         } catch {}
         setAliveCount(matchContestants.length);
 
@@ -3631,9 +3665,29 @@ export default function GamePage() {
   const updateContestant = (index: number, updates: Partial<ContestantConfig>) => {
     setContestants((prev) => {
       const copy = [...prev];
-      copy[index] = { ...copy[index], ...updates };
+      const cur = copy[index] || {};
+      const curAbility = cur.special_ability || {
+        name: 'Power Strike',
+        icon: '',
+        type: 'damage',
+        cooldown_seconds: 5,
+        power_value: 30,
+        trigger_type: 'charge',
+        trigger_value: 100,
+      };
+      const updatedAbility = updates.special_ability
+        ? { ...curAbility, ...updates.special_ability }
+        : cur.special_ability;
+
+      copy[index] = {
+        ...cur,
+        ...updates,
+        special_ability: updatedAbility,
+      };
       try {
-        safeSaveLocalStorage('arena_active_contestants', JSON.stringify(stripDataUrls(copy)));
+        const stripped = stripDataUrls(copy);
+        safeSaveLocalStorage('arena_active_contestants', JSON.stringify(stripped));
+        idbSet('arena_active_contestants', stripped).catch(() => {});
       } catch (e) {}
       return copy;
     });
@@ -3652,34 +3706,57 @@ export default function GamePage() {
     const targetFighter = contestants[index] || BEN10_ALIEN_PRESETS[index];
     if (targetFighter) {
       const preset = BEN10_ALIEN_PRESETS.find(
-        (p) => p.id === targetFighter.id || p.name === targetFighter.name
+        (p) => p.name?.toLowerCase() === targetFighter.name?.toLowerCase() || p.id === targetFighter.id
       );
       if (preset) {
-        Object.assign(preset, updates);
+        if (updates.starting_health !== undefined) preset.starting_health = updates.starting_health;
+        if (updates.damage !== undefined) preset.damage = updates.damage;
+        if (updates.speed !== undefined) preset.speed = updates.speed;
+        if (updates.special_power !== undefined) preset.special_power = updates.special_power;
+        if (updates.special_ability) {
+          preset.special_ability = { ...(preset.special_ability || {}), ...updates.special_ability };
+        }
       }
 
-      // Persist all stat edits (Damage, PWR, HP, Speed, Special Ability) in localStorage!
-      try {
-        const savedCustoms = JSON.parse(localStorage.getItem('arena_alien_customizations') || '{}');
-        const targetId = targetFighter.id || `alien_${index}`;
-        // Strip data: URLs from customizations so localStorage stays tiny (<1KB)
-        const cleanUpdates = { ...updates };
-        if (cleanUpdates.image_url && cleanUpdates.image_url.startsWith('data:')) {
-          delete cleanUpdates.image_url;
-        }
-        savedCustoms[targetId] = {
-          ...(savedCustoms[targetId] || {}),
-          ...cleanUpdates,
-        };
-        if (targetFighter.name) {
-          const keyByName = targetFighter.name.toLowerCase().replace(/\s+/g, '_');
-          savedCustoms[keyByName] = {
-            ...(savedCustoms[keyByName] || {}),
-            ...cleanUpdates,
-          };
-        }
-        safeSaveLocalStorage('arena_alien_customizations', JSON.stringify(savedCustoms));
-      } catch (e) {}
+      // Persist all stat edits (Damage, PWR, HP, Speed, CD, Trigger) in both localStorage and IndexedDB!
+      (async () => {
+        try {
+          const idbCustoms = (await idbGet<Record<string, Partial<ContestantConfig>>>('arena_alien_customizations')) || {};
+          let lsCustoms: Record<string, Partial<ContestantConfig>> = {};
+          try {
+            lsCustoms = JSON.parse(localStorage.getItem('arena_alien_customizations') || '{}');
+          } catch {}
+          const mergedCustoms = { ...lsCustoms, ...idbCustoms };
+
+          const cleanUpdates = { ...updates };
+          if (cleanUpdates.image_url && cleanUpdates.image_url.startsWith('data:')) {
+            delete cleanUpdates.image_url;
+          }
+
+          const keysToUpdate: string[] = [];
+          if (preset?.id) keysToUpdate.push(preset.id);
+          if (targetFighter.name) {
+            keysToUpdate.push(targetFighter.name.toLowerCase().replace(/\s+/g, '_'));
+          }
+          if (targetFighter.id && !targetFighter.id.startsWith('fighter_')) {
+            keysToUpdate.push(targetFighter.id);
+          }
+
+          keysToUpdate.forEach((k) => {
+            const existing = mergedCustoms[k] || {};
+            mergedCustoms[k] = {
+              ...existing,
+              ...cleanUpdates,
+              special_ability: cleanUpdates.special_ability
+                ? { ...(existing.special_ability || {}), ...cleanUpdates.special_ability }
+                : existing.special_ability,
+            };
+          });
+
+          safeSaveLocalStorage('arena_alien_customizations', JSON.stringify(mergedCustoms));
+          await idbSet('arena_alien_customizations', mergedCustoms);
+        } catch (e) {}
+      })();
     }
 
     if (updates.image_url !== undefined) {
@@ -4050,7 +4127,7 @@ export default function GamePage() {
                               key={tag}
                               type="button"
                               onClick={() => {
-                                const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                                const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30, trigger_type: 'charge', trigger_value: 100 };
                                 updateContestant(idx, { special_ability: { ...cur, icon: tag } });
                               }}
                               className={`text-[9px] px-1.5 py-0.5 rounded font-black transition ${
@@ -4069,7 +4146,7 @@ export default function GamePage() {
                           placeholder="Ability Name"
                           value={fighter.special_ability?.name || ''}
                           onChange={(e) => {
-                            const cur = fighter.special_ability || { name: '', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                            const cur = fighter.special_ability || { name: '', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30, trigger_type: 'charge', trigger_value: 100 };
                             updateContestant(idx, { special_ability: { ...cur, name: e.target.value } });
                           }}
                           className="px-2 py-1 bg-slate-900 border border-slate-800 rounded-lg text-white font-bold placeholder-slate-600 focus:outline-none focus:border-cyan-500"
@@ -4078,7 +4155,7 @@ export default function GamePage() {
                         <select
                           value={fighter.special_ability?.type || 'damage'}
                           onChange={(e) => {
-                            const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                            const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30, trigger_type: 'charge', trigger_value: 100 };
                             updateContestant(idx, { special_ability: { ...cur, type: e.target.value as any } });
                           }}
                           className="px-1.5 py-1 bg-slate-900 border border-slate-800 rounded-lg text-cyan-300 font-bold focus:outline-none"
@@ -4099,13 +4176,13 @@ export default function GamePage() {
                             step="1"
                             value={fighter.special_ability?.cooldown_seconds === 0 ? '' : (fighter.special_ability?.cooldown_seconds ?? 5)}
                             onChange={(e) => {
-                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30, trigger_type: 'charge', trigger_value: 100 };
                               const val = e.target.value;
                               const num = val === '' ? 0 : parseInt(val, 10);
                               updateContestant(idx, { special_ability: { ...cur, cooldown_seconds: isNaN(num) ? 0 : Math.min(60, Math.max(0, num)) } });
                             }}
                             onBlur={() => {
-                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30, trigger_type: 'charge', trigger_value: 100 };
                               if (!cur.cooldown_seconds || cur.cooldown_seconds < 1) {
                                 updateContestant(idx, { special_ability: { ...cur, cooldown_seconds: 5 } });
                               }
@@ -4123,13 +4200,13 @@ export default function GamePage() {
                             max="200"
                             value={fighter.special_ability?.power_value === 0 ? '' : (fighter.special_ability?.power_value ?? 30)}
                             onChange={(e) => {
-                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30, trigger_type: 'charge', trigger_value: 100 };
                               const val = e.target.value;
                               const num = val === '' ? 0 : parseInt(val, 10);
                               updateContestant(idx, { special_ability: { ...cur, power_value: isNaN(num) ? 0 : Math.min(200, Math.max(0, num)) } });
                             }}
                             onBlur={() => {
-                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30, trigger_type: 'charge', trigger_value: 100 };
                               if (!cur.power_value || cur.power_value < 1) {
                                 updateContestant(idx, { special_ability: { ...cur, power_value: 30 } });
                               }
@@ -4147,7 +4224,7 @@ export default function GamePage() {
                             value={fighter.special_ability?.trigger_type || 'charge'}
                             onChange={(e) => {
                               const newType = e.target.value as any;
-                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30 };
+                              const cur = fighter.special_ability || { name: 'Power Strike', icon: '', type: 'damage', cooldown_seconds: 5, power_value: 30, trigger_type: 'charge', trigger_value: 100 };
                               const defaultVal = newType === 'hit_combo' ? 4 : newType === 'hp_threshold' ? 50 : 100;
                               updateContestant(idx, {
                                 special_ability: {

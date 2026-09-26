@@ -76,9 +76,12 @@ const resolveSoundUrl = (sound: string, abilityType?: string) => {
       return staticFile('audio/its_hero_time.mp3');
     case 'fireblast':
       return staticFile('audio/fireblast.wav');
+    case 'predator_roar':
+      return staticFile('audio/predator_roar.wav');
+    case 'steel_bite':
+      return staticFile('audio/steel_bite.wav');
     case 'sonic_clap':
     case 'cannon_roll':
-    case 'predator_roar':
       return staticFile('audio/explosion.wav');
     case 'wind_tornado':
     case 'ghost_wail':
@@ -88,8 +91,6 @@ const resolveSoundUrl = (sound: string, abilityType?: string) => {
     case 'laser_beam':
     case 'acid_splatter':
       return staticFile('audio/gun.wav');
-    case 'steel_bite':
-      return staticFile('audio/hit.wav');
     case 'ability':
       if (abilityType === 'damage') return staticFile('audio/explosion.wav');
       if (abilityType === 'freeze') return staticFile('audio/bounce.wav');
