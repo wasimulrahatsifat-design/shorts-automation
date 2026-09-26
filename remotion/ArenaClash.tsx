@@ -1458,13 +1458,13 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#ef4444', boxShadow: '0 0 10px #ef4444' }} />
                 <span style={{ fontSize: 13, fontWeight: 900, color: '#f87171', letterSpacing: '1.5px', fontFamily: 'Montserrat, monospace' }}>
-                  {cz.reason === 'elimination' ? 'SLOW-MO 0.08X' : 'SLOW-MO 0.10X'}
+                  {cz.timeScale === 0 ? 'TIME FREEZE // 0.00X' : cz.reason === 'elimination' ? 'SLOW-MO 0.12X' : 'SLOW-MO 0.10X'}
                 </span>
               </div>
 
               {/* Center: Cutscene Category */}
               <span style={{ fontSize: 15, fontWeight: 900, color: '#ffffff', letterSpacing: '3px', textShadow: `0 0 14px ${cz.fighterColor || '#00ff66'}` }}>
-                {cz.reason === 'elimination' ? '/// FATAL KNOCKOUT ///' : '/// SPECIAL ABILITY ACTIVATION ///'}
+                {cz.title ? `/// ${cz.title} ///` : cz.reason === 'elimination' ? '/// FATAL KNOCKOUT ///' : '/// SPECIAL ABILITY ACTIVATION ///'}
               </span>
 
               {/* Right: Target Lock */}

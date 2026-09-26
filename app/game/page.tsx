@@ -3053,7 +3053,7 @@ export default function GamePage() {
         ctx.arc(ARENA_BOX.left + 28, ARENA_BOX.top + 36, 5, 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = '#f87171';
-        const speedText = cz.reason === 'elimination' ? 'SLOW-MO 0.08X' : 'SLOW-MO 0.10X';
+        const speedText = cz.timeScale === 0 ? 'TIME FREEZE // 0.00X' : cz.reason === 'elimination' ? 'SLOW-MO 0.12X' : 'SLOW-MO 0.10X';
         ctx.fillText(speedText, ARENA_BOX.left + 40, ARENA_BOX.top + 36);
 
         // Top Center: Cutscene Category
@@ -3062,7 +3062,7 @@ export default function GamePage() {
         ctx.fillStyle = '#ffffff';
         ctx.shadowColor = barColor;
         ctx.shadowBlur = 12;
-        const bannerTitle = cz.reason === 'elimination' ? '/// FATAL KNOCKOUT ///' : '/// SPECIAL ABILITY ACTIVATION ///';
+        const bannerTitle = cz.title ? `/// ${cz.title} ///` : cz.reason === 'elimination' ? '/// FATAL KNOCKOUT ///' : '/// SPECIAL ABILITY ACTIVATION ///';
         ctx.fillText(bannerTitle, ARENA_CENTER.x, ARENA_BOX.top + 36);
 
         // Top Right: Target Lock Info

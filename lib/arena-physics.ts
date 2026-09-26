@@ -522,6 +522,26 @@ export const BEN10_DEFAULT_ABILITIES: Record<string, SpecialAbility> = {
 
 export const DEFAULT_ABILITIES = BEN10_DEFAULT_ABILITIES;
 
+function getEstimatedClashDamage(attacker: SimFighter, defender: SimFighter, isOvertime: boolean): number {
+  let dmg = attacker.damage;
+  if (attacker.abilityAuraTimer > 0) {
+    const aAlien = getAlienType(attacker);
+    if (aAlien === 'heatblast') dmg += Math.round(attacker.damage * 0.6) || 20;
+    else if (aAlien === 'cannonbolt') dmg += Math.round(attacker.damage * 0.75) || 25;
+    else if (aAlien === 'wildmutt') dmg += Math.round(attacker.damage * 0.6) || 20;
+    else if (aAlien === 'ripjaws') dmg += Math.round(attacker.damage * 0.9) || 30;
+    else if (aAlien === 'diamondhead') dmg += Math.round(attacker.damage * 0.5) || 15;
+    else if (aAlien === 'four_arms') dmg += Math.round(attacker.damage * 0.8) || 28;
+  }
+  if (isOvertime) dmg *= 2;
+  if (attacker.hasDagger) dmg *= 2;
+  if (attacker.specialPower === 'berserker' && attacker.health / attacker.maxHealth <= 0.2) dmg *= 2;
+  if (attacker.specialAbility?.trigger_type === 'hp_threshold' && attacker.health <= (attacker.maxHealth * (attacker.specialAbility.trigger_value || 50)) / 100) {
+    dmg = Math.round(dmg * 1.35);
+  }
+  return dmg;
+}
+
 export function generateArenaSimulation(
   contestants: FighterInput[],
   maxFrames = 7200, // Safe upper limit (4 minutes), battle stops when winner emerges!
@@ -687,9 +707,24 @@ interface ActiveCinematicState {
   duration: number;
 }
 
+interface LethalFinisherState {
+  phase: 'attacker_zoom' | 'projectile_travel' | 'victim_zoom' | 'clash_zoom' | 'impact_finish';
+  killerId: string;
+  victimId: string;
+  killerName: string;
+  victimName: string;
+  killerColor: string;
+  victimColor: string;
+  phaseFrame: number;
+  phaseDuration: number;
+  isSeparated: boolean;
+}
+
 let activeCinematic: ActiveCinematicState | null = null;
+let lethalFinisher: LethalFinisherState | null = null;
 
 function triggerEliminationCinematic(currentFrame: number, victim: SimFighter, killer?: SimFighter) {
+  if (lethalFinisher) return;
   if (activeCinematic && activeCinematic.reason === 'elimination' && (currentFrame - activeCinematic.startFrame) < 24) {
     return;
   }
@@ -719,25 +754,259 @@ for (let frame = 0; frame < maxFrames; frame++) {
   let timeScale = 1.0;
   let currentCinematicZoom: SimCinematicZoom | undefined = undefined;
 
+  // 1. Advance anticipation check: Detect lethal attack before impact in 1v1 final showdown
+  if (aliveFighters.length === 2 && !lethalFinisher && !winner) {
+    const fA = aliveFighters[0];
+    const fB = aliveFighters[1];
+
+    // Check if an incoming lethal projectile is in flight towards opponent
+    for (const b of bullets) {
+      if (b.ownerId === fA.id || b.ownerId === fB.id) {
+        const shooter = b.ownerId === fA.id ? fA : fB;
+        const target = b.ownerId === fA.id ? fB : fA;
+
+        // Calculate total incoming projectile damage directed at target
+        let totalIncomingDmg = 0;
+        for (const bCheck of bullets) {
+          if (bCheck.ownerId === shooter.id) {
+            const dx = target.x - bCheck.x;
+            const dy = target.y - bCheck.y;
+            const bSpd = Math.hypot(bCheck.vx, bCheck.vy);
+            if (bSpd > 1) {
+              const dot = (dx * bCheck.vx + dy * bCheck.vy) / bSpd;
+              const perp = Math.abs(dx * (-bCheck.vy) + dy * bCheck.vx) / bSpd;
+              const hitR = (bCheck.size ? bCheck.size / 2 : 10) + target.size / 2 + 35;
+              if (dot > 0 && perp <= hitR) {
+                totalIncomingDmg += bCheck.damage;
+              }
+            }
+          }
+        }
+
+        if (target.health <= totalIncomingDmg) {
+          const distBetweenFighters = Math.hypot(shooter.x - target.x, shooter.y - target.y);
+          const isSeparated = distBetweenFighters > 220;
+
+          lethalFinisher = {
+            phase: isSeparated ? 'attacker_zoom' : 'clash_zoom',
+            killerId: shooter.id,
+            victimId: target.id,
+            killerName: shooter.name,
+            victimName: target.name,
+            killerColor: shooter.color || '#00ff66',
+            victimColor: target.color || '#ef4444',
+            phaseFrame: 0,
+            phaseDuration: isSeparated ? 24 : 28,
+            isSeparated,
+          };
+          break;
+        }
+      }
+    }
+
+    // Check approaching physical clash or high-speed dash that will be fatal
+    if (!lethalFinisher) {
+      const clashDist = Math.hypot(fA.x - fB.x, fA.y - fB.y);
+      const collDist = (fA.size + fB.size) / 2;
+      const rvx = fA.vx - fB.vx;
+      const rvy = fA.vy - fB.vy;
+      const relApproach = -((fB.x - fA.x) * rvx + (fB.y - fA.y) * rvy) / (clashDist || 1);
+
+      const estDmgA = getEstimatedClashDamage(fA, fB, isOvertime);
+      const estDmgB = getEstimatedClashDamage(fB, fA, isOvertime);
+
+      if (relApproach > 1.2 && (clashDist <= collDist + 65 || (relApproach > 10 && clashDist <= 350))) {
+        if (fB.health <= estDmgA || fA.health <= estDmgB) {
+          const killer = fB.health <= estDmgA ? fA : fB;
+          const victim = fB.health <= estDmgA ? fB : fA;
+
+          // If aliens are already close together, zoom once on the clash without double zoom
+          const isSeparated = clashDist > 220;
+          lethalFinisher = {
+            phase: isSeparated ? 'attacker_zoom' : 'clash_zoom',
+            killerId: killer.id,
+            victimId: victim.id,
+            killerName: killer.name,
+            victimName: victim.name,
+            killerColor: killer.color || '#00ff66',
+            victimColor: victim.color || '#ef4444',
+            phaseFrame: 0,
+            phaseDuration: isSeparated ? 24 : 28,
+            isSeparated,
+          };
+        }
+      }
+    }
+  }
+
+  // 2. Process Lethal Finisher Multi-Stage Cinematic
+  const curLethal: LethalFinisherState | null = lethalFinisher as (LethalFinisherState | null);
+  if (Boolean(curLethal)) {
+    const lf = curLethal as LethalFinisherState;
+    lf.phaseFrame++;
+
+    const killer = fighters.find((f) => f.id === lf.killerId);
+    const victim = fighters.find((f) => f.id === lf.victimId);
+
+    if (lf.phase === 'attacker_zoom') {
+      const p = Math.min(1.0, lf.phaseFrame / lf.phaseDuration);
+      const zoomAmount = Math.sin(p * Math.PI);
+      const scale = 1.0 + zoomAmount * 1.35; // Smooth 2.35x zoom on Attacker
+      timeScale = 0.0; // Time FREEZES!
+
+      const focusX = killer ? killer.x : ARENA_CENTER.x;
+      const focusY = killer ? killer.y : ARENA_CENTER.y;
+
+      currentCinematicZoom = {
+        active: true,
+        scale,
+        focusX: Math.max(ARENA_BOX.left + 140, Math.min(ARENA_BOX.right - 140, focusX)),
+        focusY: Math.max(ARENA_BOX.top + 140, Math.min(ARENA_BOX.bottom - 140, focusY)),
+        reason: 'elimination',
+        title: 'LETHAL ATTACK',
+        subTitle: `${lf.killerName.toUpperCase()} - FINAL STRIKE!`,
+        fighterName: lf.killerName,
+        fighterColor: lf.killerColor,
+        progress: p,
+        impactFlash: zoomAmount > 0.85 ? (zoomAmount - 0.85) / 0.15 : 0,
+        timeScale: 0.0,
+      };
+
+      if (lf.phaseFrame >= lf.phaseDuration) {
+        lf.phase = 'projectile_travel';
+        lf.phaseFrame = 0;
+        lf.phaseDuration = 70;
+      }
+    } else if (lf.phase === 'projectile_travel') {
+      // Camera zooms out to normal view and time plays again as projectile/dash travels!
+      timeScale = 0.85;
+      currentCinematicZoom = undefined;
+
+      let closeToVictim = false;
+      if (victim) {
+        const lethalBullet = bullets.find((b) => b.ownerId === lf.killerId);
+        if (lethalBullet) {
+          const d = Math.hypot(lethalBullet.x - victim.x, lethalBullet.y - victim.y);
+          if (d <= ((lethalBullet.size || 20) / 2 + victim.size / 2 + 55)) {
+            closeToVictim = true;
+          }
+        } else {
+          const d = Math.hypot((killer ? killer.x : 0) - victim.x, (killer ? killer.y : 0) - victim.y);
+          if (d <= (((killer?.size || 60) + victim.size) / 2 + 55)) {
+            closeToVictim = true;
+          }
+        }
+      } else {
+        closeToVictim = true;
+      }
+
+      if (closeToVictim || lf.phaseFrame >= lf.phaseDuration) {
+        lf.phase = 'victim_zoom';
+        lf.phaseFrame = 0;
+        lf.phaseDuration = 24;
+      }
+    } else if (lf.phase === 'victim_zoom') {
+      const p = Math.min(1.0, lf.phaseFrame / lf.phaseDuration);
+      const zoomAmount = Math.sin(p * Math.PI);
+      const scale = 1.0 + zoomAmount * 1.45; // 2.45x zoom on Victim right before hit
+      timeScale = 0.0; // Time FREEZES!
+
+      const focusX = victim ? victim.x : ARENA_CENTER.x;
+      const focusY = victim ? victim.y : ARENA_CENTER.y;
+
+      currentCinematicZoom = {
+        active: true,
+        scale,
+        focusX: Math.max(ARENA_BOX.left + 140, Math.min(ARENA_BOX.right - 140, focusX)),
+        focusY: Math.max(ARENA_BOX.top + 140, Math.min(ARENA_BOX.bottom - 140, focusY)),
+        reason: 'elimination',
+        title: 'CRITICAL IMPACT',
+        subTitle: `${lf.victimName.toUpperCase()} - FATAL DANGER!`,
+        fighterName: lf.victimName,
+        fighterColor: lf.victimColor,
+        progress: p,
+        impactFlash: zoomAmount > 0.85 ? (zoomAmount - 0.85) / 0.15 : 0,
+        timeScale: 0.0,
+      };
+
+      if (lf.phaseFrame >= lf.phaseDuration) {
+        lf.phase = 'impact_finish';
+        lf.phaseFrame = 0;
+        lf.phaseDuration = 38;
+      }
+    } else if (lf.phase === 'clash_zoom') {
+      const p = Math.min(1.0, lf.phaseFrame / lf.phaseDuration);
+      const zoomAmount = Math.sin(p * Math.PI);
+      const scale = 1.0 + zoomAmount * 1.35; // 2.35x zoom on Clash
+      timeScale = 0.0; // Time FREEZES on the clash!
+
+      const midX = (killer && victim) ? (killer.x + victim.x) / 2 : (killer?.x || ARENA_CENTER.x);
+      const midY = (killer && victim) ? (killer.y + victim.y) / 2 : (killer?.y || ARENA_CENTER.y);
+
+      currentCinematicZoom = {
+        active: true,
+        scale,
+        focusX: Math.max(ARENA_BOX.left + 140, Math.min(ARENA_BOX.right - 140, midX)),
+        focusY: Math.max(ARENA_BOX.top + 140, Math.min(ARENA_BOX.bottom - 140, midY)),
+        reason: 'elimination',
+        title: 'FATAL CLASH',
+        subTitle: `${lf.killerName.toUpperCase()} VS ${lf.victimName.toUpperCase()}`,
+        fighterName: lf.killerName,
+        fighterColor: lf.killerColor,
+        progress: p,
+        impactFlash: zoomAmount > 0.85 ? (zoomAmount - 0.85) / 0.15 : 0,
+        timeScale: 0.0,
+      };
+
+      if (lf.phaseFrame >= lf.phaseDuration) {
+        lf.phase = 'impact_finish';
+        lf.phaseFrame = 0;
+        lf.phaseDuration = 38;
+      }
+    } else if (lf.phase === 'impact_finish') {
+      const p = Math.min(1.0, lf.phaseFrame / lf.phaseDuration);
+      const scale = 1.0 + (1.0 - p) * 0.45;
+      timeScale = 0.12; // Slow motion impact finish!
+
+      const focusX = victim ? victim.x : ARENA_CENTER.x;
+      const focusY = victim ? victim.y : ARENA_CENTER.y;
+
+      currentCinematicZoom = {
+        active: true,
+        scale,
+        focusX: Math.max(ARENA_BOX.left + 140, Math.min(ARENA_BOX.right - 140, focusX)),
+        focusY: Math.max(ARENA_BOX.top + 140, Math.min(ARENA_BOX.bottom - 140, focusY)),
+        reason: 'elimination',
+        title: 'FATAL KNOCKOUT',
+        subTitle: `K.O. - ${lf.victimName.toUpperCase()} ELIMINATED!`,
+        fighterName: lf.victimName,
+        fighterColor: '#ef4444',
+        progress: p,
+        impactFlash: (1.0 - p) > 0.75 ? (1.0 - p - 0.75) / 0.25 : 0,
+        timeScale: 0.12,
+      };
+
+      if (lf.phaseFrame >= lf.phaseDuration) {
+        lethalFinisher = null;
+      }
+    }
+  } else {
+    // 3. Single ability / regular elimination fallback
     const currentCinematic: ActiveCinematicState | null = activeCinematic as (ActiveCinematicState | null);
     if (Boolean(currentCinematic)) {
       const cin = currentCinematic as ActiveCinematicState;
       const elapsed = frame - cin.startFrame;
       if (elapsed < cin.duration) {
         const p = elapsed / cin.duration; // 0 to 1
-        // Fighting game cutscene deep camera zoom: 2.35x for elimination, 2.15x for signature ability
         const peakZoom = cin.reason === 'elimination' ? 2.35 : 2.15;
-        const zoomAmount = Math.sin(p * Math.PI); // Smooth sine bell curve (0 -> 1 -> 0)
+        const zoomAmount = Math.sin(p * Math.PI);
         const scale = 1.0 + zoomAmount * (peakZoom - 1.0);
 
-        // Ultra dramatic slow-motion: drops down to 0.08x for lethal hits, 0.10x for special moves
         const peakSlowMo = cin.reason === 'elimination' ? 0.08 : 0.10;
         timeScale = Math.max(peakSlowMo, 1.0 - zoomAmount * (1.0 - peakSlowMo));
 
-        // Impact flash / hitstop pulse at the apex of the action (zoomAmount > 0.82)
         const impactFlash = zoomAmount > 0.82 ? (zoomAmount - 0.82) / 0.18 : 0;
 
-        // Dynamically track target fighter if still in the arena
         const targetFighter = fighters.find((f) => f.id === cin.targetFighterId);
         if (targetFighter) {
           cin.focusX = targetFighter.x;
@@ -762,6 +1031,7 @@ for (let frame = 0; frame < maxFrames; frame++) {
         activeCinematic = null;
       }
     }
+  }
 
     if (isSelectionIntro) {
       if (frame === 0) {
@@ -840,7 +1110,7 @@ for (let frame = 0; frame < maxFrames; frame++) {
       // Check winner: Battle runs until last fighter standing!
       // IMPORTANT: Wait until any active elimination cutscene completely finishes!
       // This ensures the dramatic slow-motion final knockout is fully enjoyed before the victory overlay appears.
-      const hasPendingCinematic = Boolean(activeCinematic);
+      const hasPendingCinematic = Boolean(activeCinematic || lethalFinisher);
       if (aliveFighters.length === 1 && !winner && fighters.length > 1 && !hasPendingCinematic) {
         winner = { ...aliveFighters[0] };
         winnerAnnouncedFrame = frame;
@@ -864,7 +1134,7 @@ for (let frame = 0; frame < maxFrames; frame++) {
       // items array remains empty throughout the battle.
 
     // Process Ben 10 Special Moves with specific Trigger Criteria for each alive fighter
-    if (!winner) {
+    if (!winner && timeScale > 0) {
       aliveFighters.forEach((f) => {
         if (f.frozenTimer > 0) {
           f.frozenTimer--;
@@ -1726,104 +1996,106 @@ for (let frame = 0; frame < maxFrames; frame++) {
     }
 
     // Bullets Hit & Square Arena Boundary
-    for (let i = bullets.length - 1; i >= 0; i--) {
-      const b = bullets[i];
-      b.x += b.vx * timeScale;
-      b.y += b.vy * timeScale;
-      b.life--;
+    if (timeScale > 0) {
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+        b.x += b.vx * timeScale;
+        b.y += b.vy * timeScale;
+        b.life--;
 
-      if (
-        b.x <= ARENA_BOX.left ||
-        b.x >= ARENA_BOX.right ||
-        b.y <= ARENA_BOX.top ||
-        b.y >= ARENA_BOX.bottom ||
-        b.life <= 0
-      ) {
-        bullets.splice(i, 1);
-        continue;
-      }
-
-      for (const t of aliveFighters) {
-        if (t.id === b.ownerId) continue;
-        if (t.invulnerableTimer > 0) continue; // Phased through intangible fighter!
-        if (Math.hypot(t.x - b.x, t.y - b.y) < t.size / 2 + (b.size ? b.size / 3 : 5)) {
-          const shooter = aliveFighters.find((sf) => sf.id === b.ownerId);
-          let bulletDmg = b.damage;
-
-          // XLR8 Wind Funnel damage modifiers on projectiles
-          if (shooter && getAlienType(shooter) === 'xlr8' && (shooter.abilityAuraTimer > 0 || shooter.speedBoostTimer > 0)) {
-            bulletDmg = Math.round(bulletDmg * 1.5);
-          }
-          if (getAlienType(t) === 'xlr8' && (t.abilityAuraTimer > 0 || t.speedBoostTimer > 0)) {
-            bulletDmg = Math.round(bulletDmg * 0.5);
-          }
-
-          // Cannonbolt: takes 40% damage, deals 1.3x damage while ability is active
-          if (shooter && getAlienType(shooter) === 'cannonbolt' && shooter.abilityAuraTimer > 0) {
-            bulletDmg = Math.round(bulletDmg * 1.3);
-          }
-          if (getAlienType(t) === 'cannonbolt' && t.abilityAuraTimer > 0) {
-            bulletDmg = Math.round(bulletDmg * 0.4);
-          }
-
-          // Diamondhead Passive: 10% chance to completely nullify damage
-          if (getAlienType(t) === 'diamondhead' && rng() < 0.10) {
-            bulletDmg = 0;
-            floatingTexts.push({ id: `dh_null_b_${frame}_${i}`, x: t.x, y: t.y - 35, text: 'NULLIFIED! (0 DMG)', color: '#10b981', alpha: 1, vy: -2, scale: 1.15 });
-          }
-
-          t.health = Math.max(0, t.health - bulletDmg);
-          t.hitFlash = 14;
-
-          // Credit shooter with hit combo
-          if (shooter) {
-            shooter.hitCombo = (shooter.hitCombo || 0) + 1;
-          }
-
-          // Kinetic knockback in bullet's flight direction
-          const bDist = Math.hypot(b.vx, b.vy) || 1;
-          t.vx += (b.vx / bDist) * 8;
-          t.vy += (b.vy / bDist) * 8;
-
-          const isFireBullet = shooter && getAlienType(shooter) === 'heatblast';
-          const isAcidBullet = b.bulletType === 'acid' || (shooter && getAlienType(shooter) === 'stinkfly');
-          soundEvents.push({
-            frame,
-            sound: isAcidBullet ? 'acid_splatter' : isFireBullet ? 'fireblast' : 'hit',
-            alienType: isAcidBullet ? 'stinkfly' : isFireBullet ? 'heatblast' : undefined,
-            volume: 0.85,
-          });
-          floatingTexts.push({
-            id: `b_${frame}_${i}`,
-            x: t.x,
-            y: t.y - 35,
-            text: `-${bulletDmg}`,
-            color: b.color || '#ef4444',
-            alpha: 1,
-            vy: -2.4,
-            scale: 1.25,
-          });
-
-          // Impact explosion particles
-          for (let k = 0; k < 12; k++) {
-            particles.push({
-              x: b.x,
-              y: b.y,
-              vx: (rng() - 0.5) * 12,
-              vy: (rng() - 0.5) * 12,
-              color: b.color,
-              radius: rng() * 5 + 3,
-              alpha: 1,
-            });
-          }
-
-          if (t.health <= 0 && !t.isDead) {
-            t.isDead = true;
-            triggerEliminationCinematic(frame, t, shooter);
-            soundEvents.push({ frame, sound: 'explosion', volume: 1.0 });
-          }
+        if (
+          b.x <= ARENA_BOX.left ||
+          b.x >= ARENA_BOX.right ||
+          b.y <= ARENA_BOX.top ||
+          b.y >= ARENA_BOX.bottom ||
+          b.life <= 0
+        ) {
           bullets.splice(i, 1);
-          break;
+          continue;
+        }
+
+        for (const t of aliveFighters) {
+          if (t.id === b.ownerId) continue;
+          if (t.invulnerableTimer > 0) continue; // Phased through intangible fighter!
+          if (Math.hypot(t.x - b.x, t.y - b.y) < t.size / 2 + (b.size ? b.size / 3 : 5)) {
+            const shooter = aliveFighters.find((sf) => sf.id === b.ownerId);
+            let bulletDmg = b.damage;
+
+            // XLR8 Wind Funnel damage modifiers on projectiles
+            if (shooter && getAlienType(shooter) === 'xlr8' && (shooter.abilityAuraTimer > 0 || shooter.speedBoostTimer > 0)) {
+              bulletDmg = Math.round(bulletDmg * 1.5);
+            }
+            if (getAlienType(t) === 'xlr8' && (t.abilityAuraTimer > 0 || t.speedBoostTimer > 0)) {
+              bulletDmg = Math.round(bulletDmg * 0.5);
+            }
+
+            // Cannonbolt: takes 40% damage, deals 1.3x damage while ability is active
+            if (shooter && getAlienType(shooter) === 'cannonbolt' && shooter.abilityAuraTimer > 0) {
+              bulletDmg = Math.round(bulletDmg * 1.3);
+            }
+            if (getAlienType(t) === 'cannonbolt' && t.abilityAuraTimer > 0) {
+              bulletDmg = Math.round(bulletDmg * 0.4);
+            }
+
+            // Diamondhead Passive: 10% chance to completely nullify damage
+            if (getAlienType(t) === 'diamondhead' && rng() < 0.10) {
+              bulletDmg = 0;
+              floatingTexts.push({ id: `dh_null_b_${frame}_${i}`, x: t.x, y: t.y - 35, text: 'NULLIFIED! (0 DMG)', color: '#10b981', alpha: 1, vy: -2, scale: 1.15 });
+            }
+
+            t.health = Math.max(0, t.health - bulletDmg);
+            t.hitFlash = 14;
+
+            // Credit shooter with hit combo
+            if (shooter) {
+              shooter.hitCombo = (shooter.hitCombo || 0) + 1;
+            }
+
+            // Kinetic knockback in bullet's flight direction
+            const bDist = Math.hypot(b.vx, b.vy) || 1;
+            t.vx += (b.vx / bDist) * 8;
+            t.vy += (b.vy / bDist) * 8;
+
+            const isFireBullet = shooter && getAlienType(shooter) === 'heatblast';
+            const isAcidBullet = b.bulletType === 'acid' || (shooter && getAlienType(shooter) === 'stinkfly');
+            soundEvents.push({
+              frame,
+              sound: isAcidBullet ? 'acid_splatter' : isFireBullet ? 'fireblast' : 'hit',
+              alienType: isAcidBullet ? 'stinkfly' : isFireBullet ? 'heatblast' : undefined,
+              volume: 0.85,
+            });
+            floatingTexts.push({
+              id: `b_${frame}_${i}`,
+              x: t.x,
+              y: t.y - 35,
+              text: `-${bulletDmg}`,
+              color: b.color || '#ef4444',
+              alpha: 1,
+              vy: -2.4,
+              scale: 1.25,
+            });
+
+            // Impact explosion particles
+            for (let k = 0; k < 12; k++) {
+              particles.push({
+                x: b.x,
+                y: b.y,
+                vx: (rng() - 0.5) * 12,
+                vy: (rng() - 0.5) * 12,
+                color: b.color,
+                radius: rng() * 5 + 3,
+                alpha: 1,
+              });
+            }
+
+            if (t.health <= 0 && !t.isDead) {
+              t.isDead = true;
+              triggerEliminationCinematic(frame, t, shooter);
+              soundEvents.push({ frame, sound: 'explosion', volume: 1.0 });
+            }
+            bullets.splice(i, 1);
+            break;
+          }
         }
       }
     }
@@ -2227,8 +2499,9 @@ for (let frame = 0; frame < maxFrames; frame++) {
     }
 
     // Update active ground hazard zones
-    activeHazardZones.forEach((hz) => {
-      if (hz.maxFrames < 99999) {
+    if (timeScale > 0) {
+      activeHazardZones.forEach((hz) => {
+        if (hz.maxFrames < 99999) {
         hz.remainingFrames--;
       }
       if (hz.type === 'fire') {
@@ -2430,6 +2703,7 @@ for (let frame = 0; frame < maxFrames; frame++) {
       }
     });
     activeHazardZones = activeHazardZones.filter((hz) => hz.remainingFrames > 0);
+  }
 
     // Snapshot frame
     frames.push({
