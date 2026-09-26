@@ -1,7 +1,6 @@
 import React from 'react';
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig, Sequence, Audio, Img, Series, staticFile } from 'remotion';
 import { TypewriterText } from './TypewriterText';
-import thinkingMetadata from '../public/thinking_frames/metadata.json';
 
 interface Question {
   question: string;
@@ -80,22 +79,28 @@ const ThinkingAnimation: React.FC<{ thinkingGifUrl?: string }> = ({ thinkingGifU
     );
   }
 
-  // Smooth, frame-synchronized looping of thinking animation frames
-  const totalFrames = (thinkingMetadata as any)?.frameCount || 4;
-  const frameHold = (thinkingMetadata as any)?.frameHold || 8;
-  const frameIndex = Math.floor(frame / frameHold) % totalFrames;
-  const frameSrc = staticFile(`thinking_frames/frame_${frameIndex}.png`);
-
   return (
-    <Img
-      src={frameSrc}
-      alt="Thinking"
+    <div
       style={{
         width: '100%',
         height: '100%',
-        objectFit: 'contain',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
       }}
-    />
+    >
+      <div
+        style={{
+          fontSize: 160,
+          transform: `rotate(${Math.sin(frame / 8) * 15}deg) scale(${1 + Math.sin(frame / 6) * 0.1})`,
+          filter: 'drop-shadow(0px 10px 25px rgba(0,0,0,0.45))',
+          userSelect: 'none',
+          lineHeight: 1,
+        }}
+      >
+        {'\u{1F914}'}
+      </div>
+    </div>
   );
 };
 
