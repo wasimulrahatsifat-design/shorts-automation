@@ -81,8 +81,8 @@ const ThinkingAnimation: React.FC<{ thinkingGifUrl?: string }> = ({ thinkingGifU
   }
 
   // Smooth, frame-synchronized looping of thinking animation frames
-  const totalFrames = (thinkingMetadata as any)?.frameCount || 1;
-  const frameHold = (thinkingMetadata as any)?.frameHold || 2;
+  const totalFrames = (thinkingMetadata as any)?.frameCount || 4;
+  const frameHold = (thinkingMetadata as any)?.frameHold || 8;
   const frameIndex = Math.floor(frame / frameHold) % totalFrames;
   const frameSrc = staticFile(`thinking_frames/frame_${frameIndex}.png`);
 
