@@ -8,6 +8,7 @@ interface Question {
   correct_answer: string;
   image_keyword?: string;
   image_url?: string;
+  show_image_first?: boolean;
 }
 
 export interface QuizJson {
@@ -23,6 +24,7 @@ export interface QuizJson {
   bg_music_volume?: number;
   bg_music_enabled?: boolean;
   thinking_gif?: string;
+  show_image_first?: boolean;
 }
 
 const resolveAudioUrl = (url?: string) => {
@@ -109,11 +111,25 @@ const QuizRound: React.FC<{
   topic: string; 
   partTitle?: string;
   thinkingGifUrl?: string;
-}> = ({ questionData, topic, partTitle, thinkingGifUrl }) => {
+  globalShowImageFirst?: boolean;
+}> = ({ questionData, topic, partTitle, thinkingGifUrl, globalShowImageFirst }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
   const { question, options, correct_answer, image_url } = questionData;
+
+  // Smart auto-detection for Picture/Image Guessing Quiz (e.g., "Guess the character", "What is this image?")
+  const isImageQuiz = Boolean(
+    questionData.show_image_first ?? 
+    globalShowImageFirst ?? 
+    (questionData.image_url && (
+      /\b(this (image|picture|photo|pic|logo|character|person|flag|celebrity|animal|place|item|thing|silhouette|shadow))\b/i.test(questionData.question) ||
+      /\b(guess the (image|picture|character|logo|flag|celebrity|animal|person|movie|hero|alien|villain|pokemon|brand))\b/i.test(questionData.question) ||
+      /\b(who is this|what is this|name this|identify this|which character|which person|which flag|which logo)\b/i.test(questionData.question) ||
+      /(এই ছবি|ছবিতে কে|ছবিটি কার|চিহ্নিত কর|ছবিটি দেখে বলো)/i.test(questionData.question) ||
+      /\b(guess the|identify the|visual quiz|picture quiz|photo quiz|logo quiz|flag quiz)\b/i.test(topic)
+    ))
+  );
 
   // Title Animations
   const titleOpacity = interpolate(frame, [0, 15], [0, 1], { extrapolateRight: 'clamp' });
@@ -216,14 +232,75 @@ const QuizRound: React.FC<{
             justifyContent: 'center',
             alignItems: 'center',
             overflow: 'hidden',
+            position: 'relative',
           }}
         >
-          {isTimerDone ? (
-            image_url ? (
-              <Img src={image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-            ) : null
+          {isImageQuiz && image_url ? (
+            <>
+              {/* Picture Quiz Mode: Show image upfront from start */}
+              <Img
+                src={image_url}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  transform: isTimerDone ? 'scale(1.05)' : 'scale(1)',
+                  transition: 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                  filter: isTimerDone ? 'drop-shadow(0 0 24px rgba(74, 222, 128, 0.45))' : 'none',
+                }}
+              />
+
+              {/* Floating Thinking Badge while timer is active */}
+              {!isTimerDone && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: 14,
+                    right: 14,
+                    backgroundColor: 'rgba(15, 23, 42, 0.88)',
+                    backdropFilter: 'blur(10px)',
+                    border: '2px solid rgba(255, 255, 255, 0.3)',
+                    borderRadius: 999,
+                    padding: '8px 18px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 30,
+                      transform: `rotate(${Math.sin(frame / 6) * 14}deg) scale(${1 + Math.sin(frame / 5) * 0.1})`,
+                      lineHeight: 1,
+                      userSelect: 'none',
+                    }}
+                  >
+                    {'\u{1F914}'}
+                  </div>
+                  <span
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 800,
+                      color: '#38bdf8',
+                      letterSpacing: 1.5,
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    Thinking
+                  </span>
+                </div>
+              )}
+            </>
           ) : (
-            <ThinkingAnimation thinkingGifUrl={thinkingGifUrl} />
+            /* Standard Trivia Mode: Thinking animation during countdown, reveal image after timer */
+            isTimerDone ? (
+              image_url ? (
+                <Img src={image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+              ) : null
+            ) : (
+              <ThinkingAnimation thinkingGifUrl={thinkingGifUrl} />
+            )
           )}
         </div>
         <div
@@ -371,6 +448,7 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
                 topic={topic} 
                 partTitle={data_json.part_title} 
                 thinkingGifUrl={data_json.thinking_gif} 
+                globalShowImageFirst={data_json.show_image_first}
               />
             </Series.Sequence>
           );

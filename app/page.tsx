@@ -49,6 +49,7 @@ export default function Home() {
   // Step 1 State
   const [topic, setTopic] = useState('');
   const [partTitle, setPartTitle] = useState('');
+  const [showImageFirst, setShowImageFirst] = useState(false);
   const [videoFormat, setVideoFormat] = useState('Data Comparison');
   const [endTitle, setEndTitle] = useState('');
   const [formatEndTitles, setFormatEndTitles] = useState<Record<string, string>>({});
@@ -666,6 +667,20 @@ export default function Home() {
         } else if (payload.part_title) {
           setPartTitle(payload.part_title);
         }
+
+        // Detect or set show_image_first for Picture/Visual quizzes
+        if (payload.show_image_first !== undefined) {
+          setShowImageFirst(Boolean(payload.show_image_first));
+        } else if (
+          showImageFirst ||
+          /\b(this (image|picture|photo|logo|character)|guess the (image|picture|character|logo|flag)|who is this|what is this)\b/i.test(topic)
+        ) {
+          setShowImageFirst(true);
+          payload.show_image_first = true;
+        } else {
+          setShowImageFirst(false);
+        }
+
         setEndTitle(payload.end_title);
         handleEndTitleChange(payload.end_title);
         setDraftJson(JSON.stringify(payload, null, 2));
@@ -710,7 +725,8 @@ export default function Home() {
             voice_id: parsedJson.voice_id || finalVoiceId,
             bg_music_url: finalBgMusicUrl || undefined,
             bg_music_volume: finalBgMusicVolume,
-            bg_music_enabled: bgMusicEnabled
+            bg_music_enabled: bgMusicEnabled,
+            ...(videoFormat === 'Quiz' ? { show_image_first: showImageFirst } : {})
           }, 
           showSubtitles, 
           duration,
@@ -897,28 +913,49 @@ export default function Home() {
               </div>
             </div>
 
-            {/* --- Quiz Part / Series Input Box --- */}
+            {/* --- Quiz Part / Series Input Box & Picture Quiz Toggle --- */}
             {videoFormat === 'Quiz' && (
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
-                    <span>🏷️</span>
-                    <span>Quiz Part / Series (Optional)</span>
-                  </label>
-                  <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
-                    Centered below Quiz title (e.g. Part-1, Part-2)
-                  </span>
+              <div className="space-y-4">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                      <span>🏷️</span>
+                      <span>Quiz Part / Series (Optional)</span>
+                    </label>
+                    <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                      Centered below Quiz title (e.g. Part-1, Part-2)
+                    </span>
+                  </div>
+                  <input 
+                    type="text" 
+                    value={partTitle}
+                    onChange={(e) => setPartTitle(e.target.value)}
+                    placeholder="e.g. Part-1, Part-2 (Leave blank if not needed)..."
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 shadow-sm"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+                    Appears in the center directly below the quiz title. If left blank, nothing is displayed.
+                  </p>
                 </div>
-                <input 
-                  type="text" 
-                  value={partTitle}
-                  onChange={(e) => setPartTitle(e.target.value)}
-                  placeholder="e.g. Part-1, Part-2 (Leave blank if not needed)..."
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 shadow-sm"
-                />
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
-                  Appears in the center directly below the quiz title. If left blank, nothing is displayed.
-                </p>
+
+                {/* Picture Quiz Mode Toggle */}
+                <div className="bg-blue-50/60 dark:bg-blue-950/20 p-3.5 rounded-xl border border-blue-200 dark:border-blue-900/50 flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="step1ShowImageFirst"
+                    checked={showImageFirst}
+                    onChange={(e) => setShowImageFirst(e.target.checked)}
+                    className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
+                  />
+                  <label htmlFor="step1ShowImageFirst" className="cursor-pointer">
+                    <span className="block text-xs font-bold text-gray-900 dark:text-white">
+                      Picture Quiz Mode (Show Images Upfront from Start)
+                    </span>
+                    <span className="block text-[11px] text-gray-500 dark:text-gray-400">
+                      Enable for "Guess the Image / Character / Flag / Logo" so viewers see the picture while guessing.
+                    </span>
+                  </label>
+                </div>
               </div>
             )}
 
@@ -1300,33 +1337,69 @@ export default function Home() {
               </span>
             </div>
 
-            {/* Quick Part Title Editor in Step 2 for Quiz */}
+            {/* Quick Part Title & Picture Quiz Mode in Step 2 for Quiz */}
             {(videoFormat === 'Quiz' || (draftJson && draftJson.includes('"questions"'))) && (
-              <div className="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="flex-1 w-full">
-                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1.5">
-                    <span>🏷️</span>
-                    <span>Quiz Part / Series (Centered below title):</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={partTitle}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setPartTitle(val);
-                      try {
-                        const parsed = JSON.parse(draftJson);
-                        parsed.part_title = val;
-                        setDraftJson(JSON.stringify(parsed, null, 2));
-                      } catch {}
-                    }}
-                    placeholder="e.g. Part-1, Part-2 (Leave blank if not needed)"
-                    className="w-full px-3.5 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500"
-                  />
+              <div className="space-y-3">
+                <div className="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex-1 w-full">
+                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-1.5">
+                      <span>🏷️</span>
+                      <span>Quiz Part / Series (Centered below title):</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={partTitle}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setPartTitle(val);
+                        try {
+                          const parsed = JSON.parse(draftJson);
+                          parsed.part_title = val;
+                          setDraftJson(JSON.stringify(parsed, null, 2));
+                        } catch {}
+                      }}
+                      placeholder="e.g. Part-1, Part-2 (Leave blank if not needed)"
+                      className="w-full px-3.5 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <span className="text-[11px] text-gray-400 dark:text-gray-500 max-w-[200px] leading-tight">
+                    Displays centered directly under the Quiz title in video. Blank = nothing shown.
+                  </span>
                 </div>
-                <span className="text-[11px] text-gray-400 dark:text-gray-500 max-w-[200px] leading-tight">
-                  Displays centered directly under the Quiz title in video. Blank = nothing shown.
-                </span>
+
+                <div className="bg-blue-50/60 dark:bg-blue-950/20 p-4 rounded-2xl border border-blue-200 dark:border-blue-900/50 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="step2ShowImageFirst"
+                      checked={showImageFirst}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setShowImageFirst(checked);
+                        try {
+                          const parsed = JSON.parse(draftJson);
+                          parsed.show_image_first = checked;
+                          if (Array.isArray(parsed.questions)) {
+                            parsed.questions.forEach((q: any) => {
+                              q.show_image_first = checked;
+                            });
+                          }
+                          setDraftJson(JSON.stringify(parsed, null, 2));
+                          setHumanScriptText(formatDataToHumanScript(parsed));
+                        } catch {}
+                      }}
+                      className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
+                    />
+                    <label htmlFor="step2ShowImageFirst" className="cursor-pointer">
+                      <span className="block text-xs font-bold text-gray-900 dark:text-white">
+                        Picture Quiz Mode (Show Images Upfront from Start)
+                      </span>
+                      <span className="block text-[11px] text-gray-500 dark:text-gray-400">
+                        Shows the question image from the beginning so viewers can inspect and guess.
+                      </span>
+                    </label>
+                  </div>
+                </div>
               </div>
             )}
 

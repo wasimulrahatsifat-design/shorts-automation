@@ -90,12 +90,15 @@ Your scripts ALWAYS hook viewers in the first 2 seconds, keep them glued until t
 
       Return a structured JSON object with EXACTLY these fields:
       - "topic": The generated punchy topic as a string.
+      - "format": "Quiz"
+      - "show_image_first": Optional boolean (set to true if this is an image-guessing quiz like "Guess the Character", "Guess the Flag", "Guess the Logo", "Identify this picture").
       - "script": The fast-paced, high-energy viral voiceover hook script (under 12 seconds read time).
       - "questions": An array of exactly 5 objects. Each object MUST have:
         - "question": Short, punchy question string.
         - "options": Array of exactly 3 concise strings (e.g., ["Cheetah", "Falcon", "Sailfish"]).
         - "correct_answer": The exact string from options that is correct.
         - "image_keyword": A VERY SPECIFIC search keyword for Wikipedia to find an image related to this question (e.g., "Falcon").
+        - "show_image_first": Optional boolean (set to true if the question requires looking at the image to answer, e.g. "What is this image?").
       Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
     } else if (videoFormat === 'Arena Clash') {
       prompt = `${viralPersona}

@@ -28,6 +28,9 @@ export function formatDataToHumanScript(data: any): string {
       if (q.image_keyword) {
         lines.push(`Image: ${q.image_keyword}`);
       }
+      if (q.show_image_first) {
+        lines.push(`Show Image First: Yes`);
+      }
       lines.push('');
     });
 
@@ -141,14 +144,21 @@ export function parseHumanScriptToData(text: string, existingData: any): any {
       const imgLineMatch = trimmed.match(/Image(?:\s*Keyword)?\s*[:.]\s*(.*)/i);
       const imageKeyword = imgLineMatch ? imgLineMatch[1].trim() : '';
 
+      const imgFirstMatch = trimmed.match(/(?:Show Image First|Image First)\s*[:.]\s*(.*)/i);
+
       if (question || options.length > 0) {
         const existingQ = (data.questions || [])[parsedQuestions.length] || {};
+        const showImageFirst = imgFirstMatch 
+          ? /yes|true|1/i.test(imgFirstMatch[1].trim())
+          : existingQ.show_image_first;
+
         parsedQuestions.push({
           ...existingQ,
           question: question || existingQ.question || `Question ${parsedQuestions.length + 1}`,
           options: options.length >= 2 ? options : (existingQ.options || ['Option A', 'Option B', 'Option C']),
           correct_answer: answer || existingQ.correct_answer || options[0] || 'Option A',
           image_keyword: imageKeyword || existingQ.image_keyword || question.slice(0, 30),
+          ...(showImageFirst !== undefined ? { show_image_first: showImageFirst } : {}),
         });
       }
     });
