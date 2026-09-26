@@ -526,6 +526,17 @@ export default function Home() {
     img.src = rawCropImageSrc;
   };
 
+  // Check URL parameters for step=3 / dashboard
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('step') === '3' || params.get('tab') === 'dashboard') {
+        setStep(3);
+        fetchVideos();
+      }
+    }
+  }, []);
+
   // Poll for updates every 5 seconds on Step 3
   useEffect(() => {
     if (step === 3) {

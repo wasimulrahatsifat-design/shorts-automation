@@ -815,12 +815,17 @@ export default function GamePage() {
   const isRecordingRef = useRef<boolean>(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  const recordedBlobRef = useRef<Blob | null>(null);
   const recordedVideoUrlRef = useRef<string | null>(null);
   const victoryTriggeredRef = useRef<boolean>(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);
   const [showRecordedModal, setShowRecordedModal] = useState(false);
   const [recordingStatusMsg, setRecordingStatusMsg] = useState<string | null>(null);
+  const [isUploadingToDashboard, setIsUploadingToDashboard] = useState(false);
+  const [dashboardVideoId, setDashboardVideoId] = useState<string | null>(null);
+  const [dashboardPublicUrl, setDashboardPublicUrl] = useState<string | null>(null);
+  const [uploadDashboardError, setUploadDashboardError] = useState<string | null>(null);
 
   // Simulation State Refs
   const battleSeedRef = useRef<number>(Math.floor(Math.random() * 1000000));
@@ -3966,6 +3971,9 @@ export default function GamePage() {
     lastSoundFrameRef.current = -1;
     victoryTriggeredRef.current = false;
     setWinner(null);
+    setDashboardVideoId(null);
+    setDashboardPublicUrl(null);
+    setUploadDashboardError(null);
     initSimulation(true);
     drawFrame();
   };
@@ -4663,13 +4671,14 @@ export default function GamePage() {
         const finalType = recorder.mimeType || 'video/webm';
         const blob = new Blob(recordedChunksRef.current, { type: finalType });
         if (blob.size > 0) {
+          recordedBlobRef.current = blob;
           if (recordedVideoUrlRef.current) {
             URL.revokeObjectURL(recordedVideoUrlRef.current);
           }
           const url = URL.createObjectURL(blob);
           recordedVideoUrlRef.current = url;
           setRecordedVideoUrl(url);
-          setRecordingStatusMsg('Record complete! Click "Render full game" to view.');
+          setRecordingStatusMsg('Record complete! Click "Render full game" to save to Dashboard.');
         }
         isRecordingRef.current = false;
         setIsRecording(false);
@@ -4680,10 +4689,66 @@ export default function GamePage() {
       isRecordingRef.current = true;
       setIsRecording(true);
       victoryTriggeredRef.current = false;
+      setDashboardVideoId(null);
+      setDashboardPublicUrl(null);
+      setUploadDashboardError(null);
       setRecordingStatusMsg('Recording active... Will auto-stop 0.5s after Victory.');
     } catch (err: any) {
       console.error('Failed to start MediaRecorder:', err);
       alert('Recording failed: ' + (err?.message || err));
+    }
+  };
+
+  const uploadVideoToDashboard = async (customBlob?: Blob | null) => {
+    const blob = customBlob || recordedBlobRef.current;
+    if (!blob) return;
+
+    setIsUploadingToDashboard(true);
+    setUploadDashboardError(null);
+
+    try {
+      const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
+      const file = new File([blob], `arena_battle_${Date.now()}.${ext}`, { type: blob.type });
+
+      const formData = new FormData();
+      formData.append('video', file);
+      formData.append('topic', topic || 'Ben 10 Alien Arena Clash');
+      formData.append(
+        'data_json',
+        JSON.stringify({
+          topic: topic || 'Ben 10 Alien Arena Clash',
+          format: 'Arena Clash',
+          description: `Epic Ben 10 Alien Arena battle featuring ${contestants.map((c) => c.name).join(', ')}! Watch the live clash and see who claims victory! #Ben10 #Shorts #ArenaClash`,
+          contestants: contestants.map((c) => ({
+            id: c.id,
+            name: c.name,
+            color: c.color,
+            image_url: c.image_url,
+          })),
+          winner: winner ? (winner as any).name : null,
+          duration_seconds: simResultRef.current?.totalSeconds || 60,
+        })
+      );
+      formData.append('duration', String(simResultRef.current?.totalSeconds || 60));
+
+      const res = await fetch('/api/videos/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setDashboardVideoId(data.video.id);
+        setDashboardPublicUrl(data.publicUrl);
+        setRecordingStatusMsg('Rendered & saved to Dashboard successfully!');
+      } else {
+        setUploadDashboardError(data.error || 'Failed to save to dashboard.');
+      }
+    } catch (err: any) {
+      console.error('Failed to upload video to dashboard:', err);
+      setUploadDashboardError(err.message || 'Upload failed.');
+    } finally {
+      setIsUploadingToDashboard(false);
     }
   };
 
@@ -4693,6 +4758,9 @@ export default function GamePage() {
       return;
     }
     setShowRecordedModal(true);
+    if (!dashboardVideoId && !isUploadingToDashboard && recordedBlobRef.current) {
+      uploadVideoToDashboard(recordedBlobRef.current);
+    }
   };
 
   return (
@@ -5424,6 +5492,7 @@ export default function GamePage() {
               {/* Render Full Game Button */}
               <button
                 onClick={handleRenderFullGame}
+                disabled={isUploadingToDashboard}
                 className={`w-full py-2.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 border ${
                   recordedVideoUrl
                     ? 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-400 shadow-lg shadow-emerald-950/50'
@@ -5431,8 +5500,19 @@ export default function GamePage() {
                 }`}
               >
                 {recordedVideoUrl && <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-950 text-emerald-300 border border-emerald-400">READY</span>}
-                <span>Render full game</span>
+                <span>{isUploadingToDashboard ? 'Saving to Dashboard...' : 'Render full game'}</span>
               </button>
+
+              {dashboardVideoId && (
+                <a
+                  href="/?step=3"
+                  target="_blank"
+                  className="w-full py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:opacity-95 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 border border-emerald-400/50 transition active:scale-95"
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse" />
+                  <span>Open Videos Dashboard ↗</span>
+                </a>
+              )}
             </div>
           </div>
         </div>
@@ -5682,6 +5762,49 @@ export default function GamePage() {
                 </button>
               </div>
 
+              {/* Dashboard Sync Status Banner */}
+              <div className="px-3 py-2 rounded-xl text-xs flex items-center justify-between gap-2 border bg-slate-950/80 border-slate-800">
+                {isUploadingToDashboard ? (
+                  <div className="flex items-center gap-2 text-cyan-400 font-medium">
+                    <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
+                    <span>Rendering & saving video to Videos Dashboard...</span>
+                  </div>
+                ) : dashboardVideoId ? (
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-emerald-400 font-bold flex items-center gap-1.5">
+                      <span>✓</span> Saved to Dashboard (Completed)
+                    </span>
+                    <a
+                      href="/?step=3"
+                      target="_blank"
+                      className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-[11px] transition shadow"
+                    >
+                      View in Dashboard ↗
+                    </a>
+                  </div>
+                ) : uploadDashboardError ? (
+                  <div className="flex items-center justify-between w-full text-rose-400">
+                    <span className="truncate max-w-[240px] text-[11px]">{uploadDashboardError}</span>
+                    <button
+                      onClick={() => uploadVideoToDashboard()}
+                      className="px-2 py-0.5 bg-rose-950 border border-rose-700 text-white rounded text-[10px] font-bold"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between w-full text-slate-400">
+                    <span>Ready to save to Dashboard</span>
+                    <button
+                      onClick={() => uploadVideoToDashboard()}
+                      className="px-2.5 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-[11px] transition"
+                    >
+                      Save to Dashboard
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* Video Player */}
               <div className="flex-1 flex flex-col items-center justify-center min-h-0 py-2">
                 {recordedVideoUrl ? (
@@ -5691,7 +5814,7 @@ export default function GamePage() {
                     autoPlay
                     loop
                     playsInline
-                    className="max-h-[60vh] w-auto aspect-[9/16] rounded-2xl bg-black shadow-2xl border-2 border-slate-800 object-contain"
+                    className="max-h-[55vh] w-auto aspect-[9/16] rounded-2xl bg-black shadow-2xl border-2 border-slate-800 object-contain"
                   />
                 ) : (
                   <div className="p-8 text-center text-xs text-slate-400">
@@ -5703,19 +5826,36 @@ export default function GamePage() {
               {/* Action Buttons */}
               <div className="flex flex-col gap-2 pt-1 border-t border-slate-800">
                 <div className="flex gap-2">
+                  {dashboardVideoId ? (
+                    <a
+                      href="/?step=3"
+                      target="_blank"
+                      className="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:opacity-95 text-white font-black text-xs rounded-xl text-center transition flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20"
+                    >
+                      <span>Open Videos Dashboard</span>
+                    </a>
+                  ) : (
+                    <button
+                      onClick={() => uploadVideoToDashboard()}
+                      disabled={isUploadingToDashboard}
+                      className="flex-1 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:opacity-95 text-white font-black text-xs rounded-xl text-center transition flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-500/20 disabled:opacity-50"
+                    >
+                      <span>{isUploadingToDashboard ? 'Saving to Dashboard...' : 'Save to Dashboard'}</span>
+                    </button>
+                  )}
                   {recordedVideoUrl && (
                     <a
-                      href={recordedVideoUrl}
+                      href={dashboardPublicUrl || recordedVideoUrl}
                       download={`Ben10_Battle_${Date.now()}.webm`}
-                      className="flex-1 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs rounded-xl text-center transition flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-500/20"
+                      className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl text-center transition flex items-center justify-center gap-1.5 border border-slate-700"
                     >
-                      <span>Download Video</span>
+                      <span>Download</span>
                     </a>
                   )}
                   <button
                     type="button"
                     onClick={() => setShowRecordedModal(false)}
-                    className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition"
+                    className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition border border-slate-700"
                   >
                     Close
                   </button>
