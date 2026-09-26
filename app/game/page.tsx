@@ -2999,40 +2999,109 @@ export default function GamePage() {
       ctx.lineTo(ARENA_BOX.right, ARENA_BOX.bottom - 35);
       ctx.stroke();
 
-      // Movie Letterbox Bars & Cinematic Slow-Motion HUD during zoom
+      // Game Cutscene Letterbox Bars & Cinematic Slow-Motion HUD during zoom
       if (isZoomActive && cz) {
         ctx.save();
-        // Top Letterbox Bar
-        ctx.fillStyle = 'rgba(2, 8, 4, 0.95)';
-        ctx.fillRect(ARENA_BOX.left, ARENA_BOX.top, ARENA_BOX.width, 54);
-        ctx.fillStyle = cz.fighterColor || '#00ff66';
-        ctx.fillRect(ARENA_BOX.left, ARENA_BOX.top + 52, ARENA_BOX.width, 2.5);
 
-        ctx.font = '900 13px "Montserrat", sans-serif';
+        // 1. Cinematic Vignette around the arena edges to focus on the center action
+        const vigGrad = ctx.createRadialGradient(ARENA_CENTER.x, ARENA_CENTER.y, 220, ARENA_CENTER.x, ARENA_CENTER.y, 450);
+        vigGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        vigGrad.addColorStop(1, 'rgba(0, 0, 0, 0.55)');
+        ctx.fillStyle = vigGrad;
+        ctx.fillRect(ARENA_BOX.left, ARENA_BOX.top, ARENA_BOX.width, ARENA_BOX.height);
+
+        // 2. Impact Flash / Hitstop pulse at peak impact
+        if (cz.impactFlash && cz.impactFlash > 0.05) {
+          const flashGrad = ctx.createRadialGradient(cz.focusX, cz.focusY, 15, cz.focusX, cz.focusY, 320);
+          flashGrad.addColorStop(0, `rgba(255, 255, 255, ${cz.impactFlash * 0.55})`);
+          flashGrad.addColorStop(0.4, `rgba(255, 255, 255, ${cz.impactFlash * 0.25})`);
+          flashGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+          ctx.fillStyle = flashGrad;
+          ctx.fillRect(ARENA_BOX.left, ARENA_BOX.top, ARENA_BOX.width, ARENA_BOX.height);
+        }
+
+        const barColor = cz.fighterColor || '#00ff66';
+
+        // 3. Top Cutscene Letterbox Bar (72px)
+        ctx.fillStyle = 'rgba(2, 6, 4, 0.96)';
+        ctx.fillRect(ARENA_BOX.left, ARENA_BOX.top, ARENA_BOX.width, 72);
+        // Neon Glow Strip
+        ctx.fillStyle = barColor;
+        ctx.fillRect(ARENA_BOX.left, ARENA_BOX.top + 70, ARENA_BOX.width, 3);
+        ctx.shadowColor = barColor;
+        ctx.shadowBlur = 14;
+
+        // Top Left: Slow-Mo Speed Badge
+        ctx.font = '900 12px "Montserrat", monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.arc(ARENA_BOX.left + 28, ARENA_BOX.top + 36, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#f87171';
+        const speedText = cz.reason === 'elimination' ? 'SLOW-MO 0.08X' : 'SLOW-MO 0.10X';
+        ctx.fillText(speedText, ARENA_BOX.left + 40, ARENA_BOX.top + 36);
+
+        // Top Center: Cutscene Category
+        ctx.font = '900 14px "Montserrat", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = barColor;
+        ctx.shadowBlur = 12;
+        const bannerTitle = cz.reason === 'elimination' ? '/// FATAL KNOCKOUT ///' : '/// SPECIAL ABILITY ACTIVATION ///';
+        ctx.fillText(bannerTitle, ARENA_CENTER.x, ARENA_BOX.top + 36);
+
+        // Top Right: Target Lock Info
+        ctx.textAlign = 'right';
+        ctx.font = '800 11px "Montserrat", monospace';
+        ctx.fillStyle = '#94a3b8';
+        ctx.shadowBlur = 0;
+        ctx.fillText('[ TARGET LOCK // CAM_01 ]', ARENA_BOX.right - 24, ARENA_BOX.top + 36);
+
+        // 4. Bottom Cutscene Letterbox Bar (84px)
+        ctx.fillStyle = 'rgba(2, 6, 4, 0.96)';
+        ctx.fillRect(ARENA_BOX.left, ARENA_BOX.bottom - 84, ARENA_BOX.width, 84);
+        // Neon Glow Strip
+        ctx.fillStyle = barColor;
+        ctx.fillRect(ARENA_BOX.left, ARENA_BOX.bottom - 84, ARENA_BOX.width, 3);
+        ctx.shadowColor = barColor;
+        ctx.shadowBlur = 14;
+
+        // Move Badge Pill
+        const badgeWidth = 140;
+        const badgeHeight = 22;
+        const badgeX = ARENA_CENTER.x - badgeWidth / 2;
+        const badgeY = ARENA_BOX.bottom - 72;
+        ctx.beginPath();
+        ctx.roundRect(badgeX, badgeY, badgeWidth, badgeHeight, 6);
+        ctx.fillStyle = barColor;
+        ctx.fill();
+
+        ctx.font = '900 11px "Montserrat", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#a7f3d0';
-        ctx.fillText('CINEMATIC SLOW-MOTION', ARENA_CENTER.x, ARENA_BOX.top + 28);
+        ctx.fillStyle = '#020604';
+        ctx.shadowBlur = 0;
+        ctx.fillText(cz.title.toUpperCase(), ARENA_CENTER.x, badgeY + badgeHeight / 2);
 
-        // Bottom Letterbox Bar
-        ctx.fillStyle = 'rgba(2, 8, 4, 0.95)';
-        ctx.fillRect(ARENA_BOX.left, ARENA_BOX.bottom - 54, ARENA_BOX.width, 54);
-        ctx.fillStyle = cz.fighterColor || '#00ff66';
-        ctx.fillRect(ARENA_BOX.left, ARENA_BOX.bottom - 54, ARENA_BOX.width, 2.5);
+        // Move Subtitle / Alien Action
+        ctx.font = '900 21px "Montserrat", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = barColor;
+        ctx.shadowBlur = 18;
+        ctx.fillText(cz.subTitle.toUpperCase(), ARENA_CENTER.x, ARENA_BOX.bottom - 26);
 
-        ctx.font = '900 18px "Montserrat", sans-serif';
-        ctx.fillStyle = cz.fighterColor || '#00ff66';
-        ctx.shadowColor = cz.fighterColor || '#00ff66';
-        ctx.shadowBlur = 16;
-        ctx.fillText(cz.subTitle.toUpperCase(), ARENA_CENTER.x, ARENA_BOX.bottom - 28);
         ctx.restore();
       }
 
       // End Arena Shake Section
       ctx.restore();
 
-      // Victory Overlay: ONLY SHOWN WHEN frameWinner IS PRESENT! (NO EMOJIS)
-      if (frameWinner) {
+      // Victory Overlay: ONLY SHOWN WHEN frameWinner IS PRESENT AND NOT IN CINEMATIC CUTSCENE! (NO EMOJIS)
+      if (frameWinner && !isZoomActive) {
         pauseBattleMusic();
         ctx.save();
         ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';

@@ -323,6 +323,8 @@ export interface SimCinematicZoom {
   fighterName: string;
   fighterColor: string;
   progress: number;
+  impactFlash?: number;
+  timeScale?: number;
 }
 
 export interface SimFrameState {
@@ -684,7 +686,7 @@ interface ActiveCinematicState {
 let activeCinematic: ActiveCinematicState | null = null;
 
 function triggerEliminationCinematic(currentFrame: number, victim: SimFighter, killer?: SimFighter) {
-  if (activeCinematic && activeCinematic.reason === 'elimination' && (currentFrame - activeCinematic.startFrame) < 18) {
+  if (activeCinematic && activeCinematic.reason === 'elimination' && (currentFrame - activeCinematic.startFrame) < 24) {
     return;
   }
   activeCinematic = {
@@ -694,10 +696,10 @@ function triggerEliminationCinematic(currentFrame: number, victim: SimFighter, k
     targetFighterId: victim.id,
     fighterName: victim.name,
     fighterColor: victim.color || '#ef4444',
-    title: 'FATAL IMPACT',
-    subTitle: `${victim.name.toUpperCase()} ELIMINATED!`,
+    title: 'FATAL KNOCKOUT',
+    subTitle: `K.O. - ${victim.name.toUpperCase()} ELIMINATED!`,
     startFrame: currentFrame,
-    duration: 38,
+    duration: 54, // Extended dramatic cutscene duration for ultra slow-motion appreciation
   };
 }
 
@@ -719,14 +721,19 @@ for (let frame = 0; frame < maxFrames; frame++) {
       const elapsed = frame - cin.startFrame;
       if (elapsed < cin.duration) {
         const p = elapsed / cin.duration; // 0 to 1
-        const peakZoom = cin.reason === 'elimination' ? 1.70 : 1.62;
-        const zoomAmount = Math.sin(p * Math.PI); // 0 -> 1 -> 0
+        // Fighting game cutscene deep camera zoom: 2.35x for elimination, 2.15x for signature ability
+        const peakZoom = cin.reason === 'elimination' ? 2.35 : 2.15;
+        const zoomAmount = Math.sin(p * Math.PI); // Smooth sine bell curve (0 -> 1 -> 0)
         const scale = 1.0 + zoomAmount * (peakZoom - 1.0);
 
-        // Physical slow motion: drops down to 0.28x speed at the peak of the action
-        timeScale = Math.max(0.28, 1.0 - zoomAmount * 0.72);
+        // Ultra dramatic slow-motion: drops down to 0.08x for lethal hits, 0.10x for special moves
+        const peakSlowMo = cin.reason === 'elimination' ? 0.08 : 0.10;
+        timeScale = Math.max(peakSlowMo, 1.0 - zoomAmount * (1.0 - peakSlowMo));
 
-        // Dynamically track target fighter if still available
+        // Impact flash / hitstop pulse at the apex of the action (zoomAmount > 0.82)
+        const impactFlash = zoomAmount > 0.82 ? (zoomAmount - 0.82) / 0.18 : 0;
+
+        // Dynamically track target fighter if still in the arena
         const targetFighter = fighters.find((f) => f.id === cin.targetFighterId);
         if (targetFighter) {
           cin.focusX = targetFighter.x;
@@ -736,14 +743,16 @@ for (let frame = 0; frame < maxFrames; frame++) {
         currentCinematicZoom = {
           active: true,
           scale,
-          focusX: Math.max(ARENA_BOX.left + 150, Math.min(ARENA_BOX.right - 150, cin.focusX)),
-          focusY: Math.max(ARENA_BOX.top + 150, Math.min(ARENA_BOX.bottom - 150, cin.focusY)),
+          focusX: Math.max(ARENA_BOX.left + 140, Math.min(ARENA_BOX.right - 140, cin.focusX)),
+          focusY: Math.max(ARENA_BOX.top + 140, Math.min(ARENA_BOX.bottom - 140, cin.focusY)),
           reason: cin.reason,
           title: cin.title,
           subTitle: cin.subTitle,
           fighterName: cin.fighterName,
           fighterColor: cin.fighterColor,
           progress: p,
+          impactFlash,
+          timeScale,
         };
       } else {
         activeCinematic = null;
@@ -825,11 +834,14 @@ for (let frame = 0; frame < maxFrames; frame++) {
       }
 
       // Check winner: Battle runs until last fighter standing!
-      if (aliveFighters.length === 1 && !winner && fighters.length > 1) {
+      // IMPORTANT: Wait until any active elimination cutscene completely finishes!
+      // This ensures the dramatic slow-motion final knockout is fully enjoyed before the victory overlay appears.
+      const hasPendingCinematic = Boolean(activeCinematic);
+      if (aliveFighters.length === 1 && !winner && fighters.length > 1 && !hasPendingCinematic) {
         winner = { ...aliveFighters[0] };
         winnerAnnouncedFrame = frame;
         soundEvents.push({ frame, sound: 'winner', volume: 1.0 });
-      } else if (aliveFighters.length === 0 && !winner && fighters.length > 1) {
+      } else if (aliveFighters.length === 0 && !winner && fighters.length > 1 && !hasPendingCinematic) {
         // Mutual elimination fallback: resurrect fighter with highest maxHealth
         const survivor = fighters[0];
         survivor.isDead = false;
@@ -908,10 +920,10 @@ for (let frame = 0; frame < maxFrames; frame++) {
               targetFighterId: f.id,
               fighterName: f.name,
               fighterColor: f.color || '#00ff66',
-              title: 'SPECIAL ABILITY',
-              subTitle: `${f.name.toUpperCase()} - ${ab.name.toUpperCase()}`,
+              title: 'SIGNATURE MOVE',
+              subTitle: `${f.name.toUpperCase()} // ${ab.name.toUpperCase()}`,
               startFrame: frame,
-              duration: 36,
+              duration: 46,
             };
           }
 

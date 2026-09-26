@@ -1388,46 +1388,104 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
         <div style={{ position: 'absolute', bottom: -4, left: -4, width: 34, height: 34, borderBottom: '6px solid #00ff66', borderLeft: '6px solid #00ff66', zIndex: 30 }} />
         <div style={{ position: 'absolute', bottom: -4, right: -4, width: 34, height: 34, borderBottom: '6px solid #00ff66', borderRight: '6px solid #00ff66', zIndex: 30 }} />
 
-        {/* Cinematic Movie Letterbox Bars & Slow-Motion HUD during zoom */}
+        {/* Cinematic Game Cutscene Letterbox Bars & Slow-Motion HUD during zoom */}
         {isZoomActive && cz && (
           <>
+            {/* 1. Cinematic Edge Vignette */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background: 'radial-gradient(circle at center, transparent 45%, rgba(0,0,0,0.6) 100%)',
+                pointerEvents: 'none',
+                zIndex: 32,
+              }}
+            />
+
+            {/* 2. Impact Flash / Hitstop pulse */}
+            {cz.impactFlash && cz.impactFlash > 0.05 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: `radial-gradient(circle at ${cz.focusX - ARENA_BOX.left}px ${cz.focusY - ARENA_BOX.top}px, rgba(255,255,255,${cz.impactFlash * 0.55}) 0%, rgba(255,255,255,${cz.impactFlash * 0.2}) 35%, transparent 70%)`,
+                  pointerEvents: 'none',
+                  zIndex: 33,
+                }}
+              />
+            )}
+
+            {/* 3. Top Cutscene Letterbox Bar (72px) */}
             <div
               style={{
                 position: 'absolute',
                 top: 0,
                 left: 0,
                 right: 0,
-                height: 52,
-                backgroundColor: 'rgba(2, 8, 4, 0.95)',
-                borderBottom: `2.5px solid ${cz.fighterColor || '#00ff66'}`,
-                boxShadow: `0 0 20px ${cz.fighterColor || '#00ff66'}`,
+                height: 72,
+                backgroundColor: 'rgba(2, 6, 4, 0.96)',
+                borderBottom: `3px solid ${cz.fighterColor || '#00ff66'}`,
+                boxShadow: `0 0 25px ${cz.fighterColor || '#00ff66'}`,
                 zIndex: 35,
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
+                justifyContent: 'space-between',
+                padding: '0 24px',
               }}
             >
-              <span style={{ fontSize: 13, fontWeight: 900, color: '#a7f3d0', letterSpacing: '2px', textTransform: 'uppercase' }}>
-                CINEMATIC SLOW-MOTION
+              {/* Left: Slow-Mo Speed Badge */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#ef4444', boxShadow: '0 0 10px #ef4444' }} />
+                <span style={{ fontSize: 13, fontWeight: 900, color: '#f87171', letterSpacing: '1.5px', fontFamily: 'Montserrat, monospace' }}>
+                  {cz.reason === 'elimination' ? 'SLOW-MO 0.08X' : 'SLOW-MO 0.10X'}
+                </span>
+              </div>
+
+              {/* Center: Cutscene Category */}
+              <span style={{ fontSize: 15, fontWeight: 900, color: '#ffffff', letterSpacing: '3px', textShadow: `0 0 14px ${cz.fighterColor || '#00ff66'}` }}>
+                {cz.reason === 'elimination' ? '/// FATAL KNOCKOUT ///' : '/// SPECIAL ABILITY ACTIVATION ///'}
+              </span>
+
+              {/* Right: Target Lock */}
+              <span style={{ fontSize: 11, fontWeight: 800, color: '#94a3b8', letterSpacing: '1px', fontFamily: 'Montserrat, monospace' }}>
+                [ TARGET LOCK // CAM_01 ]
               </span>
             </div>
+
+            {/* 4. Bottom Cutscene Letterbox Bar (84px) */}
             <div
               style={{
                 position: 'absolute',
                 bottom: 0,
                 left: 0,
                 right: 0,
-                height: 52,
-                backgroundColor: 'rgba(2, 8, 4, 0.95)',
-                borderTop: `2.5px solid ${cz.fighterColor || '#00ff66'}`,
-                boxShadow: `0 0 20px ${cz.fighterColor || '#00ff66'}`,
+                height: 84,
+                backgroundColor: 'rgba(2, 6, 4, 0.96)',
+                borderTop: `3px solid ${cz.fighterColor || '#00ff66'}`,
+                boxShadow: `0 0 25px ${cz.fighterColor || '#00ff66'}`,
                 zIndex: 35,
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
+                gap: 5,
               }}
             >
-              <span style={{ fontSize: 16, fontWeight: 900, color: cz.fighterColor || '#00ff66', letterSpacing: '1px', textTransform: 'uppercase' }}>
+              <div
+                style={{
+                  padding: '2px 14px',
+                  borderRadius: 6,
+                  backgroundColor: cz.fighterColor || '#00ff66',
+                  color: '#020604',
+                  fontSize: 11,
+                  fontWeight: 900,
+                  letterSpacing: '1.5px',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {cz.title}
+              </div>
+              <span style={{ fontSize: 21, fontWeight: 900, color: '#ffffff', letterSpacing: '1.5px', textTransform: 'uppercase', textShadow: `0 0 18px ${cz.fighterColor || '#00ff66'}` }}>
                 {cz.subTitle}
               </span>
             </div>
@@ -1438,8 +1496,8 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
       {/* High-Tech Ben 10 Omnitrix Alien Dossier Health Cards */}
       {renderHealthBars()}
 
-      {/* Victory Celebration Overlay (NO EMOJIS) */}
-      {frameWinner && (
+      {/* Victory Celebration Overlay: ONLY SHOWN WHEN frameWinner IS PRESENT AND NOT IN CINEMATIC CUTSCENE! (NO EMOJIS) */}
+      {frameWinner && !isZoomActive && (
         <div
           style={{
             position: 'absolute',
