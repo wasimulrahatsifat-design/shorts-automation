@@ -1012,21 +1012,42 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
             {/* 1. CHARACTER-SPECIFIC VISUAL EFFECTS       */}
             {/* ========================================== */}
 
-            {/* --- HEATBLAST: BLAZING FIRE FLAME AURA --- */}
+            {/* --- HEATBLAST: BLAZING FIRE FLAME AURA & FORWARD FIRE BLAST BEAM --- */}
             {aType === 'heatblast' && (
-              <div
-                style={{
-                  position: 'absolute',
-                  inset: -22,
-                  borderRadius: '50%',
-                  background:
-                    'radial-gradient(circle, rgba(255, 230, 0, 0.95) 20%, rgba(234, 88, 12, 0.85) 55%, rgba(220, 38, 38, 0.6) 75%, transparent 95%)',
-                  filter: 'blur(8px)',
-                  boxShadow: '0 0 35px #ea580c, inset 0 0 20px #ffea00',
-                  pointerEvents: 'none',
-                  zIndex: -1,
-                }}
-              />
+              <>
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: -22,
+                    borderRadius: '50%',
+                    background:
+                      'radial-gradient(circle, rgba(255, 230, 0, 0.95) 20%, rgba(234, 88, 12, 0.85) 55%, rgba(220, 38, 38, 0.6) 75%, transparent 95%)',
+                    filter: 'blur(8px)',
+                    boxShadow: '0 0 35px #ea580c, inset 0 0 20px #ffea00',
+                    pointerEvents: 'none',
+                    zIndex: -1,
+                  }}
+                />
+                {f.abilityAuraTimer > 0 && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: '50%',
+                      top: '50%',
+                      width: 220,
+                      height: 48,
+                      transformOrigin: '0 50%',
+                      transform: `translateY(-50%) rotate(${Math.atan2(f.vy, f.vx)}rad)`,
+                      background: 'linear-gradient(to right, #ffffff, #fde047 30%, #ea580c 70%, transparent 100%)',
+                      clipPath: 'polygon(0% 25%, 100% 0%, 100% 100%, 0% 75%)',
+                      boxShadow: '0 0 30px #ea580c',
+                      filter: 'blur(1px)',
+                      pointerEvents: 'none',
+                      zIndex: 1,
+                    }}
+                  />
+                )}
+              </>
             )}
 
             {/* --- FOUR ARMS: 4 RED MUSCULAR ARMS (2 ON EACH SIDE) --- */}

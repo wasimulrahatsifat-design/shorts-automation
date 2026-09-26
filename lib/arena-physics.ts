@@ -222,6 +222,9 @@ export interface SimFighter {
   bleedTicksRemaining?: number;
   bleedIntervalTimer?: number;
   bleedSource?: 'ripjaws' | 'wildmutt';
+  burnTimer?: number;
+  burnTicksRemaining?: number;
+  burnIntervalTimer?: number;
   hasUsedFirstAbility?: boolean;
 }
 
@@ -397,15 +400,15 @@ export const BEN10_DEFAULT_ABILITIES: Record<string, SpecialAbility> = {
     description: 'Claps four muscular hands to unleash a devastating physical shockwave!',
   },
   heatblast: {
-    name: 'Fire Wave Dash',
-    icon: 'FIRE WAVE',
+    name: 'Fire Blast',
+    icon: 'FIRE BLAST',
     type: 'damage',
     cooldown_seconds: 5,
-    power_value: 28,
+    power_value: 32,
     trigger_type: 'charge',
     trigger_value: 100,
     weapon_type: 'none',
-    description: 'Propels forward on a wave of heat and fire, dealing burning impact damage!',
+    description: 'Pyronite fires a straight blazing fire blast stream and dashes straight at the opponent! Contact inflicts 2s burn damage.',
   },
   xlr8: {
     name: 'Wind Funnel',
@@ -589,10 +592,8 @@ export function generateArenaSimulation(
     };
 
     const cooldownFrames = Math.max(60, Math.round(ability.cooldown_seconds * 30));
-    // hp_threshold and hit_combo should never start on cooldown
-    const initialCooldown = (ability.trigger_type === 'hp_threshold' || ability.trigger_type === 'hit_combo')
-      ? 0
-      : Math.round(cooldownFrames * (0.3 + rng() * 0.4));
+    // If trigger_type is cooldown, start full cooldown timer so count starts from 0% and counts full duration
+    const initialCooldown = ability.trigger_type === 'cooldown' ? cooldownFrames : 0;
 
     return {
       id: c.id || `fighter_${idx + 1}`,
@@ -639,6 +640,9 @@ export function generateArenaSimulation(
       bleedTimer: 0,
       bleedTicksRemaining: 0,
       bleedIntervalTimer: 0,
+      burnTimer: 0,
+      burnTicksRemaining: 0,
+      burnIntervalTimer: 0,
       hasUsedFirstAbility: false,
     };
   });
@@ -1011,12 +1015,14 @@ for (let frame = 0; frame < maxFrames; frame++) {
               });
             }
           } else if (aType === 'heatblast') {
-            // HEATBLAST: BLAZING PYRONITE FLAMETHROWER & 3-SECOND ARENA FIRE!
+            // HEATBLAST: BLAZING PYRONITE STRAIGHT FIRE BLAST & 3-SECOND ARENA FIRE!
             soundEvents.push({ frame, sound: 'fireblast', alienType: 'heatblast', volume: 1.0 });
-            f.abilityAuraTimer = 75;
+            f.abilityAuraTimer = 65;
             f.abilityAuraColor = '#ea580c';
-            f.vx = Math.cos(targetAngle) * 14;
-            f.vy = Math.sin(targetAngle) * 14;
+
+            // Straight fire wave dash directly toward opponent:
+            f.vx = Math.cos(targetAngle) * 16;
+            f.vy = Math.sin(targetAngle) * 16;
 
             // Spawn 3-second burning fire ground hazard where Heatblast attacks (target area)
             activeHazardZones.push({
@@ -1032,29 +1038,34 @@ for (let frame = 0; frame < maxFrames; frame++) {
               damagePerFrame: 0.35,
             });
 
-            for (const spread of [-0.18, 0, 0.18]) {
+            // Straight concentrated fire blast projectiles shooting straight forward in a stream:
+            for (let i = 0; i < 3; i++) {
+              const offsetDist = i * 22;
               bullets.push({
-                x: f.x + Math.cos(targetAngle + spread) * (f.size / 2 + 18),
-                y: f.y + Math.sin(targetAngle + spread) * (f.size / 2 + 18),
-                vx: Math.cos(targetAngle + spread) * 19,
-                vy: Math.sin(targetAngle + spread) * 19,
+                x: f.x + Math.cos(targetAngle) * (f.size / 2 + 18 + offsetDist),
+                y: f.y + Math.sin(targetAngle) * (f.size / 2 + 18 + offsetDist),
+                vx: Math.cos(targetAngle) * 22,
+                vy: Math.sin(targetAngle) * 22,
                 ownerId: f.id,
                 color: '#ea580c',
                 damage: Math.max(5, Math.round(abilityPower / 3)),
-                life: 60,
+                life: 55,
                 bulletType: 'fireball',
-                size: 28,
+                size: 32,
               });
             }
 
-            for (let k = 0; k < 20; k++) {
+            // Straight blazing fire blast cone particles shooting forward
+            for (let k = 0; k < 22; k++) {
+              const pSpd = rng() * 12 + 6;
+              const pAng = targetAngle + (rng() - 0.5) * 0.25;
               particles.push({
-                x: f.x + (rng() - 0.5) * f.size,
-                y: f.y + (rng() - 0.5) * f.size,
-                vx: Math.cos(targetAngle + (rng() - 0.5) * 0.8) * (rng() * 10 + 6),
-                vy: Math.sin(targetAngle + (rng() - 0.5) * 0.8) * (rng() * 10 + 6),
-                color: rng() > 0.5 ? '#ea580c' : '#facc15',
-                radius: rng() * 6 + 3,
+                x: f.x + Math.cos(targetAngle) * (f.size / 2),
+                y: f.y + Math.sin(targetAngle) * (f.size / 2),
+                vx: Math.cos(pAng) * pSpd,
+                vy: Math.sin(pAng) * pSpd,
+                color: rng() > 0.4 ? '#ea580c' : '#facc15',
+                radius: rng() * 5 + 3,
                 alpha: 1,
               });
             }
@@ -1472,6 +1483,60 @@ for (let frame = 0; frame < maxFrames; frame++) {
               f.isDead = true;
               triggerEliminationCinematic(frame, f);
               soundEvents.push({ frame, sound: 'explosion', volume: 1.0 });
+            }
+          }
+        }
+      }
+
+      // Heatblast Passive Contact Burn (DoT: 2s burn with 1 dmg per second = 2 dmg total)
+      if (f.burnTimer && f.burnTimer > 0 && !f.isDead) {
+        f.burnTimer--;
+        // Trailing burning flame sparks and smoke from the burning victim
+        if (frame % 3 === 0) {
+          particles.push({
+            x: f.x + (rng() - 0.5) * (f.size * 0.6),
+            y: f.y + (rng() - 0.5) * (f.size * 0.6),
+            vx: (rng() - 0.5) * 2,
+            vy: -2 - rng() * 3,
+            color: rng() > 0.4 ? '#ea580c' : '#facc15',
+            radius: rng() * 4 + 2,
+            alpha: 0.9,
+          });
+        }
+
+        if (f.burnIntervalTimer !== undefined) {
+          f.burnIntervalTimer--;
+          if (f.burnIntervalTimer <= 0 && f.burnTicksRemaining && f.burnTicksRemaining > 0) {
+            f.health = Math.max(0, f.health - 1);
+            f.hitFlash = 6;
+            f.burnTicksRemaining--;
+            f.burnIntervalTimer = 30; // 30 frames = 1 second
+
+            floatingTexts.push({
+              id: `burn_dot_${frame}_${f.id}_${f.burnTicksRemaining}`,
+              x: f.x + (rng() - 0.5) * 20,
+              y: f.y - 35,
+              text: '-1 BURN',
+              color: '#ea580c',
+              alpha: 1,
+              vy: -1.8,
+              scale: 1.1,
+            });
+
+            if (f.health <= 0 && !f.isDead) {
+              f.isDead = true;
+              triggerEliminationCinematic(frame, f);
+              floatingTexts.push({
+                id: `burn_rip_${frame}_${f.id}`,
+                x: f.x,
+                y: f.y - 50,
+                text: 'INCINERATED!',
+                color: '#ea580c',
+                alpha: 1,
+                vy: -2.5,
+                scale: 1.3,
+              });
+              soundEvents.push({ frame, sound: 'explosion', volume: 0.9 });
             }
           }
         }
@@ -1916,6 +1981,60 @@ for (let frame = 0; frame < maxFrames; frame++) {
                     alpha: 1.0,
                   });
                 }
+              }
+            }
+
+            // Heatblast Passive: Contact Burn on opponents (2s burn @ 1 HP/s = 2 HP total)
+            if (aAlien === 'heatblast' && !B.isDead && (!B.burnTimer || B.burnTimer <= 0)) {
+              B.burnTimer = 60; // 2 seconds (60 frames at 30 fps)
+              B.burnTicksRemaining = 2; // 1 dmg per sec
+              B.burnIntervalTimer = 30; // 1st tick at 30 frames
+              floatingTexts.push({
+                id: `hb_burn_${frame}_${B.id}`,
+                x: B.x,
+                y: B.y - 45,
+                text: 'BURNING! (2s)',
+                color: '#ea580c',
+                alpha: 1,
+                vy: -2,
+                scale: 1.15,
+              });
+              for (let k = 0; k < 12; k++) {
+                particles.push({
+                  x: B.x + (rng() - 0.5) * 20,
+                  y: B.y + (rng() - 0.5) * 20,
+                  vx: (rng() - 0.5) * 6,
+                  vy: -2 - rng() * 4,
+                  color: rng() > 0.4 ? '#ea580c' : '#facc15',
+                  radius: rng() * 4 + 2,
+                  alpha: 1,
+                });
+              }
+            }
+            if (bAlien === 'heatblast' && !A.isDead && (!A.burnTimer || A.burnTimer <= 0)) {
+              A.burnTimer = 60; // 2 seconds (60 frames at 30 fps)
+              A.burnTicksRemaining = 2; // 1 dmg per sec
+              A.burnIntervalTimer = 30; // 1st tick at 30 frames
+              floatingTexts.push({
+                id: `hb_burn_${frame}_${A.id}`,
+                x: A.x,
+                y: A.y - 45,
+                text: 'BURNING! (2s)',
+                color: '#ea580c',
+                alpha: 1,
+                vy: -2,
+                scale: 1.15,
+              });
+              for (let k = 0; k < 12; k++) {
+                particles.push({
+                  x: A.x + (rng() - 0.5) * 20,
+                  y: A.y + (rng() - 0.5) * 20,
+                  vx: (rng() - 0.5) * 6,
+                  vy: -2 - rng() * 4,
+                  color: rng() > 0.4 ? '#ea580c' : '#facc15',
+                  radius: rng() * 4 + 2,
+                  alpha: 1,
+                });
               }
             }
 

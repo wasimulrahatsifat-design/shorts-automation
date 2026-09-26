@@ -2051,26 +2051,39 @@ export default function GamePage() {
             ctx.fill();
           }
 
-          // Forward Roaring Flamethrower Jet Cone when active!
+          // Straight Roaring Fire Blast Stream when active!
           if (f.abilityAuraTimer > 0) {
             const moveAng = Math.atan2(f.vy, f.vx) || 0;
             ctx.save();
             ctx.rotate(moveAng);
-            const flameLen = 220;
+            const flameLen = 230;
+            // Straight forward fiery beam
             ctx.beginPath();
-            ctx.moveTo(half, -15);
-            ctx.quadraticCurveTo(half + flameLen * 0.5, -50, half + flameLen, 0);
-            ctx.quadraticCurveTo(half + flameLen * 0.5, 50, half, 15);
+            ctx.moveTo(half, -18);
+            ctx.lineTo(half + flameLen, -36);
+            ctx.lineTo(half + flameLen + 18, 0);
+            ctx.lineTo(half + flameLen, 36);
+            ctx.lineTo(half, 18);
             ctx.closePath();
             const jetGrad = ctx.createLinearGradient(half, 0, half + flameLen, 0);
-            jetGrad.addColorStop(0, 'rgba(255, 255, 220, 0.95)');
-            jetGrad.addColorStop(0.35, 'rgba(250, 204, 21, 0.9)');
-            jetGrad.addColorStop(0.7, 'rgba(234, 88, 12, 0.7)');
+            jetGrad.addColorStop(0, '#ffffff');
+            jetGrad.addColorStop(0.2, '#fde047');
+            jetGrad.addColorStop(0.55, '#ea580c');
             jetGrad.addColorStop(1, 'rgba(220, 38, 38, 0)');
             ctx.fillStyle = jetGrad;
             ctx.shadowColor = '#ea580c';
             ctx.shadowBlur = 35;
             ctx.fill();
+
+            // Concentric straight fire blast shockwave rings
+            for (let r = 1; r <= 3; r++) {
+              const rDist = half + r * 50 + (curFrame % 14) * 3;
+              ctx.beginPath();
+              ctx.arc(rDist, 0, 16 + r * 6, -Math.PI * 0.4, Math.PI * 0.4);
+              ctx.strokeStyle = `rgba(255, 230, 100, ${0.85 - r * 0.22})`;
+              ctx.lineWidth = 4;
+              ctx.stroke();
+            }
             ctx.restore();
           }
           ctx.restore();
