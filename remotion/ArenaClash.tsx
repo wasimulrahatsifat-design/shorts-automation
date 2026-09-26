@@ -81,8 +81,9 @@ const resolveSoundUrl = (sound: string, abilityType?: string) => {
     case 'steel_bite':
       return staticFile('audio/steel_bite.wav');
     case 'sonic_clap':
-    case 'cannon_roll':
       return staticFile('audio/explosion.wav');
+    case 'cannon_roll':
+      return staticFile('audio/cannon_roll.wav');
     case 'wind_tornado':
     case 'ghost_wail':
       return staticFile('audio/bounce.wav');

@@ -880,6 +880,8 @@ export default function GamePage() {
         type = 'crystal_shatter';
       } else if (abilityType === 'freeze' || alienType === 'ghostfreak') {
         type = 'ghost_wail';
+      } else if (alienType === 'cannonbolt') {
+        type = 'cannon_roll';
       } else if (alienType === 'ripjaws') {
         type = 'steel_bite';
       } else if (alienType === 'wildmutt') {
@@ -896,6 +898,7 @@ export default function GamePage() {
       type === 'omnitrix_turn' ||
       type === 'omnitrix_slam' ||
       type === 'fireblast' ||
+      type === 'cannon_roll' ||
       type === 'steel_bite' ||
       type === 'predator_roar' ||
       type === 'acid_splatter'
@@ -905,7 +908,7 @@ export default function GamePage() {
         audio.volume = Math.min(1, soundVolume * 1.0);
         audio.play().catch(() => {});
       } catch (e) {}
-      if (type !== 'fireblast') return;
+      if (type !== 'fireblast' && type !== 'cannon_roll') return;
     }
 
     try {
@@ -1153,18 +1156,30 @@ export default function GamePage() {
         oscLaser.start();
         oscLaser.stop(ctx.currentTime + 0.16);
       } else if (type === 'cannon_roll') {
-        // CANNONBOLT: HEAVY ARMORED RUMBLE & CRASH
+        // CANNONBOLT: HEAVY ARMORED RUMBLE & CRASH (Audible on all speakers)
         const oscRoll = ctx.createOscillator();
         const gainRoll = ctx.createGain();
-        oscRoll.type = 'triangle';
-        oscRoll.frequency.setValueAtTime(90, ctx.currentTime);
-        oscRoll.frequency.exponentialRampToValueAtTime(32, ctx.currentTime + 0.45);
-        gainRoll.gain.setValueAtTime(0.8 * soundVolume, ctx.currentTime);
+        oscRoll.type = 'sawtooth';
+        oscRoll.frequency.setValueAtTime(240, ctx.currentTime);
+        oscRoll.frequency.exponentialRampToValueAtTime(60, ctx.currentTime + 0.45);
+        gainRoll.gain.setValueAtTime(0.75 * soundVolume, ctx.currentTime);
         gainRoll.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
         oscRoll.connect(gainRoll);
         gainRoll.connect(ctx.destination);
         oscRoll.start();
         oscRoll.stop(ctx.currentTime + 0.45);
+
+        const oscClang = ctx.createOscillator();
+        const gainClang = ctx.createGain();
+        oscClang.type = 'square';
+        oscClang.frequency.setValueAtTime(520, ctx.currentTime);
+        oscClang.frequency.exponentialRampToValueAtTime(140, ctx.currentTime + 0.22);
+        gainClang.gain.setValueAtTime(0.55 * soundVolume, ctx.currentTime);
+        gainClang.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+        oscClang.connect(gainClang);
+        gainClang.connect(ctx.destination);
+        oscClang.start();
+        oscClang.stop(ctx.currentTime + 0.22);
       } else if (type === 'ghost_wail') {
         // GHOSTFREAK: SPECTRAL PHANTOM WAIL
         const oscGhost = ctx.createOscillator();

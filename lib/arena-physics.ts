@@ -2161,6 +2161,7 @@ for (let frame = 0; frame < maxFrames; frame++) {
                 dmgA += Math.round(A.damage * 0.75) || 25; // Armored kinetic impact
                 B.vx += nx * 14; B.vy += ny * 14;
                 floatingTexts.push({ id: `slam_${frame}_${B.id}`, x: B.x, y: B.y - 45, text: 'KINETIC SLAM!', color: '#f59e0b', alpha: 1, vy: -2, scale: 1.1 });
+                soundEvents.push({ frame, sound: 'cannon_roll', alienType: 'cannonbolt', volume: 0.95 });
               } else if (aAlien === 'wildmutt') {
                 dmgA += Math.round(A.damage * 0.6) || 20; // Predator pounce bite
                 B.speedBoostTimer = -45; // Slow down
@@ -2215,6 +2216,7 @@ for (let frame = 0; frame < maxFrames; frame++) {
                 dmgB += Math.round(B.damage * 0.75) || 25;
                 A.vx -= nx * 14; A.vy -= ny * 14;
                 floatingTexts.push({ id: `slam_${frame}_${A.id}`, x: A.x, y: A.y - 45, text: 'KINETIC SLAM!', color: '#f59e0b', alpha: 1, vy: -2, scale: 1.1 });
+                soundEvents.push({ frame, sound: 'cannon_roll', alienType: 'cannonbolt', volume: 0.95 });
               } else if (bAlien === 'wildmutt') {
                 dmgB += Math.round(B.damage * 0.6) || 20;
                 A.speedBoostTimer = -45;
