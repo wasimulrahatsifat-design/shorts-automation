@@ -214,6 +214,10 @@ export interface SimFighter {
   specialMoveReady: boolean;
   rageModeActivated?: boolean;
   crystalTrapCount?: number;
+  bleedTimer?: number;
+  bleedTicksRemaining?: number;
+  bleedIntervalTimer?: number;
+  bleedSource?: 'ripjaws' | 'wildmutt';
 }
 
 export interface SimItem {
@@ -424,7 +428,7 @@ export const BEN10_DEFAULT_ABILITIES: Record<string, SpecialAbility> = {
     trigger_type: 'charge',
     trigger_value: 100,
     weapon_type: 'none',
-    description: 'Uses sensory neck gills to lock-on, lunging into a steel-crushing bite and drool slow!',
+    description: 'Lunges into a vicious predator bite dealing heavy damage and causing 4s bleed (-1 HP/s, 4 HP total)!',
   },
   ripjaws: {
     name: 'Steel Jaw Bite',
@@ -435,7 +439,7 @@ export const BEN10_DEFAULT_ABILITIES: Record<string, SpecialAbility> = {
     trigger_type: 'hit_combo',
     trigger_value: 4,
     weapon_type: 'none',
-    description: 'Snaps giant steel-piercing jaws on collision, shredding shields and dealing critical damage!',
+    description: 'Snaps giant steel jaws shredding shields and inflicting a 3s bleed (-1 HP/s, 3 HP total)!',
   },
   upgrade: {
     name: 'Optic Plasma Laser',
@@ -607,6 +611,9 @@ export function generateArenaSimulation(
       specialMoveReady: false,
       rageModeActivated: false,
       crystalTrapCount: 0,
+      bleedTimer: 0,
+      bleedTicksRemaining: 0,
+      bleedIntervalTimer: 0,
     };
   });
 
@@ -1005,6 +1012,16 @@ export function generateArenaSimulation(
             f.abilityAuraTimer = 70;
             f.abilityAuraColor = '#f97316';
             soundEvents.push({ frame, sound: 'predator_roar', alienType: 'wildmutt', volume: 1.0 });
+            floatingTexts.push({
+              id: `wm_pounce_${frame}_${f.id}`,
+              x: f.x,
+              y: f.y - 45,
+              text: 'PREDATOR POUNCE!',
+              color: '#f97316',
+              alpha: 1,
+              vy: -2,
+              scale: 1.25,
+            });
           } else if (aType === 'ripjaws') {
             // RIPJAWS: STEEL JAW BITE CHARGE
             f.vx = Math.cos(targetAngle) * 19;
@@ -1012,6 +1029,16 @@ export function generateArenaSimulation(
             f.abilityAuraTimer = 75;
             f.abilityAuraColor = '#06b6d4';
             soundEvents.push({ frame, sound: 'steel_bite', alienType: 'ripjaws', volume: 1.0 });
+            floatingTexts.push({
+              id: `rj_bite_${frame}_${f.id}`,
+              x: f.x,
+              y: f.y - 45,
+              text: 'STEEL JAW BITE!',
+              color: '#06b6d4',
+              alpha: 1,
+              vy: -2,
+              scale: 1.25,
+            });
           } else if (aType === 'upgrade') {
             // UPGRADE: OPTIC PLASMA LASER (Burst of 3 high-speed laser bolts)
             soundEvents.push({ frame, sound: 'laser_beam', alienType: 'upgrade', volume: 1.0 });
@@ -1197,6 +1224,73 @@ export function generateArenaSimulation(
       }
 
       if (f.speedBoostTimer > 0) f.speedBoostTimer--;
+
+      // Bleed Damage-Over-Time (DoT) and blood loss effect (Ripjaws: 3s @ 1 HP/s = 3 HP; Wildmutt: 4s @ 1 HP/s = 4 HP)
+      if (f.bleedTimer && f.bleedTimer > 0 && !f.isDead) {
+        f.bleedTimer--;
+
+        // Trailing crimson blood droplets dripping downward from the wounded fighter
+        if (frame % 3 === 0) {
+          particles.push({
+            x: f.x + (rng() - 0.5) * (f.size * 0.5),
+            y: f.y + (rng() - 0.5) * (f.size * 0.5),
+            vx: (rng() - 0.5) * 1.5,
+            vy: rng() * 2 + 1.2,
+            color: rng() > 0.4 ? '#dc2626' : '#991b1b',
+            radius: rng() * 3 + 2,
+            alpha: 0.9,
+          });
+        }
+
+        if (f.bleedIntervalTimer !== undefined) {
+          f.bleedIntervalTimer--;
+          if (f.bleedIntervalTimer <= 0 && f.bleedTicksRemaining && f.bleedTicksRemaining > 0) {
+            f.health = Math.max(0, f.health - 1);
+            f.hitFlash = 6;
+            f.bleedTicksRemaining--;
+            f.bleedIntervalTimer = 30; // 30 frames = 1 second
+
+            // Blood droplet burst on tick
+            for (let b = 0; b < 6; b++) {
+              particles.push({
+                x: f.x + (rng() - 0.5) * 24,
+                y: f.y + (rng() - 0.5) * 24,
+                vx: (rng() - 0.5) * 4,
+                vy: (rng() - 0.5) * 4 + 1.5,
+                color: '#ef4444',
+                radius: rng() * 2.5 + 2,
+                alpha: 1.0,
+              });
+            }
+
+            floatingTexts.push({
+              id: `bleed_${frame}_${f.id}_${f.bleedTicksRemaining}`,
+              x: f.x + (rng() - 0.5) * 20,
+              y: f.y - 35,
+              text: '-1 BLEED',
+              color: '#ef4444',
+              alpha: 1,
+              vy: -1.8,
+              scale: 1.1,
+            });
+
+            if (f.health <= 0 && !f.isDead) {
+              f.isDead = true;
+              floatingTexts.push({
+                id: `rip_bleed_${frame}_${f.id}`,
+                x: f.x,
+                y: f.y - 50,
+                text: 'BLED OUT!',
+                color: '#dc2626',
+                alpha: 1,
+                vy: -2.5,
+                scale: 1.3,
+              });
+              soundEvents.push({ frame, sound: 'explosion', volume: 0.9 });
+            }
+          }
+        }
+      }
 
       const aType = getAlienType(f);
       if (aType === 'xlr8') {
@@ -1544,13 +1638,47 @@ export function generateArenaSimulation(
                 B.vx += nx * 14; B.vy += ny * 14;
                 floatingTexts.push({ id: `slam_${frame}_${B.id}`, x: B.x, y: B.y - 45, text: 'KINETIC SLAM!', color: '#f59e0b', alpha: 1, vy: -2, scale: 1.1 });
               } else if (aAlien === 'wildmutt') {
-                dmgA += Math.round(A.damage * 0.6) || 20; // Steel bite
+                dmgA += Math.round(A.damage * 0.6) || 20; // Predator pounce bite
                 B.speedBoostTimer = -45; // Slow down
-                floatingTexts.push({ id: `bite_${frame}_${B.id}`, x: B.x, y: B.y - 45, text: 'STEEL BITE!', color: '#f97316', alpha: 1, vy: -2, scale: 1.1 });
+                // Apply 4-second bleed (1 HP lost per sec, 4 HP total)
+                B.bleedTimer = 120;
+                B.bleedTicksRemaining = 4;
+                B.bleedIntervalTimer = 30;
+                B.bleedSource = 'wildmutt';
+                floatingTexts.push({ id: `bite_${frame}_${B.id}`, x: B.x, y: B.y - 45, text: 'PREDATOR MAUL! BLEED (-4 HP)', color: '#f97316', alpha: 1, vy: -2, scale: 1.25 });
+                // Blood splatter particles burst on enemy
+                for (let k = 0; k < 16; k++) {
+                  particles.push({
+                    x: B.x + (rng() - 0.5) * 20,
+                    y: B.y + (rng() - 0.5) * 20,
+                    vx: (rng() - 0.5) * 8,
+                    vy: (rng() - 0.5) * 8 + 2,
+                    color: rng() > 0.3 ? '#dc2626' : '#991b1b',
+                    radius: rng() * 4 + 2,
+                    alpha: 1.0,
+                  });
+                }
               } else if (aAlien === 'ripjaws') {
-                dmgA += Math.round(A.damage * 0.9) || 30; // Pierce jaws
+                dmgA += Math.round(A.damage * 0.9) || 30; // Steel jaws
                 B.bonusShield = 0; B.hasShield = false; // shred shield
-                floatingTexts.push({ id: `jaw_${frame}_${B.id}`, x: B.x, y: B.y - 45, text: 'PIERCE CRUSH!', color: '#06b6d4', alpha: 1, vy: -2, scale: 1.2 });
+                // Apply 3-second bleed (1 HP lost per sec, 3 HP total)
+                B.bleedTimer = 90;
+                B.bleedTicksRemaining = 3;
+                B.bleedIntervalTimer = 30;
+                B.bleedSource = 'ripjaws';
+                floatingTexts.push({ id: `jaw_${frame}_${B.id}`, x: B.x, y: B.y - 45, text: 'STEEL BITE! BLEED (-3 HP)', color: '#06b6d4', alpha: 1, vy: -2, scale: 1.25 });
+                // Blood splatter particles burst on enemy
+                for (let k = 0; k < 16; k++) {
+                  particles.push({
+                    x: B.x + (rng() - 0.5) * 20,
+                    y: B.y + (rng() - 0.5) * 20,
+                    vx: (rng() - 0.5) * 8,
+                    vy: (rng() - 0.5) * 8 + 2,
+                    color: rng() > 0.3 ? '#dc2626' : '#7f1d1d',
+                    radius: rng() * 4 + 2,
+                    alpha: 1.0,
+                  });
+                }
               }
             }
 
@@ -1566,11 +1694,41 @@ export function generateArenaSimulation(
               } else if (bAlien === 'wildmutt') {
                 dmgB += Math.round(B.damage * 0.6) || 20;
                 A.speedBoostTimer = -45;
-                floatingTexts.push({ id: `bite_${frame}_${A.id}`, x: A.x, y: A.y - 45, text: 'STEEL BITE!', color: '#f97316', alpha: 1, vy: -2, scale: 1.1 });
+                A.bleedTimer = 120;
+                A.bleedTicksRemaining = 4;
+                A.bleedIntervalTimer = 30;
+                A.bleedSource = 'wildmutt';
+                floatingTexts.push({ id: `bite_${frame}_${A.id}`, x: A.x, y: A.y - 45, text: 'PREDATOR MAUL! BLEED (-4 HP)', color: '#f97316', alpha: 1, vy: -2, scale: 1.25 });
+                for (let k = 0; k < 16; k++) {
+                  particles.push({
+                    x: A.x + (rng() - 0.5) * 20,
+                    y: A.y + (rng() - 0.5) * 20,
+                    vx: (rng() - 0.5) * 8,
+                    vy: (rng() - 0.5) * 8 + 2,
+                    color: rng() > 0.3 ? '#dc2626' : '#991b1b',
+                    radius: rng() * 4 + 2,
+                    alpha: 1.0,
+                  });
+                }
               } else if (bAlien === 'ripjaws') {
                 dmgB += Math.round(B.damage * 0.9) || 30;
                 A.bonusShield = 0; A.hasShield = false;
-                floatingTexts.push({ id: `jaw_${frame}_${A.id}`, x: A.x, y: A.y - 45, text: 'PIERCE CRUSH!', color: '#06b6d4', alpha: 1, vy: -2, scale: 1.2 });
+                A.bleedTimer = 90;
+                A.bleedTicksRemaining = 3;
+                A.bleedIntervalTimer = 30;
+                A.bleedSource = 'ripjaws';
+                floatingTexts.push({ id: `jaw_${frame}_${A.id}`, x: A.x, y: A.y - 45, text: 'STEEL BITE! BLEED (-3 HP)', color: '#06b6d4', alpha: 1, vy: -2, scale: 1.25 });
+                for (let k = 0; k < 16; k++) {
+                  particles.push({
+                    x: A.x + (rng() - 0.5) * 20,
+                    y: A.y + (rng() - 0.5) * 20,
+                    vx: (rng() - 0.5) * 8,
+                    vy: (rng() - 0.5) * 8 + 2,
+                    color: rng() > 0.3 ? '#dc2626' : '#7f1d1d',
+                    radius: rng() * 4 + 2,
+                    alpha: 1.0,
+                  });
+                }
               }
             }
 

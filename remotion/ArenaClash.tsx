@@ -953,6 +953,7 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
         if (f.gunBullets > 0) itemBadge += ` [BLASTER x${f.gunBullets}]`;
         if (f.speedBoostTimer > 0) itemBadge += ' [SPEED]';
         if (f.frozenTimer > 0) itemBadge += ' [FROZEN]';
+        if (f.bleedTimer && f.bleedTimer > 0) itemBadge += ' [BLEEDING]';
 
         const isAbilityActive = f.abilityAuraTimer > 0;
         const isFrozen = f.frozenTimer > 0;
@@ -1259,6 +1260,21 @@ export const ArenaClash: React.FC<{ data_json: ArenaClashData; topic: string }> 
                     border: '3px solid #38bdf8',
                     borderRadius: '50%',
                     zIndex: 3,
+                  }}
+                />
+              )}
+
+              {/* Bleeding Crimson Pulse Overlay */}
+              {f.bleedTimer !== undefined && f.bleedTimer > 0 && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: -4,
+                    borderRadius: '50%',
+                    border: '4px solid #ef4444',
+                    boxShadow: '0 0 16px #dc2626, inset 0 0 10px rgba(220, 38, 38, 0.5)',
+                    backgroundColor: 'rgba(220, 38, 38, 0.25)',
+                    zIndex: 4,
                   }}
                 />
               )}

@@ -2905,12 +2905,34 @@ export default function GamePage() {
         if (f.gunBullets > 0) itemBadge += `BLASTER x${f.gunBullets} `;
         if (f.speedBoostTimer > 0) itemBadge += 'SPEED ';
         if (f.frozenTimer > 0) itemBadge += 'FROZEN ';
+        if (f.bleedTimer && f.bleedTimer > 0) itemBadge += 'BLEEDING ';
         if (isCharged) itemBadge += 'READY';
+
+        if (f.bleedTimer && f.bleedTimer > 0) {
+          ctx.save();
+          const bleedPulse = 0.5 + 0.5 * Math.sin(curFrame * 0.4);
+          ctx.beginPath();
+          ctx.arc(0, 0, half + 4, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(239, 68, 68, ${0.4 + bleedPulse * 0.5})`;
+          ctx.lineWidth = 4;
+          ctx.shadowColor = '#dc2626';
+          ctx.shadowBlur = 14;
+          ctx.stroke();
+
+          // Blood droplet indicator
+          ctx.beginPath();
+          ctx.arc(half * 0.65, -half * 0.65, 5 + bleedPulse * 2, 0, Math.PI * 2);
+          ctx.fillStyle = '#dc2626';
+          ctx.shadowColor = '#7f1d1d';
+          ctx.shadowBlur = 8;
+          ctx.fill();
+          ctx.restore();
+        }
 
         if (itemBadge) {
           ctx.font = 'bold 15px "Montserrat", sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillStyle = '#00ff66';
+          ctx.fillStyle = (f.bleedTimer && f.bleedTimer > 0) ? '#ef4444' : '#00ff66';
           ctx.shadowColor = '#000';
           ctx.shadowBlur = 6;
           ctx.fillText(itemBadge.trim(), 0, -half - 12);
