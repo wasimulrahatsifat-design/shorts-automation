@@ -193,8 +193,13 @@ Your scripts ALWAYS hook viewers in the first 2 seconds, keep them glued until t
           return publicUrl;
         };
 
-        for (const s of dataPayload.scenarios) {
-          const text = `Would you rather ${s.option_a} or ${s.option_b}?`;
+        for (let i = 0; i < dataPayload.scenarios.length; i++) {
+          const s = dataPayload.scenarios[i];
+          const cleanA = (s.option_a || '').replace(/^would you rather\s+/i, '').trim();
+          const cleanB = (s.option_b || '').replace(/^would you rather\s+/i, '').trim();
+          const text = i === 0
+            ? `Would you rather ${cleanA} or ${cleanB}?`
+            : `${cleanA.charAt(0).toUpperCase() + cleanA.slice(1)} or ${cleanB}?`;
           const url = await generateTTSForText(text);
           tts_urls.push(url);
         }
@@ -226,9 +231,13 @@ Your scripts ALWAYS hook viewers in the first 2 seconds, keep them glued until t
     const hasOutro = Boolean(dataPayload.end_title && dataPayload.end_title.trim());
     if (videoFormat === 'Would You Rather' && dataPayload.scenarios) {
       let totalSeconds = 0;
-      for (const s of dataPayload.scenarios) {
-        const textLength = s.option_a.length + s.option_b.length + 20;
-        const readingSeconds = Math.max(1.8, textLength / 21);
+      for (let i = 0; i < dataPayload.scenarios.length; i++) {
+        const s = dataPayload.scenarios[i];
+        const prefixLength = i === 0 ? 17 : 0;
+        const cleanA = (s.option_a || '').replace(/^would you rather\s+/i, '').trim();
+        const cleanB = (s.option_b || '').replace(/^would you rather\s+/i, '').trim();
+        const textLength = cleanA.length + cleanB.length + prefixLength + 4;
+        const readingSeconds = Math.max(1.5, textLength / 21);
         totalSeconds += readingSeconds + 5; // timer 3s + reveal 2s
       }
       finalDuration = Math.round(totalSeconds + (hasOutro ? 2.8 : 0));

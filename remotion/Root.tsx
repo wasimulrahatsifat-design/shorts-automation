@@ -54,8 +54,8 @@ export const RemotionRoot: React.FC = () => {
         calculateMetadata={({ props }: any) => {
           if (props.data_json?.scenarios && Array.isArray(props.data_json.scenarios)) {
             let totalFrames = 0;
-            for (const s of props.data_json.scenarios) {
-              totalFrames += getWyrTiming(s, 30).totalFrames;
+            for (let i = 0; i < props.data_json.scenarios.length; i++) {
+              totalFrames += getWyrTiming(props.data_json.scenarios[i], 30, i === 0).totalFrames;
             }
             const hasOutro = Boolean(props.data_json?.end_title && props.data_json.end_title.trim());
             return { durationInFrames: totalFrames + (hasOutro ? Math.round(2.8 * 30) : 0) };

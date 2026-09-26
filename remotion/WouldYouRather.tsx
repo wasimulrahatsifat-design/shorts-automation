@@ -36,10 +36,13 @@ const resolveAudioUrl = (url?: string) => {
   return staticFile(clean);
 };
 
-export const getWyrTiming = (s: Scenario, fps: number) => {
-  const textLength = s.option_a.length + s.option_b.length + 20; // "Would you rather option a or option b"
+export const getWyrTiming = (s: Scenario, fps: number, isFirstRound?: boolean) => {
+  const prefixLength = isFirstRound ? 17 : 0; // "Would you rather " is 17 characters
+  const cleanA = (s.option_a || '').replace(/^would you rather\s+/i, '').trim();
+  const cleanB = (s.option_b || '').replace(/^would you rather\s+/i, '').trim();
+  const textLength = cleanA.length + cleanB.length + prefixLength + 4; // " or " is 4 characters
   // ~21 chars per sec matches ElevenLabs speaking cadence so the timer starts immediately without dead pauses
-  const readingSeconds = Math.max(1.8, textLength / 21);
+  const readingSeconds = Math.max(1.5, textLength / 21);
   const readingFrames = Math.round(readingSeconds * fps);
   const timerFrames = 3 * fps;
   const revealFrames = 2 * fps;
@@ -51,7 +54,12 @@ export const getWyrTiming = (s: Scenario, fps: number) => {
   };
 };
 
-const WyrRound: React.FC<{ scenarioData: Scenario; topic: string; isLastRound?: boolean }> = ({ scenarioData, topic, isLastRound }) => {
+const WyrRound: React.FC<{ 
+  scenarioData: Scenario; 
+  topic: string; 
+  isLastRound?: boolean;
+  isFirstRound?: boolean;
+}> = ({ scenarioData, topic, isLastRound, isFirstRound }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -65,7 +73,7 @@ const WyrRound: React.FC<{ scenarioData: Scenario; topic: string; isLastRound?: 
   const vsScale = spring({ frame: frame - 30, fps, config: { damping: 10, stiffness: 150 } });
 
   // Timing
-  const { readingFrames, timerFrames } = getWyrTiming(scenarioData, fps);
+  const { readingFrames, timerFrames } = getWyrTiming(scenarioData, fps, isFirstRound);
   const timerStartFrame = readingFrames;
   
   const timerProgress = interpolate(frame, [timerStartFrame, timerStartFrame + timerFrames], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
@@ -345,14 +353,20 @@ export const WouldYouRather: React.FC<{ data_json: WouldYouRatherJson; topic: st
 
       <Series>
         {scenarios.map((scenario, index) => {
-          const timing = getWyrTiming(scenario, fps);
+          const isFirstRound = index === 0;
+          const timing = getWyrTiming(scenario, fps, isFirstRound);
           const ttsUrl = tts_urls && tts_urls[index] ? tts_urls[index] : null;
           const isLastRound = index === scenarios.length - 1;
 
           return (
             <Series.Sequence key={index} durationInFrames={timing.totalFrames}>
               {ttsUrl && <Audio src={ttsUrl} volume={0.9} />}
-              <WyrRound scenarioData={scenario} topic={topic} isLastRound={isLastRound} />
+              <WyrRound 
+                scenarioData={scenario} 
+                topic={topic} 
+                isLastRound={isLastRound} 
+                isFirstRound={isFirstRound} 
+              />
             </Series.Sequence>
           );
         })}
