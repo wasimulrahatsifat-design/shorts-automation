@@ -36,76 +36,133 @@ const resolveAudioUrl = (url?: string) => {
   return staticFile(clean);
 };
 
-function formatNumberWithUnit(val: number, yAxisLabel?: string): string {
+export function splitTitleAndYears(title: string): { mainTitle: string; yearText: string | null } {
+  if (!title) return { mainTitle: '', yearText: null };
+  const trimmed = title.trim();
+
+  // 1. Year range pattern: e.g. "(2010-2026)", "2010-2026", "2010 - 2026", "২০১০-২০২৬", "(২০১০ - ২০২৬)", "1990-2025"
+  const rangeRegex = /[\(\[\{]?\s*((?:19\d{2}|20\d{2}|১৯[০-৯]{2}|২০[০-৯]{2})\s*[-–—~toথেকে]+\s*(?:19\d{2}|20\d{2}|১৯[০-৯]{2}|২০[০-৯]{2}))\s*[\)\]\}]?/i;
+  const rangeMatch = trimmed.match(rangeRegex);
+  if (rangeMatch && rangeMatch[1]) {
+    const yearText = rangeMatch[1].trim();
+    let mainTitle = trimmed.replace(rangeMatch[0], '').replace(/\s{2,}/g, ' ').trim();
+    mainTitle = mainTitle.replace(/[\s\-–—|:,]+$/, '').replace(/^[\s\-–—|:,]+/, '').trim();
+    return { mainTitle: mainTitle || trimmed, yearText };
+  }
+
+  // 2. Single year in parens/brackets e.g. "(2026)" or "[2026]" or "(২০২৬)"
+  const parenYearRegex = /[\(\[\{]\s*((?:19\d{2}|20\d{2}|১৯[০-৯]{2}|২০[০-৯]{2}))\s*[\)\]\}]/i;
+  const parenMatch = trimmed.match(parenYearRegex);
+  if (parenMatch && parenMatch[1]) {
+    const yearText = parenMatch[1].trim();
+    let mainTitle = trimmed.replace(parenMatch[0], '').replace(/\s{2,}/g, ' ').trim();
+    mainTitle = mainTitle.replace(/[\s\-–—|:,]+$/, '').replace(/^[\s\-–—|:,]+/, '').trim();
+    return { mainTitle: mainTitle || trimmed, yearText };
+  }
+
+  // 3. Standalone year at the end e.g. "Most Popular Movies 2026" or "... ২০২৬"
+  const endYearRegex = /\b((?:19\d{2}|20\d{2}|১৯[০-৯]{2}|২০[০-৯]{2}))\s*$/i;
+  const endMatch = trimmed.match(endYearRegex);
+  if (endMatch && endMatch[1]) {
+    const yearText = endMatch[1].trim();
+    let mainTitle = trimmed.replace(endMatch[0], '').replace(/\s{2,}/g, ' ').trim();
+    mainTitle = mainTitle.replace(/[\s\-–—|:,]+$/, '').replace(/^[\s\-–—|:,]+/, '').trim();
+    return { mainTitle: mainTitle || trimmed, yearText };
+  }
+
+  return { mainTitle: trimmed, yearText: null };
+}
+
+export function formatNumberWithUnit(val: number, yAxisLabel?: string, isWinnerDisplay?: boolean): string {
   if (val === undefined || val === null || isNaN(val)) return '0';
 
   const label = (yAxisLabel || '').trim();
   const labelLower = label.toLowerCase();
+  const hasDollar = label.includes('$');
+  const currencyPrefix = hasDollar ? '$' : '';
 
   // 1. Detect standard metric unit from yAxisLabel
   let unitSuffix = '';
+  let unitFull = '';
   if (labelLower.includes('trillion') || /\b(\$)?t\b/i.test(label)) {
     unitSuffix = ' T';
+    unitFull = ' Trillion';
   } else if (labelLower.includes('billion') || /\b(\$)?b\b/i.test(label)) {
     unitSuffix = ' B';
+    unitFull = ' Billion';
   } else if (labelLower.includes('million') || /\b(\$)?m\b/i.test(label)) {
     unitSuffix = ' M';
+    unitFull = ' Million';
   } else if (labelLower.includes('thousand') || /\b(\$)?k\b/i.test(label)) {
     unitSuffix = ' K';
+    unitFull = ' Thousand';
   } else if (labelLower.includes('%') || labelLower.includes('percent')) {
     unitSuffix = '%';
+    unitFull = '%';
   } else {
     // Check if label specifies a unit in parentheses, e.g. "Capacity (GWh)" -> "GWh"
     const parenMatch = label.match(/\(([^)]+)\)/);
     if (parenMatch && parenMatch[1]) {
       const inside = parenMatch[1].trim();
       const insideLower = inside.toLowerCase();
-      if (insideLower.includes('million')) unitSuffix = ' M';
-      else if (insideLower.includes('billion')) unitSuffix = ' B';
-      else if (insideLower.includes('trillion')) unitSuffix = ' T';
-      else if (insideLower.includes('thousand')) unitSuffix = ' K';
-      else if (inside.length <= 6) unitSuffix = ` ${inside}`;
+      if (insideLower.includes('million')) { unitSuffix = ' M'; unitFull = ' Million'; }
+      else if (insideLower.includes('billion')) { unitSuffix = ' B'; unitFull = ' Billion'; }
+      else if (insideLower.includes('trillion')) { unitSuffix = ' T'; unitFull = ' Trillion'; }
+      else if (insideLower.includes('thousand')) { unitSuffix = ' K'; unitFull = ' Thousand'; }
+      else if (inside.length <= 8) { unitSuffix = ` ${inside}`; unitFull = ` ${inside}`; }
     }
   }
 
   // 2. If a unit was found from yAxisLabel:
   if (unitSuffix) {
-    if (unitSuffix.includes('M') && val >= 1_000_000) {
+    if ((unitSuffix.includes('M') || unitFull.includes('Million')) && val >= 1_000_000) {
       val = val / 1_000_000;
-    } else if (unitSuffix.includes('B') && val >= 1_000_000_000) {
+    } else if ((unitSuffix.includes('B') || unitFull.includes('Billion')) && val >= 1_000_000_000) {
       val = val / 1_000_000_000;
-    } else if (unitSuffix.includes('T') && val >= 1_000_000_000_000) {
+    } else if ((unitSuffix.includes('T') || unitFull.includes('Trillion')) && val >= 1_000_000_000_000) {
       val = val / 1_000_000_000_000;
-    } else if (unitSuffix.includes('K') && val >= 1_000) {
+    } else if ((unitSuffix.includes('K') || unitFull.includes('Thousand')) && val >= 1_000) {
       val = val / 1_000;
     }
 
+    const chosenSuffix = isWinnerDisplay ? unitFull : unitSuffix;
     const formattedNum = Number.isInteger(val)
       ? val.toLocaleString()
-      : (val < 10 ? val.toFixed(1) : Math.round(val).toLocaleString());
-    return `${formattedNum}${unitSuffix}`;
+      : (val < 1000 ? (val % 1 !== 0 ? (Math.round(val * 10) / 10).toFixed(1) : Math.round(val).toLocaleString()) : Math.round(val).toLocaleString());
+    return `${currencyPrefix}${formattedNum}${chosenSuffix}`;
   }
 
   // 3. Fallback: Automatically abbreviate raw large values
   const absVal = Math.abs(val);
   if (absVal >= 1_000_000_000_000) {
     const num = val / 1_000_000_000_000;
-    return `${num % 1 === 0 ? num : num.toFixed(1)} T`;
+    const formatted = num % 1 === 0 ? num.toLocaleString() : (Math.round(num * 10) / 10).toFixed(1);
+    return `${currencyPrefix}${formatted}${isWinnerDisplay ? ' Trillion' : ' T'}`;
   }
   if (absVal >= 1_000_000_000) {
     const num = val / 1_000_000_000;
-    return `${num % 1 === 0 ? num : num.toFixed(1)} B`;
+    const formatted = num % 1 === 0 ? num.toLocaleString() : (Math.round(num * 10) / 10).toFixed(1);
+    return `${currencyPrefix}${formatted}${isWinnerDisplay ? ' Billion' : ' B'}`;
   }
   if (absVal >= 1_000_000) {
     const num = val / 1_000_000;
-    return `${num % 1 === 0 ? num : num.toFixed(1)} M`;
+    const formatted = num % 1 === 0 ? num.toLocaleString() : (Math.round(num * 10) / 10).toFixed(1);
+    return `${currencyPrefix}${formatted}${isWinnerDisplay ? ' Million' : ' M'}`;
   }
   if (absVal >= 10_000) {
     const num = val / 1_000;
-    return `${num % 1 === 0 ? num : num.toFixed(1)} K`;
+    const formatted = num % 1 === 0 ? num.toLocaleString() : (Math.round(num * 10) / 10).toFixed(1);
+    return `${currencyPrefix}${formatted}${isWinnerDisplay ? ' Thousand' : ' K'}`;
   }
 
-  return Math.round(val).toLocaleString();
+  // For regular numbers (including decimals like 6.2):
+  if (!Number.isInteger(val)) {
+    const rounded = Math.round(val * 10) / 10;
+    const formatted = rounded % 1 === 0 ? rounded.toLocaleString() : rounded.toFixed(1);
+    return `${currencyPrefix}${formatted}`;
+  }
+
+  return `${currencyPrefix}${val.toLocaleString()}`;
 }
 
 function getRankBadgeStyle(rank: number) {
@@ -281,24 +338,58 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
 
       <Sequence durationInFrames={chartDuration}>
         <AbsoluteFill style={{ opacity: chartOpacity }}>
-          {/* Header Topic with proper top padding */}
-          <div style={{ 
-            position: 'absolute',
-            top: 60,
-            width: '100%',
-            opacity: titleOpacity, 
-            transform: `scale(${titleScale})`, 
-            fontSize: 46, 
-            fontWeight: 700, 
-            lineHeight: 1.25,
-            textAlign: 'center',
-            textShadow: '3px 3px 12px rgba(0,0,0,0.7)',
-            color: '#f8f9fa',
-            padding: '0 45px',
-            boxSizing: 'border-box'
-          }}>
-            {topic || "Animated Line Chart"}
-          </div>
+          {/* Header Topic with proper top padding and centered year line */}
+          {(() => {
+            const { mainTitle, yearText } = splitTitleAndYears(topic || "Animated Line Chart");
+            return (
+              <div style={{ 
+                position: 'absolute',
+                top: 48,
+                width: '100%',
+                opacity: titleOpacity, 
+                transform: `scale(${titleScale})`, 
+                textAlign: 'center',
+                padding: '0 45px',
+                boxSizing: 'border-box',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                zIndex: 15
+              }}>
+                <div style={{
+                  fontSize: mainTitle.length > 28 ? 38 : 44, 
+                  fontWeight: 800, 
+                  lineHeight: 1.22,
+                  textAlign: 'center',
+                  textShadow: '3px 3px 12px rgba(0,0,0,0.8)',
+                  color: '#f8f9fa',
+                }}>
+                  {mainTitle}
+                </div>
+                {yearText && (
+                  <div style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 26,
+                    fontWeight: 800,
+                    letterSpacing: '1.5px',
+                    color: '#38bdf8',
+                    backgroundColor: 'rgba(15, 23, 42, 0.82)',
+                    border: '1.5px solid rgba(56, 189, 248, 0.45)',
+                    padding: '2px 18px',
+                    borderRadius: 999,
+                    boxShadow: '0 4px 14px rgba(0,0,0,0.5), 0 0 12px rgba(56, 189, 248, 0.25)',
+                    textShadow: '0 2px 6px rgba(0,0,0,0.6)',
+                  }}>
+                    {yearText}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Clean Fixed Legend Overlay (Names & Colors) - Rock-solid stable layout */}
           {(() => {
@@ -561,46 +652,176 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
             </div>
           )}
 
-          {/* Moving Avatars at the head of each line (Circles ONLY - No overlapping text) */}
-          {paths.map((pathData, idx) => {
-            const p1 = pathData.points[currI];
-            const p2 = pathData.points[nextI];
-            
-            const currentY = interpolate(frac, [0, 1], [p1.y, p2.y]);
+          {/* Moving Balls & Big Non-Overlapping Live Numbers to the Right */}
+          {(() => {
             const avatarSize = 78;
+            const ballRadius = avatarSize / 2;
+
+            // 1. Calculate positions and live values for each ball
+            const rawBallData = paths.map((pathData, idx) => {
+              const p1 = pathData.points[currI];
+              const p2 = pathData.points[nextI];
+              const currentY = interpolate(frac, [0, 1], [p1.y, p2.y]);
+              const currentVal = interpolate(frac, [0, 1], [p1.val, p2.val]);
+              return {
+                idx,
+                pathData,
+                currentY,
+                currentVal,
+                targetY: currentY,
+              };
+            });
+
+            // 2. Anti-overlap relaxation algorithm: sort top-to-bottom and repel overlapping badges
+            const sorted = [...rawBallData].sort((a, b) => a.currentY - b.currentY);
+            const MIN_SEPARATION = 46;
+
+            for (let iter = 0; iter < 8; iter++) {
+              for (let i = 0; i < sorted.length - 1; i++) {
+                const diff = sorted[i + 1].targetY - sorted[i].targetY;
+                if (diff < MIN_SEPARATION) {
+                  const overlap = (MIN_SEPARATION - diff) / 2;
+                  sorted[i].targetY -= overlap;
+                  sorted[i + 1].targetY += overlap;
+                }
+              }
+              // Gentle spring pull toward natural ball center
+              for (let i = 0; i < sorted.length; i++) {
+                sorted[i].targetY += (sorted[i].currentY - sorted[i].targetY) * 0.12;
+              }
+            }
+
+            const resolvedMap = new Map<number, { targetY: number; currentY: number; currentVal: number }>();
+            sorted.forEach((item) => {
+              resolvedMap.set(item.idx, {
+                targetY: item.targetY,
+                currentY: item.currentY,
+                currentVal: item.currentVal,
+              });
+            });
+
+            // Right-side number placement X (clamped within screen margin)
+            const numberLeft = Math.min(curX + ballRadius + 14, width - 155);
 
             return (
-              <div 
-                key={idx} 
-                style={{
-                  position: 'absolute',
-                  left: curX - avatarSize / 2,
-                  top: currentY - avatarSize / 2,
-                  width: avatarSize,
-                  height: avatarSize,
-                  borderRadius: '50%',
-                  backgroundColor: '#1e293b',
-                  border: `5px solid ${pathData.color}`,
-                  boxShadow: `0 6px 18px rgba(0,0,0,0.7), 0 0 16px ${pathData.color}99`,
-                  overflow: 'hidden',
-                  zIndex: 10,
-                  opacity: interpolate(frame, [15, 30], [0, 1], { extrapolateRight: 'clamp' }),
-                  pointerEvents: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                {pathData.item.image_url ? (
-                  <Img src={pathData.item.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                ) : (
-                  <span style={{ fontSize: 22, fontWeight: 800, color: pathData.color }}>
-                    {pathData.item.label.slice(0, 2).toUpperCase()}
-                  </span>
-                )}
-              </div>
+              <>
+                {/* Connecting indicator lines if number badge was vertically shifted to avoid overlap */}
+                <svg
+                  width={width}
+                  height={height}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    pointerEvents: 'none',
+                    zIndex: 9,
+                  }}
+                >
+                  {paths.map((pathData, idx) => {
+                    const pos = resolvedMap.get(idx);
+                    if (!pos) return null;
+                    const isShifted = Math.abs(pos.targetY - pos.currentY) > 8;
+                    if (!isShifted) return null;
+
+                    return (
+                      <path
+                        key={`conn-${idx}`}
+                        d={`M ${curX + ballRadius} ${pos.currentY} C ${curX + ballRadius + 18} ${pos.currentY}, ${numberLeft - 16} ${pos.targetY}, ${numberLeft} ${pos.targetY}`}
+                        fill="none"
+                        stroke={pathData.color}
+                        strokeWidth={2.5}
+                        strokeDasharray="4 4"
+                        opacity={0.7}
+                      />
+                    );
+                  })}
+                </svg>
+
+                {/* The Moving Balls (Circular Avatars) */}
+                {paths.map((pathData, idx) => {
+                  const pos = resolvedMap.get(idx);
+                  const currentY = pos ? pos.currentY : chartY;
+
+                  return (
+                    <div
+                      key={`ball-${idx}`}
+                      style={{
+                        position: 'absolute',
+                        left: curX - ballRadius,
+                        top: currentY - ballRadius,
+                        width: avatarSize,
+                        height: avatarSize,
+                        borderRadius: '50%',
+                        backgroundColor: '#1e293b',
+                        border: `5px solid ${pathData.color}`,
+                        boxShadow: `0 6px 18px rgba(0,0,0,0.7), 0 0 16px ${pathData.color}99`,
+                        overflow: 'hidden',
+                        zIndex: 10,
+                        opacity: interpolate(frame, [15, 30], [0, 1], { extrapolateRight: 'clamp' }),
+                        pointerEvents: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      {pathData.item.image_url ? (
+                        <Img src={pathData.item.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <span style={{ fontSize: 22, fontWeight: 800, color: pathData.color }}>
+                          {pathData.item.label.slice(0, 2).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Big Non-Overlapping Live Numbers on the Right of the Balls */}
+                {paths.map((pathData, idx) => {
+                  const pos = resolvedMap.get(idx);
+                  if (!pos) return null;
+
+                  return (
+                    <div
+                      key={`num-${idx}`}
+                      style={{
+                        position: 'absolute',
+                        left: numberLeft,
+                        top: pos.targetY - 22,
+                        height: 44,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '0 14px',
+                        backgroundColor: 'rgba(15, 23, 42, 0.92)',
+                        backdropFilter: 'blur(8px)',
+                        border: `2px solid ${pathData.color}`,
+                        borderRadius: 999,
+                        boxShadow: `0 4px 14px rgba(0,0,0,0.65), 0 0 14px ${pathData.color}55`,
+                        zIndex: 12,
+                        pointerEvents: 'none',
+                        opacity: interpolate(frame, [15, 30], [0, 1], { extrapolateRight: 'clamp' }),
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 27,
+                          fontWeight: 900,
+                          color: pathData.color,
+                          textShadow: `0 0 12px ${pathData.color}66`,
+                          fontVariantNumeric: 'tabular-nums',
+                          fontFeatureSettings: '"tnum"',
+                          letterSpacing: '0.5px',
+                        }}
+                      >
+                        {formatNumberWithUnit(pos.currentVal, y_axis_label)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </>
             );
-          })}
+          })()}
 
           {/* Dynamic Timeline Text (Slightly smaller size & pure White color) */}
           <div style={{
@@ -851,7 +1072,7 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
             borderRadius: 28,
             boxShadow: '0 8px 20px rgba(0,0,0,0.5)'
           }}>
-            {formatNumberWithUnit(winner.finalValue, y_axis_label)}
+            {formatNumberWithUnit(winner.finalValue, y_axis_label, true)}
           </div>
 
           {data_json.end_title && data_json.end_title.trim() && (

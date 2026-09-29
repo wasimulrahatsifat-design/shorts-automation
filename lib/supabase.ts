@@ -27,6 +27,10 @@ export function getSupabaseConfigs(): SupabaseConfig[] {
     const cleanUrl = url.trim();
     const cleanKey = key.trim();
     if (!cleanUrl || !cleanKey || seenUrls.has(cleanUrl)) return;
+    if (cleanUrl.includes('krtdupjglmlhumcbsxke.supabase.co')) {
+      console.warn('[Supabase] Ignoring dead/paused project krtdupjglmlhumcbsxke.supabase.co');
+      return;
+    }
     seenUrls.add(cleanUrl);
     configs.push({
       url: cleanUrl,
@@ -78,13 +82,24 @@ export function isQuotaOrRestrictedError(error: any): boolean {
     status === '402' ||
     status === 429 ||
     status === '429' ||
+    status === 404 ||
+    status === 500 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504 ||
     msg.includes('exceed_egress_quota') ||
     msg.includes('egress') ||
     msg.includes('quota') ||
     msg.includes('restricted') ||
     msg.includes('payment required') ||
     msg.includes('spend cap') ||
-    msg.includes('billing')
+    msg.includes('billing') ||
+    msg.includes('fetch failed') ||
+    msg.includes('enotfound') ||
+    msg.includes('econnrefused') ||
+    msg.includes('etimedout') ||
+    msg.includes('network') ||
+    msg.includes('getaddrinfo')
   );
 }
 
@@ -196,12 +211,10 @@ export async function uploadToStorageWithFailover(
         });
 
       if (error) {
-        if (isQuotaOrRestrictedError(error)) {
-          markProjectExhausted(config.index, error.message);
-          lastError = error;
-          continue;
-        }
-        throw error;
+        console.warn(`[Supabase Storage Failover] Upload failed on [${config.url}]:`, error.message || error);
+        markProjectExhausted(config.index, error.message);
+        lastError = error;
+        continue;
       }
 
       const { data: publicUrlData } = client.storage.from(bucket).getPublicUrl(path);
@@ -211,12 +224,10 @@ export async function uploadToStorageWithFailover(
         config,
       };
     } catch (err: any) {
-      if (isQuotaOrRestrictedError(err)) {
-        markProjectExhausted(config.index, err.message);
-        lastError = err;
-        continue;
-      }
-      throw err;
+      console.warn(`[Supabase Storage Failover] Exception on [${config.url}]:`, err.message || err);
+      markProjectExhausted(config.index, err.message);
+      lastError = err;
+      continue;
     }
   }
 

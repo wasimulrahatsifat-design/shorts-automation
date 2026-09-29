@@ -83,6 +83,7 @@ export default function Home() {
   const [cropTargetKeyword, setCropTargetKeyword] = useState<string | null>(null);
   const [rawCropImageSrc, setRawCropImageSrc] = useState<string | null>(null);
   const [rawCropImgSize, setRawCropImgSize] = useState<{ width: number; height: number }>({ width: 300, height: 300 });
+  const [cropAspectRatio, setCropAspectRatio] = useState<'1:1' | '16:11'>('1:1');
   const [cropScale, setCropScale] = useState<number>(1);
   const [cropPan, setCropPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDraggingCrop, setIsDraggingCrop] = useState(false);
@@ -380,8 +381,12 @@ export default function Home() {
     const img = new Image();
     img.onload = () => {
       setRawCropImgSize({ width: img.naturalWidth, height: img.naturalHeight });
-      const VIEWPORT_W = 320;
-      const VIEWPORT_H = 220;
+      const isDataComp = videoFormat === 'Data Comparison' || (draftJson && draftJson.includes('"items"'));
+      const initialRatio: '1:1' | '16:11' = isDataComp ? '1:1' : '16:11';
+      setCropAspectRatio(initialRatio);
+
+      const VIEWPORT_W = initialRatio === '1:1' ? 280 : 320;
+      const VIEWPORT_H = initialRatio === '1:1' ? 280 : 220;
       // Default to fit entire image cleanly inside box without cutting off!
       const fitScale = Math.min(VIEWPORT_W / img.naturalWidth, VIEWPORT_H / img.naturalHeight);
       setCropScale(Number(Math.max(0.15, fitScale).toFixed(2)));
@@ -391,6 +396,15 @@ export default function Home() {
       setCropModalOpen(true);
     };
     img.src = imageSrc;
+  };
+
+  const handleRatioChange = (ratio: '1:1' | '16:11') => {
+    setCropAspectRatio(ratio);
+    const VIEWPORT_W = ratio === '1:1' ? 280 : 320;
+    const VIEWPORT_H = ratio === '1:1' ? 280 : 220;
+    const fitScale = Math.min(VIEWPORT_W / rawCropImgSize.width, VIEWPORT_H / rawCropImgSize.height);
+    setCropScale(Number(Math.max(0.15, fitScale).toFixed(2)));
+    setCropPan({ x: 0, y: 0 });
   };
 
   const handleFileUpload = (keyword: string, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -445,16 +459,16 @@ export default function Home() {
   };
 
   const handleFitCrop = () => {
-    const VIEWPORT_W = 320;
-    const VIEWPORT_H = 220;
+    const VIEWPORT_W = cropAspectRatio === '1:1' ? 280 : 320;
+    const VIEWPORT_H = cropAspectRatio === '1:1' ? 280 : 220;
     const fitScale = Math.min(VIEWPORT_W / rawCropImgSize.width, VIEWPORT_H / rawCropImgSize.height);
     setCropScale(Number(fitScale.toFixed(2)));
     setCropPan({ x: 0, y: 0 });
   };
 
   const handleFillCrop = () => {
-    const VIEWPORT_W = 320;
-    const VIEWPORT_H = 220;
+    const VIEWPORT_W = cropAspectRatio === '1:1' ? 280 : 320;
+    const VIEWPORT_H = cropAspectRatio === '1:1' ? 280 : 220;
     const fillScale = Math.max(VIEWPORT_W / rawCropImgSize.width, VIEWPORT_H / rawCropImgSize.height);
     setCropScale(Number(fillScale.toFixed(2)));
     setCropPan({ x: 0, y: 0 });
@@ -465,10 +479,11 @@ export default function Home() {
 
     const img = new Image();
     img.onload = () => {
-      const VIEWPORT_W = 320;
-      const VIEWPORT_H = 220;
-      const OUT_W = 640;
-      const OUT_H = 440;
+      const isSquare = cropAspectRatio === '1:1';
+      const VIEWPORT_W = isSquare ? 280 : 320;
+      const VIEWPORT_H = isSquare ? 280 : 220;
+      const OUT_W = isSquare ? 600 : 640;
+      const OUT_H = isSquare ? 600 : 440;
       const canvas = document.createElement('canvas');
       canvas.width = OUT_W;
       canvas.height = OUT_H;
@@ -1497,16 +1512,16 @@ export default function Home() {
                       </span>
                       
                       {req.file ? (
-                        <div className="relative w-32 h-24 rounded-xl overflow-hidden border-2 border-emerald-500 shadow-md bg-slate-950 flex items-center justify-center">
-                          <img src={req.file} alt={req.keyword} className="w-full h-full object-contain" />
-                          <div className="absolute top-0 right-0 bg-emerald-500 text-white rounded-bl-lg px-2 py-0.5 text-[9px] font-black tracking-wider">
-                            ✓ Saved
+                        <div className={`relative ${videoFormat === 'Data Comparison' ? 'w-24 h-24 rounded-full border-4' : 'w-32 h-24 rounded-xl border-2'} overflow-hidden border-emerald-500 shadow-md bg-slate-950 flex items-center justify-center`}>
+                          <img src={req.file} alt={req.keyword} className="w-full h-full object-cover" />
+                          <div className={`absolute ${videoFormat === 'Data Comparison' ? 'bottom-0 inset-x-0 bg-emerald-500/90 text-center py-0.5' : 'top-0 right-0 bg-emerald-500 rounded-bl-lg px-2 py-0.5'} text-white text-[9px] font-black tracking-wider`}>
+                            ✓ {videoFormat === 'Data Comparison' ? '1:1' : 'Saved'}
                           </div>
                         </div>
                       ) : (
-                        <div className="w-32 h-24 rounded-xl bg-gray-100 dark:bg-gray-700/60 border-2 border-dashed border-gray-300 dark:border-gray-600 flex flex-col items-center justify-center text-gray-400 text-xs gap-1 font-semibold">
+                        <div className={`${videoFormat === 'Data Comparison' ? 'w-24 h-24 rounded-full' : 'w-32 h-24 rounded-xl'} bg-gray-100 dark:bg-gray-700/60 border-2 border-dashed border-gray-300 dark:border-gray-600 flex flex-col items-center justify-center text-gray-400 text-xs gap-1 font-semibold`}>
                           <span>📷</span>
-                          <span>Image Required</span>
+                          <span className="text-[10px]">{videoFormat === 'Data Comparison' ? '1:1 Required' : 'Image Required'}</span>
                         </div>
                       )}
                       
@@ -1678,14 +1693,48 @@ export default function Home() {
                   <span>Framing Guidelines:</span>
                 </p>
                 <p>
-                  Drag the image or use the zoom slider to position the subject. Click <strong>Fit</strong> to display the entire image within frame.
+                  Drag the image or use the zoom slider to position the subject. {cropAspectRatio === '1:1' ? 'The circle shows the exact avatar frame.' : 'Click Fit to display the entire image within frame.'}
                 </p>
               </div>
 
-              {/* Viewport Box (320px x 220px) */}
+              {/* Ratio Selector */}
+              <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-2xl border border-slate-200 dark:border-slate-700">
+                <span className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                  <span>📐</span>
+                  <span>Frame Ratio:</span>
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleRatioChange('1:1')}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-xl transition flex items-center gap-1 ${
+                      cropAspectRatio === '1:1'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
+                    }`}
+                  >
+                    <span>⚪</span>
+                    <span>1:1 Square {videoFormat === 'Data Comparison' ? '(Data Comparison)' : ''}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRatioChange('16:11')}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-xl transition flex items-center gap-1 ${
+                      cropAspectRatio === '16:11'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
+                    }`}
+                  >
+                    <span>▭</span>
+                    <span>16:11 Rectangle</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Viewport Box */}
               <div className="flex flex-col items-center">
                 <div
-                  className="relative w-[320px] h-[220px] bg-slate-950 rounded-2xl overflow-hidden shadow-inner border-2 border-dashed border-blue-500 select-none cursor-grab active:cursor-grabbing flex items-center justify-center touch-none"
+                  className={`relative ${cropAspectRatio === '1:1' ? 'w-[280px] h-[280px]' : 'w-[320px] h-[220px]'} bg-slate-950 rounded-2xl overflow-hidden shadow-inner border-2 border-dashed border-blue-500 select-none cursor-grab active:cursor-grabbing flex items-center justify-center touch-none transition-all duration-200`}
                   onMouseDown={handleCropMouseDown}
                   onMouseMove={handleCropMouseMove}
                   onMouseUp={handleCropMouseUp}
@@ -1695,6 +1744,14 @@ export default function Home() {
                   onTouchEnd={handleCropMouseUp}
                   onWheel={handleCropWheel}
                 >
+                  {/* Circular Avatar Guide for 1:1 Square */}
+                  {cropAspectRatio === '1:1' && (
+                    <div className="absolute inset-2 rounded-full border-2 border-dashed border-amber-400/80 pointer-events-none z-10 shadow-[0_0_0_9999px_rgba(15,23,42,0.4)] flex items-center justify-center">
+                      <span className="text-[10px] font-bold text-amber-300/80 uppercase tracking-widest bg-black/60 px-2 py-0.5 rounded-full pointer-events-none">
+                        1:1 Avatar Frame
+                      </span>
+                    </div>
+                  )}
                   {/* Visual Center Guides */}
                   <div className="absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3 border border-white/10 opacity-30 z-10">
                     <div className="border-r border-b border-white/20"></div>

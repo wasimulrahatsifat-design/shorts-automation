@@ -1,7 +1,7 @@
 import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import { findVideoAcrossProjects, uploadToStorageWithFailover, getActiveSupabase } from './supabase-helper.mjs';
+import { findVideoAcrossProjects, uploadToStorageWithFailover, getActiveSupabase, setActiveProjectIndex } from './supabase-helper.mjs';
 
 async function main() {
   const videoId = process.env.VIDEO_ID;
@@ -20,7 +20,10 @@ async function main() {
     process.exit(1);
   }
 
-  const { video: row, client: videoClient } = found;
+  const { video: row, client: videoClient, config: videoConfig } = found;
+  if (videoConfig && typeof videoConfig.index === 'number') {
+    setActiveProjectIndex(videoConfig.index);
+  }
 
   // 2. Prepare and sanitize props for Remotion
   const props = {

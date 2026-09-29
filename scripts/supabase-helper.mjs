@@ -12,6 +12,10 @@ export function getSupabaseConfigs() {
     const cleanUrl = url.trim();
     const cleanKey = key.trim();
     if (!cleanUrl || !cleanKey || seenUrls.has(cleanUrl)) return;
+    if (cleanUrl.includes('krtdupjglmlhumcbsxke.supabase.co')) {
+      console.warn(`[Supabase] Excluding dead/expired project: ${cleanUrl}`);
+      return;
+    }
     seenUrls.add(cleanUrl);
     configs.push({
       url: cleanUrl,
@@ -56,13 +60,24 @@ export function isQuotaOrRestrictedError(error) {
     status === '402' ||
     status === 429 ||
     status === '429' ||
+    status === 404 ||
+    status === 500 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504 ||
     msg.includes('exceed_egress_quota') ||
     msg.includes('egress') ||
     msg.includes('quota') ||
     msg.includes('restricted') ||
     msg.includes('payment required') ||
     msg.includes('spend cap') ||
-    msg.includes('billing')
+    msg.includes('billing') ||
+    msg.includes('fetch failed') ||
+    msg.includes('enotfound') ||
+    msg.includes('econnrefused') ||
+    msg.includes('etimedout') ||
+    msg.includes('network') ||
+    msg.includes('getaddrinfo')
   );
 }
 
@@ -105,6 +120,12 @@ export function markProjectExhausted(index, reason) {
   }
 }
 
+export function setActiveProjectIndex(index) {
+  if (typeof index === 'number') {
+    activeProjectIndex = index;
+  }
+}
+
 export async function findVideoAcrossProjects(videoId) {
   const configs = getSupabaseConfigs();
   for (const config of configs) {
@@ -120,7 +141,7 @@ export async function findVideoAcrossProjects(videoId) {
         return { video: data, client, config };
       }
     } catch (e) {
-      // Continue searching
+      markProjectExhausted(config.index, e.message);
     }
   }
   return null;
@@ -141,12 +162,10 @@ export async function uploadToStorageWithFailover(bucket, path, body, options = 
         });
 
       if (error) {
-        if (isQuotaOrRestrictedError(error)) {
-          markProjectExhausted(config.index, error.message);
-          lastError = error;
-          continue;
-        }
-        throw error;
+        console.warn(`[Supabase Storage Failover] Upload failed on [${config.url}]:`, error.message || error);
+        markProjectExhausted(config.index, error.message);
+        lastError = error;
+        continue;
       }
 
       const { data: publicUrlData } = client.storage.from(bucket).getPublicUrl(path);
@@ -156,12 +175,10 @@ export async function uploadToStorageWithFailover(bucket, path, body, options = 
         config,
       };
     } catch (err) {
-      if (isQuotaOrRestrictedError(err)) {
-        markProjectExhausted(config.index, err.message);
-        lastError = err;
-        continue;
-      }
-      throw err;
+      console.warn(`[Supabase Storage Failover] Exception on [${config.url}]:`, err.message || err);
+      markProjectExhausted(config.index, err.message);
+      lastError = err;
+      continue;
     }
   }
 
