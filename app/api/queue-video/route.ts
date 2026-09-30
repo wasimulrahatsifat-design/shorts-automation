@@ -133,6 +133,14 @@ export async function POST(request: Request) {
       finalDuration = sim.totalSeconds;
     } else if (data_json.format === 'Arena Clash' && data_json.duration_seconds) {
       finalDuration = data_json.duration_seconds;
+    } else if (data_json.format === 'AestheticVideo' && data_json.scenes) {
+      let totalFrames = 0;
+      const scenes = data_json.scenes;
+      for (let i = 0; i < scenes.length; i++) {
+        const dur = scenes[i].duration || 125;
+        totalFrames += i === 0 ? dur : (dur - 15);
+      }
+      finalDuration = Math.round(totalFrames / 30);
     } else {
       // Data Comparison: calibrate duration so script is never cut off
       let dcDuration = parseInt(duration) || data_json.duration_seconds || 15;
@@ -146,8 +154,11 @@ export async function POST(request: Request) {
 
     // Check if background music is enabled
     const isBgMusicEnabled = body.bg_music_enabled !== false && data_json.bg_music_enabled !== false;
-    const finalBgMusicUrl = isBgMusicEnabled ? (body.bg_music_url || data_json.bg_music_url || undefined) : undefined;
-    const finalBgMusicVolume = isBgMusicEnabled ? (typeof body.bg_music_volume === 'number' ? body.bg_music_volume : data_json.bg_music_volume) : undefined;
+    let finalBgMusicUrl = isBgMusicEnabled ? (body.bg_music_url || data_json.bg_music_url || undefined) : undefined;
+    if (isBgMusicEnabled && !finalBgMusicUrl && data_json.format === 'AestheticVideo') {
+      finalBgMusicUrl = '/audio/lofi_chill.mp3';
+    }
+    const finalBgMusicVolume = isBgMusicEnabled ? (typeof body.bg_music_volume === 'number' ? body.bg_music_volume : (data_json.bg_music_volume ?? 0.35)) : undefined;
 
     // Insert into Supabase with failover
     const { data: dbData, error } = await executeWithSupabaseFailover((client) =>

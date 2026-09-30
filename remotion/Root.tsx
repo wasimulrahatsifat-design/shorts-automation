@@ -195,35 +195,58 @@ export const RemotionRoot: React.FC = () => {
       <Composition
         id="AestheticVideo"
         component={AestheticVideo}
-        durationInFrames={750}
+        durationInFrames={495}
         fps={30}
         width={1080}
         height={1920}
         calculateMetadata={({ props }: any) => {
           if (props.data_json?.scenes && Array.isArray(props.data_json.scenes)) {
+            const scenes = props.data_json.scenes;
             let totalFrames = 0;
-            for (const s of props.data_json.scenes) {
-              totalFrames += s.duration || 150;
+            for (let i = 0; i < scenes.length; i++) {
+              const dur = scenes[i].duration || 125;
+              totalFrames += i === 0 ? dur : (dur - 15);
             }
-            return { durationInFrames: totalFrames };
+            return { durationInFrames: Math.max(90, totalFrames) };
           }
           return {
-            durationInFrames: props.data_json?.duration_seconds ? props.data_json.duration_seconds * 30 : 750
+            durationInFrames: props.data_json?.duration_seconds ? props.data_json.duration_seconds * 30 : 495
           };
         }}
         defaultProps={{
           data_json: {
-            topic: 'Aesthetic Demo',
+            topic: 'Dreamcore Cherry Blossom Meadow',
             format: "AestheticVideo",
+            duration_seconds: 17,
+            location_description: "A surreal, misty meadow with glowing pink and white blooming cherry blossom trees under a soft pastel lavender sky.",
             scenes: [
-              { image_keyword: "Cherry blossom forest", duration: 150 },
-              { image_keyword: "Liminal pool room", duration: 150 },
-              { image_keyword: "Neon city at night", duration: 150 },
-              { image_keyword: "Vaporwave sunset", duration: 150 },
-              { image_keyword: "Empty mall from the 90s", duration: 150 }
+              {
+                camera_angle: "Wide Establishing View",
+                camera_motion: "zoom-in",
+                image_keyword: "Cinematic wide establishing shot of an ethereal dreamcore meadow with blooming white and pink cherry blossom trees, pastel sky, volumetric golden-hour haze, photorealistic 9:16",
+                duration: 125
+              },
+              {
+                camera_angle: "Dramatic Low-Angle Shot",
+                camera_motion: "tilt-up",
+                image_keyword: "In the exact same meadow, ground-level dramatic low-angle shot looking straight up into the glowing canopy of cherry blossom branches with sunbeams filtering through, 9:16",
+                duration: 125
+              },
+              {
+                camera_angle: "Medium Eye-Level Tracking Shot",
+                camera_motion: "pan-right",
+                image_keyword: "In the exact same meadow, medium eye-level tracking view gliding along the weathered mossy tree trunk with pink flower petals scattered across gentle grass, 9:16",
+                duration: 125
+              },
+              {
+                camera_angle: "High-Angle Overhead View",
+                camera_motion: "zoom-out",
+                image_keyword: "In the exact same meadow, high-angle overhead bird's eye view looking down upon the glowing cherry blossom tree and soft rolling hill covered in fallen petals, 9:16",
+                duration: 125
+              }
             ],
           },
-          topic: 'Aesthetic Demo',
+          topic: 'Dreamcore Cherry Blossom Meadow',
         }}
       />
     </>
