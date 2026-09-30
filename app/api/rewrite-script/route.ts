@@ -40,15 +40,29 @@ export async function POST(request: Request) {
       - "questions": Keep this exact questions array or update it if you changed the script: ${currentQuestions}
       Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
     } else {
-      prompt = `Rewrite this voiceover script to specifically fit a ${targetDuration}-second YouTube Short pacing. Make it engaging and fast-paced.
+      const parsedDuration = parseInt(targetDuration) || 15;
+      const speakingSeconds = Math.max(10, parsedDuration - 3);
+      const minWords = Math.round(speakingSeconds * 2.3);
+      const maxWords = Math.round(speakingSeconds * 2.6);
+      const numSteps = parsedDuration <= 20 ? '5 to 7' : parsedDuration <= 35 ? '7 to 10' : '10 to 14';
+
+      prompt = `Rewrite this voiceover script to specifically fit a ${parsedDuration}-second YouTube Short pacing.
+      The video animates a racing line chart for ${speakingSeconds} seconds followed by a 3-second winner reveal.
+      
+      CRITICAL TIMING & EXACT WORD COUNT (${parsedDuration}s video):
+      - The script MUST contain between ${minWords} and ${maxWords} words so it takes EXACTLY ${speakingSeconds} seconds to speak aloud at standard energetic speed.
+      - DO NOT make it shorter than ${minWords} words (that would cause silence before the race ends).
+      - DO NOT make it longer than ${maxWords} words (that would cause the speech to cut off or overlap the winner screen).
+      - Narrate the opening starting lineup, dramatic overtakes in the middle, and the thrilling final stretch!
+      
       Current script: "${currentScript}"
       The current year is 2026. Make sure to include up-to-date statistical data and projections up to 2026 if applicable.
       
       You MUST return a JSON object with EXACTLY these fields:
-      - "script": The rewritten voiceover script.
+      - "script": The rewritten voiceover script strictly between ${minWords} and ${maxWords} words.
       - "x_axis_label": Label for the X-axis (e.g. "Year", "Month").
       - "y_axis_label": Label for the Y-axis (e.g. "Monthly Players", "Revenue").
-      - "timeline_labels": An array of strings representing the time steps (e.g., ["2018", "2019", "2020", "2021", "2022"]). MUST have at least 5 items.
+      - "timeline_labels": An array of ${numSteps} strings representing chronological time steps.
       - "items": Keep this exact data array, or update the labels/values to match the new script: ${currentItems}
       CRITICAL: The length of the "values" array for EACH item MUST perfectly match the length of the "timeline_labels" array.
       
@@ -67,6 +81,7 @@ export async function POST(request: Request) {
     // 3. Generate New TTS
     let tts_url = null;
     let tts_urls: string[] = [];
+    let finalDuration = parseInt(targetDuration) || 15;
     const voiceId = row.data_json?.voice_id || 'pNInz6obpgDQGcFmaJgB'; // Adam default
 
     const fetchElevenLabs = (text: string) => fetchElevenLabsTTS(text, voiceId);
@@ -125,6 +140,12 @@ export async function POST(request: Request) {
         const ttsFileName = `tts_${crypto.randomUUID()}.mp3`;
         const { publicUrl } = await uploadToStorageWithFailover('shorts', ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
         tts_url = publicUrl;
+
+        if (videoFormat === 'Data Comparison' || !videoFormat) {
+          const audioSeconds = audioBuffer.length / 16000;
+          const neededDuration = Math.ceil(audioSeconds + 3.0);
+          finalDuration = Math.max(finalDuration, neededDuration);
+        }
       }
     } catch (ttsError: any) {
       console.error('TTS Generation failed:', ttsError);
@@ -138,7 +159,7 @@ export async function POST(request: Request) {
       items: newItems,
       tts_url: tts_url,
       tts_urls: tts_urls,
-      duration_seconds: parseInt(targetDuration)
+      duration_seconds: finalDuration
     };
 
     const { error: updateError } = await videoClient

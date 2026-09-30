@@ -26,6 +26,7 @@ export async function POST(request: Request) {
     // Generate TTS Audio
     let tts_url = null;
     let tts_urls = [];
+    let singleAudioBuffer: Buffer | null = null;
     const voiceId = data_json.voice_id || 'pNInz6obpgDQGcFmaJgB'; // Default to Adam if not specified
     
     const fetchElevenLabs = (text: string) => fetchElevenLabsTTS(text, voiceId);
@@ -95,6 +96,7 @@ export async function POST(request: Request) {
         const elResponse = await fetchElevenLabs(fullScript);
         if (!elResponse.ok) throw new Error(`ElevenLabs API error: ${elResponse.statusText}`);
         const audioBuffer = Buffer.from(await elResponse.arrayBuffer());
+        singleAudioBuffer = audioBuffer;
         const ttsFileName = `tts_${crypto.randomUUID()}.mp3`;
         const { publicUrl } = await uploadToStorageWithFailover('shorts', ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
         tts_url = publicUrl;
@@ -131,6 +133,15 @@ export async function POST(request: Request) {
       finalDuration = sim.totalSeconds;
     } else if (data_json.format === 'Arena Clash' && data_json.duration_seconds) {
       finalDuration = data_json.duration_seconds;
+    } else {
+      // Data Comparison: calibrate duration so script is never cut off
+      let dcDuration = parseInt(duration) || data_json.duration_seconds || 15;
+      if (singleAudioBuffer) {
+        const audioSeconds = (singleAudioBuffer as Buffer).length / 16000;
+        const neededDuration = Math.ceil(audioSeconds + 3.0);
+        dcDuration = Math.max(dcDuration, neededDuration);
+      }
+      finalDuration = dcDuration;
     }
 
     // Check if background music is enabled

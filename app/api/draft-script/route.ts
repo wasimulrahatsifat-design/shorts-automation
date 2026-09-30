@@ -135,6 +135,12 @@ Your scripts ALWAYS hook viewers in the first 2 seconds, keep them glued until t
       - "winner_id": The id string of the last standing contestant.
       Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
     } else {
+      const targetDuration = Math.max(15, parseInt(body.duration) || 15);
+      const speakingSeconds = Math.max(10, targetDuration - 3);
+      const minWords = Math.round(speakingSeconds * 2.3);
+      const maxWords = Math.round(speakingSeconds * 2.6);
+      const numSteps = targetDuration <= 20 ? '5 to 7' : targetDuration <= 35 ? '7 to 10' : '10 to 14';
+
       prompt = `${viralPersona}
       ${topicInstruction} The current year is 2026. Make sure to include up-to-date statistical data and projections up to 2026 if applicable.
       
@@ -143,14 +149,25 @@ Your scripts ALWAYS hook viewers in the first 2 seconds, keep them glued until t
       - Focus on dramatic competition, rapid surges, and shocking underdogs.
       - Angle: ${randomCompAngle}.
       - Unique entropy seed: ${randomSeed}.
+      
+      CRITICAL DURATION & SCRIPT PACING (USER SET DURATION = ${targetDuration} SECONDS):
+      - The total video duration is ${targetDuration} seconds: ${speakingSeconds} seconds of racing chart animation followed by 3 seconds for the dramatic Winner reveal screen.
+      - The voiceover script MUST be written to naturally take EXACTLY ${speakingSeconds} seconds to read aloud.
+      - EXACT WORD COUNT REQUIREMENT: The "script" MUST have between ${minWords} and ${maxWords} words.
+      - DO NOT make it shorter than ${minWords} words (otherwise the narration finishes early leaving silence before the video ends).
+      - DO NOT make it longer than ${maxWords} words (otherwise the speech will be cut off or run over the winner reveal).
+      - Narration structure:
+        * Opening: Hook and introducing the contenders at the starting line.
+        * Middle: Dramatic overtakes, sudden accelerations, and leader swaps.
+        * Climax: The intense final stretch and building anticipation for who takes 1st place!
 
       Return a structured JSON object with EXACTLY these fields:
-      - "topic": The generated topic as a string.
-      - "script": A short, fast-paced, highly engaging 10-15 second voiceover hook script for a YouTube Short.
-      - "x_axis_label": Label for the X-axis (e.g. "Year", "Timeline").
+      - "topic": The generated topic as a string. Include the year or month range in the topic if appropriate (e.g. "Fastest Growing Tech Companies 2018-2026" or "Top EV Sales Jan - Dec").
+      - "script": The voiceover narration script strictly between ${minWords} and ${maxWords} words to fit exactly ${speakingSeconds} seconds of speech.
+      - "x_axis_label": Label for the X-axis (e.g. "Year", "Month").
       - "y_axis_label": Label for the Y-axis (e.g. "Subscribers (M)", "Market Cap ($B)").
-      - "timeline_labels": An array of strings representing the time steps (e.g., ["2018", "2019", "2020", "2021", "2022", "2024", "2026"]). MUST have at least 5 items.
-      - "items": A REQUIRED array of at least 3 objects where each object MUST have "label" (string), "image_keyword" (string), and "values" (an array of numbers).
+      - "timeline_labels": An array of ${numSteps} chronological strings representing the time steps (e.g., years ["2018", "2019", "2020", "2021", "2022", "2024", "2026"] or months ["Jan", "Feb", "Mar", ...]).
+      - "items": A REQUIRED array of 3 to 5 objects where each object MUST have "label" (string), "image_keyword" (string), and "values" (an array of numbers).
       CRITICAL: The length of the "values" array for EACH item MUST perfectly match the length of the "timeline_labels" array.
       Do not wrap the response in markdown blocks like \`\`\`json, just return the raw JSON object.`;
     }
@@ -159,6 +176,9 @@ Your scripts ALWAYS hook viewers in the first 2 seconds, keep them glued until t
 
     const { topic, script } = generatedData;
     let dataPayload = { ...generatedData, type: videoFormat };
+    if (typeof body.duration !== 'undefined') {
+      dataPayload.duration_seconds = parseInt(body.duration) || 15;
+    }
 
     if (!topic) {
       throw new Error('Invalid data format returned from Gemini: missing topic.');

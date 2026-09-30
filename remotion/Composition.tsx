@@ -35,42 +35,69 @@ const resolveAudioUrl = (url?: string) => {
   const clean = url.startsWith('/') ? url.slice(1) : url;
   return staticFile(clean);
 };
+const MONTHS_PATTERN = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?|জানুয়ারি|ফেব্রুয়ারি|মার্চ|এপ্রিল|মে|জুন|জুলাই|আগস্ট|সেপ্টেম্বর|অক্টোবর|নভেম্বর|ডিসেম্বর)';
+const YEARS_PATTERN = '(?:19\\d{2}|20\\d{2}|১৯[০-৯]{2}|২০[০-৯]{2})';
 
-export function splitTitleAndYears(title: string): { mainTitle: string; yearText: string | null } {
-  if (!title) return { mainTitle: '', yearText: null };
+export function getComparisonTitleAndRange(title: string, labels?: string[]): { mainTitle: string; rangeText: string | null } {
+  if (!title) return { mainTitle: '', rangeText: null };
   const trimmed = title.trim();
 
-  // 1. Year range pattern: e.g. "(2010-2026)", "2010-2026", "2010 - 2026", "২০১০-২০২৬", "(২০১০ - ২০২৬)", "1990-2025"
-  const rangeRegex = /[\(\[\{]?\s*((?:19\d{2}|20\d{2}|১৯[০-৯]{2}|২০[০-৯]{2})\s*[-–—~toথেকে]+\s*(?:19\d{2}|20\d{2}|১৯[০-৯]{2}|২০[০-৯]{2}))\s*[\)\]\}]?/i;
-  const rangeMatch = trimmed.match(rangeRegex);
-  if (rangeMatch && rangeMatch[1]) {
-    const yearText = rangeMatch[1].trim();
-    let mainTitle = trimmed.replace(rangeMatch[0], '').replace(/\s{2,}/g, ' ').trim();
+  // 1. Month range pattern in title: e.g. "(January - December)", "Jan - Nov", "জানুয়ারি - ডিসেম্বর", "Jan to Oct"
+  const monthRangeRegex = new RegExp(`[\\(\\[\\{]?\\s*(${MONTHS_PATTERN}\\s*[-–—~toথেকে/]+\\s*${MONTHS_PATTERN}(?:\\s+${YEARS_PATTERN})?)\\s*[\\)\\]\\}]?`, 'i');
+  const monthRangeMatch = trimmed.match(monthRangeRegex);
+  if (monthRangeMatch && monthRangeMatch[1]) {
+    const rangeText = monthRangeMatch[1].replace(/[-–—~toথেকে/]+/g, ' – ').replace(/\s{2,}/g, ' ').trim();
+    let mainTitle = trimmed.replace(monthRangeMatch[0], '').replace(/\s{2,}/g, ' ').trim();
     mainTitle = mainTitle.replace(/[\s\-–—|:,]+$/, '').replace(/^[\s\-–—|:,]+/, '').trim();
-    return { mainTitle: mainTitle || trimmed, yearText };
+    return { mainTitle: mainTitle || trimmed, rangeText };
   }
 
-  // 2. Single year in parens/brackets e.g. "(2026)" or "[2026]" or "(২০২৬)"
-  const parenYearRegex = /[\(\[\{]\s*((?:19\d{2}|20\d{2}|১৯[০-৯]{2}|২০[০-৯]{2}))\s*[\)\]\}]/i;
+  // 2. Year range pattern in title: e.g. "(2010-2026)", "2010 - 2026", "২০১০-২০২৬", "(২০১০ - ২০২৬)", "1990-2025"
+  const yearRangeRegex = new RegExp(`[\\(\\[\\{]?\\s*(${YEARS_PATTERN}\\s*[-–—~toথেকে/]+\\s*${YEARS_PATTERN})\\s*[\\)\\]\\}]?`, 'i');
+  const yearRangeMatch = trimmed.match(yearRangeRegex);
+  if (yearRangeMatch && yearRangeMatch[1]) {
+    const rangeText = yearRangeMatch[1].replace(/[-–—~toথেকে/]+/g, ' – ').replace(/\s{2,}/g, ' ').trim();
+    let mainTitle = trimmed.replace(yearRangeMatch[0], '').replace(/\s{2,}/g, ' ').trim();
+    mainTitle = mainTitle.replace(/[\s\-–—|:,]+$/, '').replace(/^[\s\-–—|:,]+/, '').trim();
+    return { mainTitle: mainTitle || trimmed, rangeText };
+  }
+
+  // 3. Single year in parens/brackets e.g. "(2026)" or "[2026]" or "(২০২৬)"
+  const parenYearRegex = new RegExp(`[\\(\\[\\{]\\s*(${YEARS_PATTERN})\\s*[\\)\\]\\}]`, 'i');
   const parenMatch = trimmed.match(parenYearRegex);
   if (parenMatch && parenMatch[1]) {
-    const yearText = parenMatch[1].trim();
+    const rangeText = parenMatch[1].trim();
     let mainTitle = trimmed.replace(parenMatch[0], '').replace(/\s{2,}/g, ' ').trim();
     mainTitle = mainTitle.replace(/[\s\-–—|:,]+$/, '').replace(/^[\s\-–—|:,]+/, '').trim();
-    return { mainTitle: mainTitle || trimmed, yearText };
+    return { mainTitle: mainTitle || trimmed, rangeText };
   }
 
-  // 3. Standalone year at the end e.g. "Most Popular Movies 2026" or "... ২০২৬"
-  const endYearRegex = /\b((?:19\d{2}|20\d{2}|১৯[০-৯]{2}|২০[০-৯]{2}))\s*$/i;
+  // 4. Standalone year at the end e.g. "Most Popular Movies 2026" or "... ২০২৬"
+  const endYearRegex = new RegExp(`\\b(${YEARS_PATTERN})\\s*$`, 'i');
   const endMatch = trimmed.match(endYearRegex);
   if (endMatch && endMatch[1]) {
-    const yearText = endMatch[1].trim();
+    const rangeText = endMatch[1].trim();
     let mainTitle = trimmed.replace(endMatch[0], '').replace(/\s{2,}/g, ' ').trim();
     mainTitle = mainTitle.replace(/[\s\-–—|:,]+$/, '').replace(/^[\s\-–—|:,]+/, '').trim();
-    return { mainTitle: mainTitle || trimmed, yearText };
+    return { mainTitle: mainTitle || trimmed, rangeText };
   }
 
-  return { mainTitle: trimmed, yearText: null };
+  // 5. If no range found in the title string, fall back to timeline labels if available (e.g. labels[0] - labels[last])
+  if (labels && labels.length >= 2) {
+    const firstLabel = labels[0].trim();
+    const lastLabel = labels[labels.length - 1].trim();
+    if (firstLabel && lastLabel && firstLabel !== lastLabel) {
+      return { mainTitle: trimmed, rangeText: `${firstLabel} – ${lastLabel}` };
+    }
+  }
+
+  return { mainTitle: trimmed, rangeText: null };
+}
+
+// Backwards-compatible alias for any legacy callers
+export function splitTitleAndYears(title: string): { mainTitle: string; yearText: string | null } {
+  const { mainTitle, rangeText } = getComparisonTitleAndRange(title);
+  return { mainTitle, yearText: rangeText };
 }
 
 export function formatNumberWithUnit(val: number, yAxisLabel?: string, isWinnerDisplay?: boolean): string {
@@ -315,9 +342,22 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
       {/* Audio Track */}
       {data_json.tts_url && <Audio src={data_json.tts_url} volume={0.9} />}
 
-      {/* Background Music Track */}
+      {/* Background Music Track (plays during chart race, stops cleanly when Winner sequence begins) */}
       {data_json.bg_music_url && data_json.bg_music_enabled !== false && (
-        <Audio src={resolveAudioUrl(data_json.bg_music_url)} volume={data_json.bg_music_volume ?? 0.15} loop />
+        <Sequence durationInFrames={chartDuration}>
+          <Audio 
+            src={resolveAudioUrl(data_json.bg_music_url)} 
+            volume={(f) => {
+              const baseVol = data_json.bg_music_volume ?? 0.15;
+              // Smooth quick fade out right before chartDuration
+              return interpolate(f, [chartDuration - 15, chartDuration], [baseVol, 0], {
+                extrapolateLeft: 'clamp',
+                extrapolateRight: 'clamp',
+              });
+            }} 
+            loop 
+          />
+        </Sequence>
       )}
 
       {/* Graph Paper Grid Background */}
@@ -338,9 +378,9 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
 
       <Sequence durationInFrames={chartDuration}>
         <AbsoluteFill style={{ opacity: chartOpacity }}>
-          {/* Header Topic with proper top padding and centered year line */}
+          {/* Header Topic with centered comparison range (month to month or year to year) */}
           {(() => {
-            const { mainTitle, yearText } = splitTitleAndYears(topic || "Animated Line Chart");
+            const { mainTitle, rangeText } = getComparisonTitleAndRange(topic || "Animated Line Chart", labels);
             return (
               <div style={{ 
                 position: 'absolute',
@@ -355,7 +395,7 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: 6,
+                gap: 8,
                 zIndex: 15
               }}>
                 <div style={{
@@ -368,23 +408,23 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
                 }}>
                   {mainTitle}
                 </div>
-                {yearText && (
+                {rangeText && (
                   <div style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: 26,
                     fontWeight: 800,
-                    letterSpacing: '1.5px',
+                    letterSpacing: '1.2px',
                     color: '#38bdf8',
-                    backgroundColor: 'rgba(15, 23, 42, 0.82)',
-                    border: '1.5px solid rgba(56, 189, 248, 0.45)',
-                    padding: '2px 18px',
+                    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                    border: '1.5px solid rgba(56, 189, 248, 0.5)',
+                    padding: '3px 20px',
                     borderRadius: 999,
                     boxShadow: '0 4px 14px rgba(0,0,0,0.5), 0 0 12px rgba(56, 189, 248, 0.25)',
                     textShadow: '0 2px 6px rgba(0,0,0,0.6)',
                   }}>
-                    {yearText}
+                    {rangeText}
                   </div>
                 )}
               </div>
@@ -602,18 +642,18 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
               );
             })}
 
-            {/* Data Lines mapped with ClipPath */}
+            {/* Data Lines mapped with ClipPath - Sleek, slightly thinner stroke for high visual elegance */}
             {paths.map((pathData, idx) => (
               <path
                 key={idx}
                 d={pathData.d}
                 fill="none"
                 stroke={pathData.color}
-                strokeWidth={8}
+                strokeWidth={5}
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 clipPath="url(#racing-clip)"
-                style={{ filter: `drop-shadow(0px 10px 10px ${pathData.color}88)` }}
+                style={{ filter: `drop-shadow(0px 6px 8px ${pathData.color}77)` }}
               />
             ))}
           </svg>
@@ -729,9 +769,9 @@ export const DataComparison: React.FC<{ data_json: DataJson, topic: string }> = 
                         d={`M ${curX + ballRadius} ${pos.currentY} C ${curX + ballRadius + 18} ${pos.currentY}, ${numberLeft - 16} ${pos.targetY}, ${numberLeft} ${pos.targetY}`}
                         fill="none"
                         stroke={pathData.color}
-                        strokeWidth={2.5}
+                        strokeWidth={2}
                         strokeDasharray="4 4"
-                        opacity={0.7}
+                        opacity={0.65}
                       />
                     );
                   })}

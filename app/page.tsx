@@ -677,7 +677,7 @@ export default function Home() {
       const response = await fetch('/api/draft-script', { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic, videoFormat, endTitle, partTitle })
+        body: JSON.stringify({ topic, videoFormat, endTitle, partTitle, duration })
       });
       const data = await response.json();
       if (response.ok && data.success) {
@@ -895,7 +895,7 @@ export default function Home() {
           <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-8 border border-gray-100 dark:border-gray-700 space-y-6">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Step 1: Setup & Topic</h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className={videoFormat === 'Data Comparison' ? 'grid grid-cols-1 md:grid-cols-2 gap-6' : 'space-y-6'}>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Video Format</label>
                 <select
@@ -909,15 +909,19 @@ export default function Home() {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Duration (Seconds)</label>
-                <input 
-                  type="number" 
-                  value={duration} 
-                  onChange={(e) => setDuration(parseInt(e.target.value) || 15)}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
-                />
-              </div>
+              {videoFormat === 'Data Comparison' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Duration (Seconds)</label>
+                  <input 
+                    type="number" 
+                    value={duration} 
+                    min={15}
+                    max={180}
+                    onChange={(e) => setDuration(parseInt(e.target.value) || 15)}
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white"
+                  />
+                </div>
+              )}
             </div>
 
             <div>
@@ -2289,24 +2293,26 @@ function VideoCard({
           </div>
         )}
 
-        {/* Duration Slider & Rewrite Action (Kept below Description) */}
-        <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-2xl border border-gray-100 dark:border-gray-800">
-          <div className="flex-1">
-            <label className="text-xs text-gray-500 font-medium block mb-1">Target Duration: {duration}s</label>
-            <input 
-              type="range" min="15" max="180" step="5"
-              value={duration}
-              onChange={(e) => setDuration(parseInt(e.target.value))}
-              className="w-full accent-blue-600"
-            />
+        {/* Duration Slider & Rewrite Action (Only for Data Comparison since Quiz/WYR automatically calculate their timing) */}
+        {(!video.data_json?.format || video.data_json?.format === 'Data Comparison' || video.data_json?.type === 'Data Comparison') && (
+          <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-2xl border border-gray-100 dark:border-gray-800">
+            <div className="flex-1">
+              <label className="text-xs text-gray-500 font-medium block mb-1">Target Duration: {duration}s</label>
+              <input 
+                type="range" min="15" max="180" step="5"
+                value={duration}
+                onChange={(e) => setDuration(parseInt(e.target.value))}
+                className="w-full accent-blue-600"
+              />
+            </div>
+            <button 
+              onClick={() => onRewrite(video.id, duration)}
+              className="px-4 py-2 bg-blue-100 hover:bg-blue-200 dark:bg-blue-950/60 dark:hover:bg-blue-900 text-blue-700 dark:text-blue-300 font-semibold rounded-xl text-sm transition-colors border border-blue-200 dark:border-blue-800 shrink-0"
+            >
+              Rewrite
+            </button>
           </div>
-          <button 
-            onClick={() => onRewrite(video.id, duration)}
-            className="px-4 py-2 bg-blue-100 hover:bg-blue-200 dark:bg-blue-950/60 dark:hover:bg-blue-900 text-blue-700 dark:text-blue-300 font-semibold rounded-xl text-sm transition-colors border border-blue-200 dark:border-blue-800 shrink-0"
-          >
-            Rewrite
-          </button>
-        </div>
+        )}
       </div>
       
       {/* Video Preview with Mobile Fullscreen Feature */}
