@@ -65,12 +65,22 @@ const WyrRound: React.FC<{
 
   const { option_a, option_b, image_url_a, image_url_b, percent_a, percent_b } = scenarioData;
 
-  // Entrance animations for panels
-  const panelAProgress = spring({ frame: frame - 10, fps, config: { damping: 14 } });
-  const panelBProgress = spring({ frame: frame - 20, fps, config: { damping: 14 } });
-  
-  // VS badge animation
-  const vsScale = spring({ frame: frame - 30, fps, config: { damping: 10, stiffness: 150 } });
+  // Snappy content entrance animations for smooth fast loading into frames
+  const contentSpring = spring({ frame, fps, config: { damping: 14, stiffness: 220 } });
+  const imgScale = interpolate(contentSpring, [0, 1], [0.9, 1]);
+  const imgOpacity = interpolate(frame, [0, 6], [0, 1], { extrapolateRight: 'clamp' });
+  const imgATranslateY = interpolate(contentSpring, [0, 1], [-16, 0]);
+  const imgBTranslateY = interpolate(contentSpring, [0, 1], [16, 0]);
+
+  // Snappy badge pop for numbers 1 and 2
+  const badgeSpring = spring({ frame: frame - 1, fps, config: { damping: 12, stiffness: 280 } });
+  const badgeScale = interpolate(badgeSpring, [0, 1], [0, 1]);
+  const badgeOpacity = interpolate(frame, [1, 6], [0, 1], { extrapolateRight: 'clamp' });
+
+  // Snappy text slide
+  const textSpring = spring({ frame: frame - 2, fps, config: { damping: 14, stiffness: 200 } });
+  const textTranslateY = interpolate(textSpring, [0, 1], [14, 0]);
+  const textOpacity = interpolate(frame, [2, 8], [0, 1], { extrapolateRight: 'clamp' });
 
   // Timing
   const { readingFrames, timerFrames } = getWyrTiming(scenarioData, fps, isFirstRound);
@@ -107,7 +117,7 @@ const WyrRound: React.FC<{
         </Sequence>
       )}
 
-      {/* Top Blue Card (Scenario A) */}
+      {/* Top Blue Card (Scenario A) - Persistent Solid Frame */}
       <div style={{
         position: 'absolute',
         top: 50,
@@ -118,7 +128,6 @@ const WyrRound: React.FC<{
         borderRadius: 32,
         border: '4px solid #3b82f6',
         boxShadow: '0 16px 40px rgba(29, 78, 216, 0.45)',
-        transform: `translateY(${(1 - panelAProgress) * -120}%)`,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -127,16 +136,18 @@ const WyrRound: React.FC<{
         overflow: 'hidden',
         zIndex: 5
       }}>
-        {/* Equal-sized Image Box (width: 100%, height: 510) */}
+        {/* Equal-sized Image Box (width: 100%, height: 485) */}
         <div style={{
           width: '100%',
-          height: 510,
+          height: 485,
           borderRadius: 22,
           overflow: 'hidden',
           position: 'relative',
           backgroundColor: '#0a0a0a',
           boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-          flexShrink: 0
+          flexShrink: 0,
+          transform: `translateY(${imgATranslateY}px) scale(${imgScale})`,
+          opacity: imgOpacity
         }}>
           {image_url_a && (
             <Img 
@@ -152,6 +163,34 @@ const WyrRound: React.FC<{
           {flashA && <div style={{ position: 'absolute', inset: 0, backgroundColor: 'white', opacity: 0.5, zIndex: 10 }} />}
         </div>
 
+        {/* Badge "1" in the middle between Image 1 and Text 1 */}
+        <div style={{
+          width: 58,
+          height: 58,
+          borderRadius: '50%',
+          backgroundColor: '#1d4ed8',
+          border: '3.5px solid #60a5fa',
+          boxShadow: '0 4px 18px rgba(0,0,0,0.65), 0 0 18px rgba(96, 165, 250, 0.75)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          margin: '10px 0 6px 0',
+          flexShrink: 0,
+          zIndex: 10,
+          transform: `scale(${badgeScale})`,
+          opacity: badgeOpacity
+        }}>
+          <span style={{
+            fontSize: 34,
+            fontWeight: 900,
+            color: '#ffffff',
+            textShadow: '0 2px 8px rgba(0,0,0,0.85)',
+            fontFamily: '"Montserrat", sans-serif'
+          }}>
+            1
+          </span>
+        </div>
+
         {/* Text & Result Area */}
         <div style={{
           flex: 1,
@@ -159,7 +198,7 @@ const WyrRound: React.FC<{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '16px 20px',
+          padding: '6px 16px',
           boxSizing: 'border-box'
         }}>
           {isTimerDone && !isLastRound ? (
@@ -181,13 +220,15 @@ const WyrRound: React.FC<{
             </div>
           ) : (
             <h2 style={{ 
-              fontSize: 48, 
+              fontSize: option_a.length > 40 ? 40 : 46, 
               fontWeight: 800, 
               color: '#ffffff', 
               textAlign: 'center', 
               lineHeight: 1.25, 
               margin: 0,
-              textShadow: '0 4px 14px rgba(0,0,0,0.8)'
+              textShadow: '0 4px 14px rgba(0,0,0,0.8)',
+              transform: `translateY(${textTranslateY}px)`,
+              opacity: textOpacity
             }}>
               {option_a}
             </h2>
@@ -195,7 +236,7 @@ const WyrRound: React.FC<{
         </div>
       </div>
 
-      {/* Bottom Red Card (Scenario B) */}
+      {/* Bottom Red Card (Scenario B) - Persistent Solid Frame */}
       <div style={{
         position: 'absolute',
         top: 1010,
@@ -206,7 +247,6 @@ const WyrRound: React.FC<{
         borderRadius: 32,
         border: '4px solid #ef4444',
         boxShadow: '0 16px 40px rgba(220, 38, 38, 0.45)',
-        transform: `translateY(${(1 - panelBProgress) * 120}%)`,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -222,7 +262,7 @@ const WyrRound: React.FC<{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '16px 20px',
+          padding: '6px 16px',
           boxSizing: 'border-box'
         }}>
           {isTimerDone && !isLastRound ? (
@@ -244,29 +284,61 @@ const WyrRound: React.FC<{
             </div>
           ) : (
             <h2 style={{ 
-              fontSize: 48, 
+              fontSize: option_b.length > 40 ? 40 : 46, 
               fontWeight: 800, 
               color: '#ffffff', 
               textAlign: 'center', 
               lineHeight: 1.25, 
               margin: 0,
-              textShadow: '0 4px 14px rgba(0,0,0,0.8)'
+              textShadow: '0 4px 14px rgba(0,0,0,0.8)',
+              transform: `translateY(${-textTranslateY}px)`,
+              opacity: textOpacity
             }}>
               {option_b}
             </h2>
           )}
         </div>
 
-        {/* Equal-sized Image Box (on bottom for Red card, width: 100%, height: 510) */}
+        {/* Badge "2" in the middle between Text 2 and Image 2 */}
+        <div style={{
+          width: 58,
+          height: 58,
+          borderRadius: '50%',
+          backgroundColor: '#dc2626',
+          border: '3.5px solid #f87171',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.65), 0 0 18px rgba(248, 113, 113, 0.75)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          margin: '6px 0 10px 0',
+          flexShrink: 0,
+          zIndex: 10,
+          transform: `scale(${badgeScale})`,
+          opacity: badgeOpacity
+        }}>
+          <span style={{
+            fontSize: 34,
+            fontWeight: 900,
+            color: '#ffffff',
+            textShadow: '0 2px 8px rgba(0,0,0,0.85)',
+            fontFamily: '"Montserrat", sans-serif'
+          }}>
+            2
+          </span>
+        </div>
+
+        {/* Equal-sized Image Box (on bottom for Red card, width: 100%, height: 485) */}
         <div style={{
           width: '100%',
-          height: 510,
+          height: 485,
           borderRadius: 22,
           overflow: 'hidden',
           position: 'relative',
           backgroundColor: '#0a0a0a',
           boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-          flexShrink: 0
+          flexShrink: 0,
+          transform: `translateY(${imgBTranslateY}px) scale(${imgScale})`,
+          opacity: imgOpacity
         }}>
           {image_url_b && (
             <Img 
@@ -308,7 +380,7 @@ const WyrRound: React.FC<{
           position: 'absolute',
           top: 960,
           left: 540,
-          transform: `translate(-50%, -50%) scale(${vsScale})`,
+          transform: 'translate(-50%, -50%)',
           width: 140,
           height: 140,
           backgroundColor: '#f8fafc',
