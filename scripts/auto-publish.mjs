@@ -474,13 +474,15 @@ async function main() {
       instagram: false,
     };
     const uploadedIds = {};
+    let lastYtError = null;
+    let lastFbError = null;
+    let lastIgError = null;
 
     try {
       // 1. YouTube Upload (ONLY if shouldPublishYouTube is true)
       if (shouldPublishYouTube) {
         const freshRow = await getFreshVideoData(video.id);
         const freshData = freshRow?.data_json || video.data_json || {};
-        let lastYtError = null;
         if (freshData.youtube_id || freshData.youtube_status === 'Published') {
           console.log(`[CONCURRENCY GUARD] YouTube already published for video [${video.id}] (ID: ${freshData.youtube_id}). Skipping duplicate upload.`);
           uploadResults.youtube = true;
@@ -545,7 +547,8 @@ async function main() {
               console.log(`[IMMEDIATE DB PERSISTENCE] Facebook ID ${fbId} saved to database immediately.`);
             }
           } catch (fbError) {
-            console.error('Facebook upload encountered an error:', fbError.message || fbError);
+            lastFbError = fbError.message || String(fbError);
+            console.error('Facebook upload encountered an error:', lastFbError);
           }
         }
       }
@@ -580,7 +583,8 @@ async function main() {
               console.log(`[IMMEDIATE DB PERSISTENCE] Instagram ID ${igId} saved to database immediately.`);
             }
           } catch (igError) {
-            console.error('Instagram Reels upload encountered an error:', igError.message || igError);
+            lastIgError = igError.message || String(igError);
+            console.error('Instagram Reels upload encountered an error:', lastIgError);
           }
         }
       }
@@ -602,10 +606,12 @@ async function main() {
       if (shouldPublishMeta) {
         if (uploadResults.facebook || uploadResults.instagram || updatedDataJson.facebook_id || updatedDataJson.instagram_id) {
           updatedDataJson.meta_status = 'Published';
+          delete updatedDataJson.meta_error;
           if (uploadedIds.facebook_id) updatedDataJson.facebook_id = uploadedIds.facebook_id;
           if (uploadedIds.instagram_id) updatedDataJson.instagram_id = uploadedIds.instagram_id;
         } else {
           updatedDataJson.meta_status = 'Failed';
+          updatedDataJson.meta_error = [lastFbError, lastIgError].filter(Boolean).join(' | ') || 'Meta upload failed';
         }
       }
 
