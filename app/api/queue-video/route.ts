@@ -138,7 +138,7 @@ export async function POST(request: Request) {
       const scenes = data_json.scenes;
       for (let i = 0; i < scenes.length; i++) {
         const dur = scenes[i].duration || 125;
-        totalFrames += i === 0 ? dur : (dur - 15);
+        totalFrames += i === 0 ? dur : (dur - 25);
       }
       finalDuration = Math.round(totalFrames / 30);
     } else {

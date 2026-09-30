@@ -159,7 +159,7 @@ export default function AestheticPage() {
       if (parsedJson.scenes) {
         for (let i = 0; i < parsedJson.scenes.length; i++) {
           const dur = parsedJson.scenes[i].duration || 125;
-          totalFrames += i === 0 ? dur : (dur - 15);
+          totalFrames += i === 0 ? dur : (dur - 25);
         }
       }
       const durationSeconds = Math.max(15, Math.round(totalFrames / 30));
@@ -378,23 +378,27 @@ export default function AestheticPage() {
 
                     <div className="flex items-center gap-3">
                       {scene.image_url ? (
-                        <div className="relative w-10 h-14 shrink-0 rounded-lg overflow-hidden border-2 border-green-500 shadow-sm">
-                          <img src={scene.image_url} alt={`Shot ${idx + 1}`} className="w-full h-full object-cover" />
+                        <div className="relative w-11 h-16 shrink-0 rounded-lg overflow-hidden border-2 border-green-500 shadow-sm bg-black">
+                          {scene.image_url.startsWith('data:video/') || scene.image_url.endsWith('.mp4') || scene.image_url.endsWith('.webm') ? (
+                            <video src={scene.image_url} autoPlay loop muted playsInline className="w-full h-full object-cover" />
+                          ) : (
+                            <img src={scene.image_url} alt={`Shot ${idx + 1}`} className="w-full h-full object-cover" />
+                          )}
                           <div className="absolute top-0 right-0 bg-green-500 text-white px-1 text-[9px] font-bold">
                             ✓
                           </div>
                         </div>
                       ) : (
-                        <div className="w-10 h-14 shrink-0 rounded-lg bg-gray-200 dark:bg-gray-700 border border-dashed border-gray-400 dark:border-gray-600 flex items-center justify-center text-[9px] text-gray-500 font-mono text-center">
+                        <div className="w-11 h-16 shrink-0 rounded-lg bg-gray-200 dark:bg-gray-700 border border-dashed border-gray-400 dark:border-gray-600 flex items-center justify-center text-[9px] text-gray-500 font-mono text-center">
                           9:16
                         </div>
                       )}
 
                       <label className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors text-center shadow-sm">
-                        {scene.image_url ? 'Change' : 'Upload Image'}
+                        {scene.image_url ? 'Change' : 'Upload Image/Video'}
                         <input 
                           type="file" 
-                          accept="image/*" 
+                          accept="image/*,video/mp4,video/webm" 
                           className="hidden" 
                           onChange={(e) => handleFileUpload(idx, e)}
                         />

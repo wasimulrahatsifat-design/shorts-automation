@@ -205,7 +205,7 @@ export const RemotionRoot: React.FC = () => {
             let totalFrames = 0;
             for (let i = 0; i < scenes.length; i++) {
               const dur = scenes[i].duration || 125;
-              totalFrames += i === 0 ? dur : (dur - 15);
+              totalFrames += i === 0 ? dur : (dur - 25);
             }
             return { durationInFrames: Math.max(90, totalFrames) };
           }
