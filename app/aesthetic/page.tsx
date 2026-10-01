@@ -49,6 +49,7 @@ export default function AestheticPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
   
   const [draftJson, setDraftJson] = useState('');
   const [scenes, setScenes] = useState<SceneItem[]>([]);
@@ -70,18 +71,33 @@ export default function AestheticPage() {
     }
   }, [draftJson, step]);
 
-  const handleFileUpload = (sceneIndex: number, e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (sceneIndex: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64Url = reader.result as string;
+    setUploadingIndex(sceneIndex);
+    setMessage({ type: 'info', text: `Uploading media for Shot ${sceneIndex + 1}...` });
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/upload-media', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success || !data.url) {
+        throw new Error(data.error || 'Failed to upload media file.');
+      }
+
+      const mediaUrl = data.url;
 
       setScenes(prev => {
         const next = [...prev];
         if (next[sceneIndex]) {
-          next[sceneIndex] = { ...next[sceneIndex], image_url: base64Url };
+          next[sceneIndex] = { ...next[sceneIndex], image_url: mediaUrl };
         }
         return next;
       });
@@ -90,15 +106,21 @@ export default function AestheticPage() {
         try {
           const parsed = JSON.parse(prevJson);
           if (parsed.scenes && parsed.scenes[sceneIndex]) {
-            parsed.scenes[sceneIndex].image_url = base64Url;
+            parsed.scenes[sceneIndex].image_url = mediaUrl;
           }
           return JSON.stringify(parsed, null, 2);
         } catch {
           return prevJson;
         }
       });
-    };
-    reader.readAsDataURL(file);
+
+      setMessage({ type: 'success', text: `Shot ${sceneIndex + 1} uploaded successfully!` });
+    } catch (err: any) {
+      console.error('Upload error:', err);
+      setMessage({ type: 'error', text: err.message || 'Failed to upload media file.' });
+    } finally {
+      setUploadingIndex(null);
+    }
   };
 
   const handleCopyPrompt = (text: string, index: number) => {
@@ -394,10 +416,15 @@ export default function AestheticPage() {
                         </div>
                       )}
 
-                      <label className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors text-center shadow-sm">
-                        {scene.image_url ? 'Change' : 'Upload Image/Video'}
+                      <label className={`cursor-pointer text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors text-center shadow-sm flex items-center justify-center min-w-[95px] ${
+                        uploadingIndex === idx 
+                          ? 'bg-amber-600 cursor-wait animate-pulse' 
+                          : 'bg-blue-600 hover:bg-blue-700'
+                      }`}>
+                        {uploadingIndex === idx ? '⏳ Uploading...' : scene.image_url ? 'Change File' : 'Upload File'}
                         <input 
                           type="file" 
+                          disabled={uploadingIndex !== null || loading}
                           accept="image/*,video/mp4,video/webm" 
                           className="hidden" 
                           onChange={(e) => handleFileUpload(idx, e)}

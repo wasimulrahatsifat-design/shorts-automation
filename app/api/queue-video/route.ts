@@ -160,6 +160,35 @@ export async function POST(request: Request) {
     }
     const finalBgMusicVolume = isBgMusicEnabled ? (typeof body.bg_music_volume === 'number' ? body.bg_music_volume : (data_json.bg_music_volume ?? 0.35)) : undefined;
 
+    // Convert any large base64 data URIs in scenes to Supabase Storage public URLs
+    // This prevents massive payload insertion from hitting PostgreSQL statement timeouts
+    if (Array.isArray(data_json.scenes)) {
+      for (const scene of data_json.scenes) {
+        if (scene.image_url && typeof scene.image_url === 'string' && scene.image_url.startsWith('data:')) {
+          try {
+            const matches = scene.image_url.match(/^data:([^;]+);base64,(.+)$/);
+            if (matches) {
+              const contentType = matches[1];
+              const isVideo = contentType.startsWith('video/');
+              const ext = isVideo 
+                ? (contentType.includes('webm') ? 'webm' : 'mp4') 
+                : (contentType.includes('png') ? 'png' : 'jpg');
+              const buffer = Buffer.from(matches[2], 'base64');
+              const fileName = `aesthetic_${crypto.randomUUID()}.${ext}`;
+              const { publicUrl } = await uploadToStorageWithFailover('shorts', fileName, buffer, {
+                contentType,
+                upsert: true,
+              });
+              scene.image_url = publicUrl;
+              console.log(`[queue-video] Successfully converted base64 scene media to storage URL: ${publicUrl}`);
+            }
+          } catch (uploadErr) {
+            console.error('[queue-video] Failed to convert base64 image_url to storage URL:', uploadErr);
+          }
+        }
+      }
+    }
+
     // Insert into Supabase with failover
     const { data: dbData, error } = await executeWithSupabaseFailover((client) =>
       client
