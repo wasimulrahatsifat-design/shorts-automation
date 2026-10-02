@@ -16,7 +16,14 @@ export async function POST(request: Request) {
     if (!data_json || !data_json.topic) {
       throw new Error('Invalid data payload. Must contain topic.');
     }
-    if (data_json.format !== 'Would You Rather' && data_json.format !== 'AestheticVideo' && data_json.format !== 'Arena Clash' && !data_json.script) {
+    if (
+      data_json.format !== 'Would You Rather' &&
+      data_json.format !== 'AestheticVideo' &&
+      data_json.format !== 'TimeLapseVideo' &&
+      data_json.format !== 'VideoFlow' &&
+      data_json.format !== 'Arena Clash' &&
+      !data_json.script
+    ) {
       throw new Error('Invalid data payload. Must contain script.');
     }
 
@@ -81,8 +88,12 @@ export async function POST(request: Request) {
           const outroUrl = await generateTTSForText(outroText);
           tts_urls.push(outroUrl);
         }
-      } else if (data_json.format === 'AestheticVideo') {
-        // Aesthetic videos don't require TTS audio
+      } else if (
+        data_json.format === 'AestheticVideo' ||
+        data_json.format === 'TimeLapseVideo' ||
+        data_json.format === 'VideoFlow'
+      ) {
+        // VideoFlow / TimeLapse / Aesthetic videos don't require TTS audio
         tts_url = null;
       } else if (data_json.format === 'Arena Clash' && !script) {
         // Arena Clash without script can use optional announcer tts_url
@@ -141,6 +152,8 @@ export async function POST(request: Request) {
         totalFrames += i === 0 ? dur : (dur - 25);
       }
       finalDuration = Math.round(totalFrames / 30);
+    } else if (data_json.format === 'TimeLapseVideo' || data_json.format === 'VideoFlow') {
+      finalDuration = data_json.duration_seconds || parseInt(duration) || 15;
     } else {
       // Data Comparison: calibrate duration so script is never cut off
       let dcDuration = parseInt(duration) || data_json.duration_seconds || 15;

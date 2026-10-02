@@ -6,6 +6,7 @@ import { Quiz, getQuestionTiming } from './Quiz';
 import { ArenaClash } from './ArenaClash';
 import { generateArenaSimulation } from '../lib/arena-physics';
 import { AestheticVideo } from './AestheticVideo';
+import { TimeLapseVideo } from './TimeLapseVideo';
 import { loadFont } from '@remotion/google-fonts/Montserrat';
 
 // Preload Montserrat font with optimal weights
@@ -247,6 +248,32 @@ export const RemotionRoot: React.FC = () => {
             ],
           },
           topic: 'Dreamcore Cherry Blossom Meadow',
+        }}
+      />
+      <Composition
+        id="TimeLapseVideo"
+        component={TimeLapseVideo}
+        durationInFrames={450} // 15 seconds at 30 fps
+        fps={30}
+        width={1080}
+        height={1920}
+        calculateMetadata={({ props }: any) => {
+          const durationSeconds = props.data_json?.duration_seconds || 15;
+          return {
+            durationInFrames: Math.max(30, Math.round(durationSeconds * 30)),
+          };
+        }}
+        defaultProps={{
+          data_json: {
+            format: "TimeLapseVideo",
+            title: "90 Days Transformation",
+            start_day: 0,
+            end_day: 90,
+            day_prefix: "Day ",
+            duration_seconds: 15,
+            video_url: "/video.mp4",
+          },
+          topic: "90 Days Transformation",
         }}
       />
     </>

@@ -867,7 +867,7 @@ export default function Home() {
               href="/aesthetic" 
               className="px-5 py-3 rounded-xl bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 font-medium hover:bg-purple-200 dark:hover:bg-purple-800/60 transition-all text-center border border-purple-300 dark:border-purple-700"
             >
-              🌸 Aesthetic
+              🎬 Video Flow
             </Link>
             <button 
               onClick={() => { setStep(3); fetchVideos(); }}

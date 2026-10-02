@@ -4807,7 +4807,7 @@ export default function GamePage() {
               Charts
             </Link>
             <Link href="/aesthetic" className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-purple-300 border border-slate-800 transition">
-              Aesthetic
+              Video Flow
             </Link>
             <Link href="/admin?tab=youtube" className="px-3 py-1.5 rounded-lg bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-900/50 transition flex items-center gap-1">
               YouTube

@@ -1,82 +1,182 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 
-interface SceneItem {
-  camera_angle?: string;
-  camera_motion?: string;
-  image_keyword: string;
-  image_url?: string;
-  duration: number;
+interface ChatMessage {
+  role: 'user' | 'model';
+  text: string;
 }
 
-const PRESET_THEMES = [
-  {
-    title: '🌸 Cherry Blossom Dream Meadow',
-    desc: 'Like the public sample video: ethereal meadow, blooming white & pink cherry trees, pastel sky',
-    prompt: 'Ethereal dreamcore meadow with blooming white and pink cherry blossom trees under a soft pastel lavender sky'
-  },
-  {
-    title: '🏊 Liminal Pool Rooms',
-    desc: 'Surreal infinite indoor pool rooms, calm turquoise water, pale ceramic tiles, warm skylight',
-    prompt: 'Surreal liminal dreamcore pool room with glowing calm turquoise water, white ceramic tiles, and soft overhead skylight haze'
-  },
-  {
-    title: '🛋️ Nostalgic 90s Empty Mall Atrium',
-    desc: 'Dreamcore vaporwave mall, indoor fountain, glass elevators, soft neon glow, vapor mist',
-    prompt: 'Nostalgic 1990s empty mall atrium at dawn, indoor palm trees, brass railings, glass elevator, liminal dreamcore haze'
-  },
-  {
-    title: '🌫️ Misty Twilight Forest Gazebo',
-    desc: 'Ancient stone gazebo in misty pine woods, glowing moss, surreal floating lanterns',
-    prompt: 'Ancient stone gazebo hidden deep inside a misty dreamcore pine forest with ethereal glowing moss and soft volumetric twilight'
-  },
-  {
-    title: '☁️ Infinite Sky Corridor',
-    desc: 'Endless white marble arches floating above cotton clouds, golden sunset rays',
-    prompt: 'Infinite liminal corridor with white classical arches open to a surreal sea of pastel clouds and warm golden hour sunlight'
-  },
-  {
-    title: '🚪 Solitary Door in Rolling Fields',
-    desc: 'Vast golden wheat field with a single glowing door leading into a starry void',
-    prompt: 'A solitary vintage wooden door standing in the center of an endless golden wheat field under a twilight dreamcore sky'
-  }
-];
+const DEFAULT_TIMELAPSE_MASTER_PROMPT = `You are a world-class AI Video Producer, Creative Director, and Prompt Engineering Master specializing in viral YouTube Shorts, TikToks, and Reels for "Time Lapse" and "Day-by-Day Progression" videos (e.g., 0 to 90 Days Transformations, Plant Growth, Fitness Transformations, Construction, Puppies Growing Up, Aging, Art Creation, Weather Changes, and Science Experiments).
 
-export default function AestheticPage() {
-  const [step, setStep] = useState<1 | 2>(1);
-  const [topic, setTopic] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
-  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
-  
-  const [draftJson, setDraftJson] = useState('');
-  const [scenes, setScenes] = useState<SceneItem[]>([]);
-  const [locationDescription, setLocationDescription] = useState('');
+When the user asks for concepts, ideas, or prompts:
+1. Provide actionable, high-performing concepts with exact Days breakdown (e.g. Day 0, Day 15, Day 30, Day 60, Day 90).
+2. Write exact, hyper-detailed Image/Video generation prompts optimized for Midjourney v6, Kling AI, Luma Dream Machine, Runway Gen-3, Pika, and Hailuo.
+3. Suggest punchy, high-CTR titles in clean Quicksand style.
+4. Keep answers structured with clear headings, bullet points, and codeblocks for prompts so the user can easily copy them.`;
 
-  // Sync parsed scenes from draftJson
+const DEFAULT_DREAMCORE_MASTER_PROMPT = `You are a cinematic director specializing in viral Liminal Space and Dreamcore aesthetic YouTube Shorts and TikToks.
+Help the user create surreal dreamcore concepts, 4 continuous cinematic camera angles (Wide establishing, Low-angle looking up, Medium tracking, Overhead view) of the exact same location, and evocative titles.`;
+
+const INITIAL_CATEGORIES = ['Time lapse', 'Dreamcore'];
+
+export default function VideoFlowPage() {
+  // Category management
+  const [categories, setCategories] = useState<string[]>(INITIAL_CATEGORIES);
+  const [selectedCategory, setSelectedCategory] = useState<string>('Time lapse');
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
+
+  // Master prompt management
+  const [masterPrompt, setMasterPrompt] = useState<string>('');
+  const [isEditingMasterPrompt, setIsEditingMasterPrompt] = useState(false);
+  const [masterPromptSavedNotice, setMasterPromptSavedNotice] = useState(false);
+
+  // Chat management
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [inputMessage, setInputMessage] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  // Video / Flow settings
+  const [videoTitle, setVideoTitle] = useState('90 Days Transformation');
+  const [videoUrl, setVideoUrl] = useState('');
+  const [startDay, setStartDay] = useState<number>(0);
+  const [endDay, setEndDay] = useState<number>(90);
+  const [dayPrefix, setDayPrefix] = useState('Day ');
+  const [durationSeconds, setDurationSeconds] = useState<number>(15);
+
+  // Upload & Rendering state
+  const [isUploading, setIsUploading] = useState(false);
+  const [isQueueing, setIsQueueing] = useState(false);
+  const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
+  // Interactive preview scrub slider
+  const [previewProgress, setPreviewProgress] = useState<number>(50); // 0 to 100%
+
+  // 1. Load Categories and Master Prompts from localStorage on mount
   useEffect(() => {
-    if (!draftJson || step !== 2) return;
     try {
-      const parsed = JSON.parse(draftJson);
-      if (parsed.location_description) {
-        setLocationDescription(parsed.location_description);
-      }
-      if (Array.isArray(parsed.scenes)) {
-        setScenes(parsed.scenes);
+      const savedCats = localStorage.getItem('videoflow_categories');
+      if (savedCats) {
+        const parsed = JSON.parse(savedCats);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setCategories(parsed);
+        }
       }
     } catch {
-      // invalid json, ignore
+      // ignore
     }
-  }, [draftJson, step]);
+  }, []);
 
-  const handleFileUpload = async (sceneIndex: number, e: React.ChangeEvent<HTMLInputElement>) => {
+  // 2. Load / Update Master Prompt when category changes
+  useEffect(() => {
+    try {
+      const storageKey = `videoflow_master_prompt_${selectedCategory.toLowerCase().replace(/\s+/g, '_')}`;
+      const savedPrompt = localStorage.getItem(storageKey);
+      if (savedPrompt) {
+        setMasterPrompt(savedPrompt);
+      } else {
+        // Fallback to default
+        if (selectedCategory === 'Time lapse') {
+          setMasterPrompt(DEFAULT_TIMELAPSE_MASTER_PROMPT);
+          localStorage.setItem(storageKey, DEFAULT_TIMELAPSE_MASTER_PROMPT);
+        } else if (selectedCategory === 'Dreamcore') {
+          setMasterPrompt(DEFAULT_DREAMCORE_MASTER_PROMPT);
+          localStorage.setItem(storageKey, DEFAULT_DREAMCORE_MASTER_PROMPT);
+        } else {
+          const customPrompt = `You are a creative director and prompt engineering expert specializing in viral video shorts for "${selectedCategory}". Help the user brainstorm ideas, script outlines, and AI generation prompts.`;
+          setMasterPrompt(customPrompt);
+          localStorage.setItem(storageKey, customPrompt);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [selectedCategory]);
+
+  // Scroll chat to bottom on new message
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isChatLoading]);
+
+  // Save Master Prompt to localStorage permanently
+  const handleSaveMasterPrompt = () => {
+    try {
+      const storageKey = `videoflow_master_prompt_${selectedCategory.toLowerCase().replace(/\s+/g, '_')}`;
+      localStorage.setItem(storageKey, masterPrompt);
+      setMasterPromptSavedNotice(true);
+      setIsEditingMasterPrompt(false);
+      setTimeout(() => setMasterPromptSavedNotice(false), 3000);
+    } catch (e: any) {
+      console.error('Failed to save master prompt:', e);
+    }
+  };
+
+  // Add new Category
+  const handleAddCategory = () => {
+    const trimmed = newCategoryName.trim();
+    if (!trimmed) return;
+    if (!categories.includes(trimmed)) {
+      const updated = [...categories, trimmed];
+      setCategories(updated);
+      try {
+        localStorage.setItem('videoflow_categories', JSON.stringify(updated));
+      } catch {}
+      setSelectedCategory(trimmed);
+    }
+    setNewCategoryName('');
+    setShowAddCategoryModal(false);
+  };
+
+  // Send message to Gemini chat
+  const handleSendMessage = async (msgToSend?: string) => {
+    const text = (msgToSend || inputMessage).trim();
+    if (!text || isChatLoading) return;
+
+    const newHistory: ChatMessage[] = [...messages, { role: 'user', text }];
+    setMessages(newHistory);
+    setInputMessage('');
+    setIsChatLoading(true);
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          history: messages,
+          masterPrompt,
+          category: selectedCategory,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success && data.reply) {
+        setMessages([...newHistory, { role: 'model', text: data.reply }]);
+      } else {
+        setMessages([
+          ...newHistory,
+          { role: 'model', text: `⚠️ Error: ${data.error || 'Failed to get response from Gemini.'}` },
+        ]);
+      }
+    } catch (err: any) {
+      setMessages([
+        ...newHistory,
+        { role: 'model', text: `⚠️ Network error: ${err.message || 'Could not connect.'}` },
+      ]);
+    } finally {
+      setIsChatLoading(false);
+    }
+  };
+
+  // Handle Video Upload directly to Supabase Storage
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setUploadingIndex(sceneIndex);
-    setMessage({ type: 'info', text: `Uploading media for Shot ${sceneIndex + 1}...` });
+    setIsUploading(true);
+    setNotification({ type: 'info', text: 'Uploading video to cloud storage...' });
 
     try {
       const formData = new FormData();
@@ -89,387 +189,584 @@ export default function AestheticPage() {
 
       const data = await res.json();
       if (!res.ok || !data.success || !data.url) {
-        throw new Error(data.error || 'Failed to upload media file.');
+        throw new Error(data.error || 'Failed to upload video.');
       }
 
-      const mediaUrl = data.url;
-
-      setScenes(prev => {
-        const next = [...prev];
-        if (next[sceneIndex]) {
-          next[sceneIndex] = { ...next[sceneIndex], image_url: mediaUrl };
-        }
-        return next;
-      });
-
-      setDraftJson(prevJson => {
-        try {
-          const parsed = JSON.parse(prevJson);
-          if (parsed.scenes && parsed.scenes[sceneIndex]) {
-            parsed.scenes[sceneIndex].image_url = mediaUrl;
-          }
-          return JSON.stringify(parsed, null, 2);
-        } catch {
-          return prevJson;
-        }
-      });
-
-      setMessage({ type: 'success', text: `Shot ${sceneIndex + 1} uploaded successfully!` });
+      setVideoUrl(data.url);
+      setNotification({ type: 'success', text: 'Video uploaded successfully! Preview updated below.' });
     } catch (err: any) {
-      console.error('Upload error:', err);
-      setMessage({ type: 'error', text: err.message || 'Failed to upload media file.' });
+      console.error(err);
+      setNotification({ type: 'error', text: err.message || 'Error uploading video file.' });
     } finally {
-      setUploadingIndex(null);
+      setIsUploading(false);
     }
   };
 
-  const handleCopyPrompt = (text: string, index: number) => {
-    navigator.clipboard.writeText(text);
-    setCopiedIndex(index);
-    setTimeout(() => {
-      setCopiedIndex(null);
-    }, 2000);
-  };
-
-  const handleGenerateDraft = async (selectedTopic?: string) => {
-    const topicToUse = (selectedTopic || topic).trim();
-    if (!topicToUse) {
-      setMessage({ type: 'error', text: 'Please enter or select a Dreamcore / Liminal theme.' });
+  // Queue Video for Remotion Rendering
+  const handleQueueRender = async () => {
+    if (!videoUrl) {
+      setNotification({ type: 'error', text: 'Please upload a video first.' });
       return;
     }
 
-    setLoading(true);
-    setMessage({ type: 'info', text: 'Drafting 4 cinematic shots for the exact same location...' });
-    setScenes([]);
+    setIsQueueing(true);
+    setNotification({ type: 'info', text: 'Queueing video for rendering...' });
 
     try {
-      const response = await fetch('/api/draft-aesthetic', { 
+      const payload = {
+        data_json: {
+          format: 'TimeLapseVideo',
+          topic: videoTitle || `${selectedCategory} Video`,
+          title: videoTitle,
+          video_url: videoUrl,
+          start_day: Number(startDay) || 0,
+          end_day: Number(endDay) || 90,
+          day_prefix: dayPrefix,
+          duration_seconds: Number(durationSeconds) || 15,
+        },
+        duration: Number(durationSeconds) || 15,
+        showSubtitles: false,
+      };
+
+      const res = await fetch('/api/queue-video', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: topicToUse })
-      });
-      const data = await response.json();
-      
-      if (response.ok && data.success) {
-        setDraftJson(JSON.stringify(data.data, null, 2));
-        if (data.data.location_description) {
-          setLocationDescription(data.data.location_description);
-        }
-        if (Array.isArray(data.data.scenes)) {
-          setScenes(data.data.scenes);
-        }
-        setStep(2);
-        setMessage(null);
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to generate draft.' });
-      }
-    } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || 'Unexpected error generating draft.' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleQueueVideo = async () => {
-    setLoading(true);
-    setMessage({ type: 'info', text: 'Queueing Dreamcore video for rendering...' });
-
-    try {
-      const parsedJson = JSON.parse(draftJson);
-      
-      let totalFrames = 0;
-      if (parsedJson.scenes) {
-        for (let i = 0; i < parsedJson.scenes.length; i++) {
-          const dur = parsedJson.scenes[i].duration || 125;
-          totalFrames += i === 0 ? dur : (dur - 25);
-        }
-      }
-      const durationSeconds = Math.max(15, Math.round(totalFrames / 30));
-
-      const response = await fetch('/api/queue-video', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          data_json: {
-            ...parsedJson,
-            bg_music_url: parsedJson.bg_music_url || '/audio/lofi_chill.mp3',
-            bg_music_enabled: true
-          }, 
-          showSubtitles: false,
-          duration: durationSeconds 
-        })
+        body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
-      if (response.ok && data.success) {
-        setMessage({ 
-          type: 'success', 
-          text: `🎉 Dreamcore video (~${durationSeconds}s) queued successfully! Check Main Dashboard to view rendering status.` 
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setNotification({
+          type: 'success',
+          text: '🎉 Video queued successfully! Check Main Dashboard for render progress.',
         });
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to queue video.' });
+        setNotification({ type: 'error', text: data.error || 'Failed to queue video.' });
       }
-    } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || 'Unexpected error queueing video.' });
+    } catch (err: any) {
+      setNotification({ type: 'error', text: err.message || 'Error queueing video.' });
     } finally {
-      setLoading(false);
+      setIsQueueing(false);
     }
   };
 
-  const allImagesUploaded = scenes.length > 0 && scenes.every(s => Boolean(s.image_url));
+  // Calculated current day for interactive preview
+  const previewCurrentDay = Math.round(startDay + (endDay - startDay) * (previewProgress / 100));
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-8">
-      <div className="max-w-5xl mx-auto space-y-8">
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8 font-sans selection:bg-cyan-500 selection:text-black">
+      <div className="max-w-7xl mx-auto space-y-6">
         
-        {/* Header Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-6 md:p-8 border border-gray-100 dark:border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
+        {/* Navigation & Header */}
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900/80 backdrop-blur-xl border border-slate-800 p-6 rounded-3xl shadow-2xl">
+          <div className="space-y-1">
             <div className="flex items-center gap-3">
-              <span className="text-3xl">🌌</span>
-              <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 dark:text-white">
-                Dreamcore & Liminal Shorts Generator
+              <span className="text-3xl">🎬</span>
+              <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-sky-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
+                Video Flow
               </h1>
+              <span className="text-xs uppercase tracking-wider bg-sky-500/20 text-sky-400 border border-sky-500/30 px-2.5 py-0.5 rounded-full font-bold">
+                Studio
+              </span>
             </div>
-            <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
-              Create cohesive 16–18 second ambient shorts with 4 cinematic angles of the exact same location.
+            <p className="text-sm text-slate-400">
+              AI-powered Time Lapse & Video Generator with customizable overlays and Quicksand typography.
             </p>
           </div>
-          <div className="flex gap-3 w-full md:w-auto">
-            <Link 
-              href="/game" 
-              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-amber-500 hover:opacity-90 text-white font-bold transition-all text-center shadow-md shadow-red-500/20 text-sm"
+
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <Link
+              href="/"
+              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold transition-all border border-slate-700 hover:border-slate-600 shadow-sm"
+            >
+              📊 Main Dashboard
+            </Link>
+            <Link
+              href="/game"
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-amber-500 hover:opacity-90 text-white text-sm font-bold transition-all shadow-md shadow-red-500/20"
             >
               ⚔️ Arena Game
             </Link>
-            <Link 
-              href="/" 
-              className="px-4 py-2.5 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-all text-center text-sm"
-            >
-              Main Dashboard
-            </Link>
           </div>
-        </div>
+        </header>
 
-        {/* Message Banner */}
-        {message && (
-          <div className={`p-4 rounded-2xl text-sm font-medium border ${
-            message.type === 'success' ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800' : 
-            message.type === 'error' ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800' : 
-            'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
-          }`}>
-            {message.text}
+        {/* Notification Banner */}
+        {notification && (
+          <div
+            className={`p-4 rounded-2xl text-sm font-semibold border flex items-center justify-between transition-all ${
+              notification.type === 'success'
+                ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
+                : notification.type === 'error'
+                ? 'bg-rose-950/60 border-rose-500/40 text-rose-300'
+                : 'bg-sky-950/60 border-sky-500/40 text-sky-300'
+            }`}
+          >
+            <span>{notification.text}</span>
+            <button onClick={() => setNotification(null)} className="text-xs opacity-70 hover:opacity-100 ml-4">
+              ✕
+            </button>
           </div>
         )}
 
-        {/* Step 1: Input Theme */}
-        {step === 1 && (
-          <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-6 md:p-8 border border-gray-100 dark:border-gray-700 space-y-6">
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300">
-                  Dreamcore / Liminal Space Theme
-                </label>
-                <span className="text-xs bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-2.5 py-1 rounded-full font-semibold">
-                  15–18 Seconds Short
-                </span>
-              </div>
-              <input 
-                type="text" 
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                disabled={loading}
-                placeholder="e.g., Cherry blossom dream meadow, Liminal pool rooms, Nostalgic 90s mall..."
-                className="w-full px-4 py-3.5 border border-gray-300 dark:border-gray-600 rounded-2xl bg-white dark:bg-gray-700 text-gray-800 dark:text-white disabled:opacity-50 text-base focus:ring-2 focus:ring-purple-500 focus:outline-none"
+        {/* 1. Category Selection Bar (Time lapse, Dreamcore, + Add Category) */}
+        <section className="bg-slate-900/60 border border-slate-800/80 p-5 rounded-3xl space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+              <span>🏷️ Select Video Flow Category</span>
+            </label>
+            <span className="text-xs text-slate-500">Click to switch master prompt and workflow</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            {categories.map((cat) => {
+              const isSelected = selectedCategory === cat;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-5 py-2.5 rounded-2xl text-sm font-bold transition-all flex items-center gap-2 border ${
+                    isSelected
+                      ? 'bg-gradient-to-r from-sky-500 to-indigo-600 text-white border-sky-400 shadow-lg shadow-sky-500/25 scale-[1.02]'
+                      : 'bg-slate-800/90 text-slate-300 border-slate-700 hover:bg-slate-750 hover:border-slate-600'
+                  }`}
+                >
+                  <span>{cat === 'Time lapse' ? '⏱️' : cat === 'Dreamcore' ? '🌌' : '📁'}</span>
+                  <span>{cat}</span>
+                </button>
+              );
+            })}
+
+            <button
+              onClick={() => setShowAddCategoryModal(true)}
+              className="px-4 py-2.5 rounded-2xl text-sm font-bold text-slate-400 hover:text-white bg-slate-800/40 hover:bg-slate-800 border border-dashed border-slate-700 hover:border-slate-500 transition-all flex items-center gap-1.5"
+            >
+              <span>+</span>
+              <span>Add Category</span>
+            </button>
+          </div>
+
+          {/* Add Category Modal/Popup */}
+          {showAddCategoryModal && (
+            <div className="mt-4 p-4 rounded-2xl bg-slate-850 border border-slate-700 flex flex-col md:flex-row items-center gap-3">
+              <input
+                type="text"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                placeholder="Enter new category name (e.g., Fitness Transformation)..."
+                className="w-full md:flex-1 px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-sky-500"
               />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                💡 টিপস: আলাদা আলাদা জায়গার বদলে একই জায়গার ৪টি সিনেমাটিক অ্যাঙ্গেল (Establishing, Low-Angle, Tracking, Overhead) তৈরি হবে।
-              </p>
+              <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+                <button
+                  onClick={() => setShowAddCategoryModal(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddCategory}
+                  className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold shadow-md"
+                >
+                  Save Category
+                </button>
+              </div>
             </div>
+          )}
+        </section>
 
-            {/* Presets */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
-                Or Pick a Curated Preset (Click to generate instantly)
-              </label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {PRESET_THEMES.map((preset, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => {
-                      setTopic(preset.prompt);
-                      handleGenerateDraft(preset.prompt);
-                    }}
-                    disabled={loading}
-                    className="p-4 text-left rounded-2xl border border-gray-200 dark:border-gray-700 hover:border-purple-400 dark:hover:border-purple-500 bg-gray-50 dark:bg-gray-750 hover:bg-purple-50/50 dark:hover:bg-purple-950/20 transition-all group"
-                  >
-                    <div className="font-bold text-sm text-gray-800 dark:text-gray-100 group-hover:text-purple-600 dark:group-hover:text-purple-300">
-                      {preset.title}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
-                      {preset.desc}
-                    </div>
-                  </button>
-                ))}
+        {/* 2. Persistent Master Prompt Box */}
+        <section className="bg-slate-900/60 border border-slate-800/80 rounded-3xl overflow-hidden transition-all">
+          <div className="p-5 flex items-center justify-between border-b border-slate-800/60">
+            <div className="flex items-center gap-3">
+              <span className="text-xl">⚙️</span>
+              <div>
+                <h3 className="text-sm font-bold text-slate-200">
+                  Master Prompt for <span className="text-sky-400">"{selectedCategory}"</span>
+                </h3>
+                <p className="text-xs text-slate-500">
+                  This system instruction is saved permanently in your browser and guides every AI reply.
+                </p>
               </div>
             </div>
 
-            <div className="pt-4 flex justify-end">
+            <div className="flex items-center gap-3">
+              {masterPromptSavedNotice && (
+                <span className="text-xs text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-500/30 px-3 py-1 rounded-full animate-fade-in">
+                  ✓ Saved Permanently
+                </span>
+              )}
               <button
-                onClick={() => handleGenerateDraft()}
-                disabled={loading || !topic.trim()}
-                className={`px-8 py-3.5 rounded-2xl text-white font-bold transition-all shadow-md ${
-                  loading || !topic.trim()
-                    ? 'bg-purple-400 cursor-not-allowed' 
-                    : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 shadow-purple-500/25 active:scale-95'
+                onClick={() => {
+                  if (isEditingMasterPrompt) {
+                    handleSaveMasterPrompt();
+                  } else {
+                    setIsEditingMasterPrompt(true);
+                  }
+                }}
+                className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  isEditingMasterPrompt
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
                 }`}
               >
-                {loading ? 'Generating 4 Cohesive Shots...' : 'Generate 4 Cinematic Shots →'}
+                {isEditingMasterPrompt ? '💾 Save Master Prompt' : '✏️ Edit Master Prompt'}
               </button>
             </div>
           </div>
-        )}
 
-        {/* Step 2: Review Shots & Upload Images */}
-        {step === 2 && (
-          <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-lg p-6 md:p-8 border border-gray-100 dark:border-gray-700 space-y-6">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 border-b border-gray-100 dark:border-gray-700 pb-4">
-              <div>
-                <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">
-                  Step 2: Generate & Upload 4 Camera Angles
-                </h2>
-                <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  Copy each prompt below into Midjourney or Imagen, download the 9:16 images, and upload them here.
-                </p>
-              </div>
-              <div className="flex items-center gap-2 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-3 py-1.5 rounded-xl text-xs font-semibold">
-                <span>🎵 Lofi Chill Music: Active</span>
+          {isEditingMasterPrompt ? (
+            <div className="p-5 space-y-3 bg-slate-950/40">
+              <textarea
+                value={masterPrompt}
+                onChange={(e) => setMasterPrompt(e.target.value)}
+                rows={7}
+                className="w-full p-4 bg-slate-900 border border-slate-700 rounded-2xl text-xs font-mono text-slate-200 focus:outline-none focus:border-sky-500 leading-relaxed resize-y"
+                placeholder="Enter master prompt / system instructions..."
+              />
+              <div className="flex justify-between items-center text-xs text-slate-500">
+                <span>Tip: Specify days format, title format, and Midjourney/Kling video prompt constraints.</span>
+                <button
+                  onClick={handleSaveMasterPrompt}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-md"
+                >
+                  Save Changes Forever
+                </button>
               </div>
             </div>
+          ) : (
+            <div className="p-5 text-xs text-slate-400 font-mono line-clamp-2 hover:line-clamp-none transition-all cursor-pointer bg-slate-950/20"
+                 onClick={() => setIsEditingMasterPrompt(true)}>
+              {masterPrompt}
+            </div>
+          )}
+        </section>
 
-            {locationDescription && (
-              <div className="p-4 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900 text-xs md:text-sm text-indigo-900 dark:text-indigo-200 flex items-start gap-2">
-                <span className="text-base shrink-0">📍</span>
-                <div>
-                  <span className="font-bold">Shared Location: </span>
-                  {locationDescription}
-                </div>
+        {/* Main Grid: Left = AI Chat, Right = Video Customizer & Live 9:16 Preview */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          
+          {/* LEFT COLUMN: Gemini AI Chat Box (7 cols) */}
+          <div className="lg:col-span-7 bg-slate-900/80 border border-slate-800 p-6 rounded-3xl space-y-5 shadow-2xl flex flex-col h-[740px]">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <span>Gemini AI Assistant</span>
+                  <span className="text-xs text-slate-500 font-normal">({selectedCategory} Mode)</span>
+                </h2>
               </div>
-            )}
+              <button
+                onClick={() => setMessages([])}
+                className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                title="Clear Chat History"
+              >
+                Clear Chat
+              </button>
+            </div>
 
-            {/* Shots Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {scenes.map((scene, idx) => (
-                <div 
-                  key={idx} 
-                  className="bg-gray-50 dark:bg-gray-750/70 p-5 rounded-2xl border border-gray-200 dark:border-gray-700 flex flex-col justify-between gap-4"
+            {/* Quick Suggestion Chips */}
+            <div className="flex flex-wrap gap-2 pt-1">
+              {[
+                '🌱 Plant Growth 0-90 Days Prompts',
+                '🏋️ Weight Loss 0-90 Days Prompts',
+                '🐶 Puppy Growth 0-90 Days Prompts',
+                '💡 5 Viral Time Lapse Titles',
+              ].map((chip, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleSendMessage(chip)}
+                  disabled={isChatLoading}
+                  className="text-xs bg-slate-800 hover:bg-slate-700/80 border border-slate-700/80 hover:border-sky-500 text-slate-300 px-3 py-1.5 rounded-full transition-all"
                 >
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="bg-purple-600 text-white text-xs font-extrabold px-2 py-0.5 rounded-lg">
-                          Shot {idx + 1}/4
-                        </span>
-                        <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
-                          {scene.camera_angle || `Angle ${idx + 1}`}
-                        </span>
-                      </div>
-                      <span className="text-[11px] bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-0.5 rounded-md font-mono">
-                        🎬 {scene.camera_motion || 'zoom-in'}
-                      </span>
-                    </div>
-
-                    <div className="relative bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-200 dark:border-gray-600 text-xs text-gray-700 dark:text-gray-300 font-mono leading-relaxed line-clamp-4 hover:line-clamp-none transition-all">
-                      {scene.image_keyword}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-3 pt-2 border-t border-gray-200/60 dark:border-gray-700/60">
-                    <button
-                      type="button"
-                      onClick={() => handleCopyPrompt(scene.image_keyword, idx)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                        copiedIndex === idx
-                          ? 'bg-green-600 text-white shadow-sm'
-                          : 'bg-purple-100 hover:bg-purple-200 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 dark:hover:bg-purple-800/60'
-                      }`}
-                    >
-                      {copiedIndex === idx ? '✓ Copied!' : '📋 Copy Prompt'}
-                    </button>
-
-                    <div className="flex items-center gap-3">
-                      {scene.image_url ? (
-                        <div className="relative w-11 h-16 shrink-0 rounded-lg overflow-hidden border-2 border-green-500 shadow-sm bg-black">
-                          {scene.image_url.startsWith('data:video/') || scene.image_url.endsWith('.mp4') || scene.image_url.endsWith('.webm') ? (
-                            <video src={scene.image_url} autoPlay loop muted playsInline className="w-full h-full object-cover" />
-                          ) : (
-                            <img src={scene.image_url} alt={`Shot ${idx + 1}`} className="w-full h-full object-cover" />
-                          )}
-                          <div className="absolute top-0 right-0 bg-green-500 text-white px-1 text-[9px] font-bold">
-                            ✓
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="w-11 h-16 shrink-0 rounded-lg bg-gray-200 dark:bg-gray-700 border border-dashed border-gray-400 dark:border-gray-600 flex items-center justify-center text-[9px] text-gray-500 font-mono text-center">
-                          9:16
-                        </div>
-                      )}
-
-                      <label className={`cursor-pointer text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors text-center shadow-sm flex items-center justify-center min-w-[95px] ${
-                        uploadingIndex === idx 
-                          ? 'bg-amber-600 cursor-wait animate-pulse' 
-                          : 'bg-blue-600 hover:bg-blue-700'
-                      }`}>
-                        {uploadingIndex === idx ? '⏳ Uploading...' : scene.image_url ? 'Change File' : 'Upload File'}
-                        <input 
-                          type="file" 
-                          disabled={uploadingIndex !== null || loading}
-                          accept="image/*,video/mp4,video/webm" 
-                          className="hidden" 
-                          onChange={(e) => handleFileUpload(idx, e)}
-                        />
-                      </label>
-                    </div>
-                  </div>
-                </div>
+                  {chip}
+                </button>
               ))}
             </div>
 
-            {/* Advanced JSON toggle */}
-            <details className="mt-4 pt-2 border-t border-gray-100 dark:border-gray-700">
-              <summary className="cursor-pointer text-xs font-semibold text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
-                ⚙️ Advanced Script JSON (Optional)
-              </summary>
-              <textarea
-                value={draftJson}
-                onChange={(e) => setDraftJson(e.target.value)}
-                className="w-full mt-2 h-44 font-mono text-xs p-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 resize-none focus:ring-2 focus:ring-purple-500"
-              />
-            </details>
+            {/* Messages Scroll Area */}
+            <div className="flex-1 overflow-y-auto space-y-4 pr-2 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+              {messages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center p-8 text-slate-500 space-y-3">
+                  <span className="text-4xl opacity-50">✨</span>
+                  <p className="text-sm font-medium">
+                    Ask Gemini to generate your 0–90 Day Time Lapse progression prompts, image keywords, or video titles!
+                  </p>
+                  <p className="text-xs text-slate-600">
+                    Replies are tailored automatically by the persistent Master Prompt.
+                  </p>
+                </div>
+              ) : (
+                messages.map((m, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}
+                  >
+                    <div
+                      className={`max-w-[88%] p-4 rounded-2xl text-xs md:text-sm leading-relaxed whitespace-pre-wrap ${
+                        m.role === 'user'
+                          ? 'bg-gradient-to-r from-sky-600 to-indigo-600 text-white rounded-tr-none shadow-md'
+                          : 'bg-slate-800/90 text-slate-200 border border-slate-700/80 rounded-tl-none shadow-sm'
+                      }`}
+                    >
+                      {m.text}
+                    </div>
+                    {m.role === 'model' && (
+                      <button
+                        onClick={() => navigator.clipboard.writeText(m.text)}
+                        className="text-[11px] text-slate-500 hover:text-sky-400 mt-1 ml-1 flex items-center gap-1 transition-colors"
+                      >
+                        📋 Copy Reply
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
 
-            {/* Actions */}
-            <div className="flex justify-between items-center pt-4">
-              <button 
-                onClick={() => setStep(1)}
-                className="px-6 py-3 bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600 rounded-2xl font-medium transition-colors text-sm"
-              >
-                ← Back
-              </button>
+              {isChatLoading && (
+                <div className="flex items-center gap-2 text-xs text-sky-400 bg-slate-850 p-3 rounded-2xl w-fit border border-slate-700 animate-pulse">
+                  <span>✨ Gemini is thinking & crafting prompts...</span>
+                </div>
+              )}
+              <div ref={chatBottomRef} />
+            </div>
+
+            {/* Chat Input Bar */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSendMessage();
+              }}
+              className="pt-2 flex items-center gap-2 border-t border-slate-800"
+            >
+              <input
+                type="text"
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                placeholder={`Ask Gemini for ${selectedCategory} prompts or day breakdowns...`}
+                disabled={isChatLoading}
+                className="flex-1 px-4 py-3 bg-slate-950 border border-slate-700 rounded-2xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+              />
               <button
-                onClick={handleQueueVideo}
-                disabled={loading || !allImagesUploaded}
-                className={`px-8 py-3.5 rounded-2xl text-white font-bold transition-all shadow-md text-sm ${
-                  loading || !allImagesUploaded
-                    ? 'bg-emerald-400/60 cursor-not-allowed opacity-75' 
-                    : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/25 active:scale-95'
+                type="submit"
+                disabled={isChatLoading || !inputMessage.trim()}
+                className={`px-5 py-3 rounded-2xl font-bold text-sm text-white transition-all shadow-md ${
+                  isChatLoading || !inputMessage.trim()
+                    ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 active:scale-95'
                 }`}
               >
-                {loading ? 'Queueing Video...' : allImagesUploaded ? 'Start Rendering Video →' : 'Upload All 4 Images to Render'}
+                Send →
               </button>
-            </div>
+            </form>
           </div>
-        )}
+
+          {/* RIGHT COLUMN: Video Upload, Day Setup & Live 9:16 Preview (5 cols) */}
+          <div className="lg:col-span-5 space-y-6">
+            
+            {/* Customization Settings Card */}
+            <div className="bg-slate-900/80 border border-slate-800 p-6 rounded-3xl space-y-5 shadow-2xl">
+              <h2 className="text-base font-bold text-white border-b border-slate-800 pb-3 flex items-center gap-2">
+                <span>📹 Video Customizer</span>
+                <span className="text-xs text-sky-400 font-mono font-normal">(Font: Quicksand)</span>
+              </h2>
+
+              {/* 1. Title Input (Quicksand font) */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                  Top Video Title
+                </label>
+                <input
+                  type="text"
+                  value={videoTitle}
+                  onChange={(e) => setVideoTitle(e.target.value)}
+                  placeholder="e.g., 90 Days Plant Growth"
+                  className="w-full px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:border-sky-500"
+                  style={{ fontFamily: 'Quicksand, sans-serif', fontWeight: 700 }}
+                />
+              </div>
+
+              {/* 2. Video Upload Box */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                  Upload Timelapse Video
+                </label>
+                <div className="relative border-2 border-dashed border-slate-700 hover:border-sky-500 bg-slate-950/60 rounded-2xl p-4 text-center transition-all">
+                  <input
+                    type="file"
+                    accept="video/mp4,video/webm,video/quicktime,image/*"
+                    onChange={handleVideoUpload}
+                    disabled={isUploading}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                  />
+                  <div className="flex flex-col items-center justify-center gap-1.5">
+                    <span className="text-2xl">{isUploading ? '⏳' : videoUrl ? '✅' : '📤'}</span>
+                    <span className="text-xs font-bold text-slate-200">
+                      {isUploading
+                        ? 'Uploading media to cloud storage...'
+                        : videoUrl
+                        ? 'Video Uploaded! Click to replace'
+                        : 'Choose or drag & drop video file'}
+                    </span>
+                    <span className="text-[11px] text-slate-500">Supports .mp4, .webm (Vertical 9:16 recommended)</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Day Settings (0 to 90) */}
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-300">Start Day</label>
+                  <input
+                    type="number"
+                    value={startDay}
+                    onChange={(e) => setStartDay(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white text-center font-bold focus:outline-none focus:border-sky-500"
+                    style={{ fontFamily: 'Quicksand, sans-serif' }}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-300">End Day</label>
+                  <input
+                    type="number"
+                    value={endDay}
+                    onChange={(e) => setEndDay(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white text-center font-bold focus:outline-none focus:border-sky-500"
+                    style={{ fontFamily: 'Quicksand, sans-serif' }}
+                  />
+                </div>
+              </div>
+
+              {/* Day Prefix & Duration */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-300">Day Label / Prefix</label>
+                  <input
+                    type="text"
+                    value={dayPrefix}
+                    onChange={(e) => setDayPrefix(e.target.value)}
+                    placeholder="Day "
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white text-center focus:outline-none focus:border-sky-500"
+                    style={{ fontFamily: 'Quicksand, sans-serif' }}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-300">Video Duration (Sec)</label>
+                  <input
+                    type="number"
+                    value={durationSeconds}
+                    onChange={(e) => setDurationSeconds(Number(e.target.value))}
+                    min={5}
+                    max={60}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white text-center font-bold focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+              </div>
+
+              {/* Start Rendering Button */}
+              <div className="pt-2">
+                <button
+                  onClick={handleQueueRender}
+                  disabled={isQueueing || isUploading || !videoUrl}
+                  className={`w-full py-4 rounded-2xl font-bold text-sm text-white transition-all shadow-xl flex items-center justify-center gap-2 ${
+                    isQueueing || isUploading || !videoUrl
+                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                      : 'bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-600 hover:from-emerald-400 hover:to-sky-500 shadow-emerald-500/25 active:scale-95'
+                  }`}
+                >
+                  <span>{isQueueing ? '⏳ Queueing Render...' : '🚀 Start Rendering Video'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* LIVE 9:16 VERTICAL PREVIEW MOCKUP */}
+            <div className="bg-slate-900/80 border border-slate-800 p-6 rounded-3xl space-y-4 shadow-2xl flex flex-col items-center">
+              <div className="w-full flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  📱 Live 9:16 Preview
+                </span>
+                <span className="text-xs text-sky-400 font-mono">
+                  Quicksand Font Active
+                </span>
+              </div>
+
+              {/* Mockup Frame (9:16 Aspect Ratio) */}
+              <div className="relative w-[280px] h-[498px] bg-black rounded-3xl overflow-hidden shadow-2xl border-4 border-slate-700 flex flex-col justify-between">
+                
+                {/* Background Video or Placeholder */}
+                {videoUrl ? (
+                  <video
+                    src={videoUrl}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="absolute inset-0 bg-gradient-to-b from-slate-800 to-slate-950 flex flex-col items-center justify-center p-6 text-center text-slate-500">
+                    <span className="text-4xl mb-2 opacity-40">🎬</span>
+                    <span className="text-xs">Upload video above to preview live overlay</span>
+                  </div>
+                )}
+
+                {/* Top Overlay Gradient */}
+                <div className="absolute top-0 left-0 right-0 h-28 bg-gradient-to-b from-black/80 to-transparent pointer-events-none z-10" />
+
+                {/* Bottom Overlay Gradient */}
+                <div className="absolute bottom-0 left-0 right-0 h-36 bg-gradient-to-t from-black/90 to-transparent pointer-events-none z-10" />
+
+                {/* Top Title in Quicksand Font */}
+                <div className="relative z-20 pt-8 px-4 text-center">
+                  {videoTitle && (
+                    <div
+                      className="inline-block px-3.5 py-1.5 rounded-full bg-black/40 backdrop-blur-md border border-white/20 text-white text-xs font-extrabold shadow-lg"
+                      style={{ fontFamily: 'Quicksand, sans-serif' }}
+                    >
+                      {videoTitle}
+                    </div>
+                  )}
+                </div>
+
+                {/* Bottom Day Counter in Quicksand Font */}
+                <div className="relative z-20 pb-10 flex flex-col items-center gap-2">
+                  <div
+                    className="px-5 py-2 rounded-full bg-slate-900/80 backdrop-blur-md border-2 border-white/30 text-white text-lg font-extrabold shadow-2xl"
+                    style={{ fontFamily: 'Quicksand, sans-serif', letterSpacing: '0.5px' }}
+                  >
+                    {dayPrefix}{previewCurrentDay}
+                  </div>
+                  {/* Progress bar */}
+                  <div className="w-24 h-1 bg-white/25 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-sky-400 rounded-full"
+                      style={{ width: `${previewProgress}%` }}
+                    />
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Interactive Scrub Slider for Day Testing */}
+              <div className="w-full space-y-1">
+                <div className="flex justify-between text-[11px] text-slate-400">
+                  <span>Scrub Day Progress:</span>
+                  <span className="font-bold text-sky-400" style={{ fontFamily: 'Quicksand, sans-serif' }}>
+                    {dayPrefix}{previewCurrentDay} ({previewProgress}%)
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={previewProgress}
+                  onChange={(e) => setPreviewProgress(Number(e.target.value))}
+                  className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                />
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
 
       </div>
     </div>
