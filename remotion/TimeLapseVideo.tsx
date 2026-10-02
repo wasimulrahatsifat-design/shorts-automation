@@ -17,6 +17,11 @@ const { fontFamily } = loadFont('normal', {
   ignoreTooManyRequestsWarning: true,
 });
 
+export interface DayKeyframe {
+  time: number; // in seconds
+  day: number;  // day number
+}
+
 export interface TimeLapseVideoJson {
   format?: 'TimeLapseVideo' | 'VideoFlow' | string;
   topic?: string;
@@ -26,9 +31,61 @@ export interface TimeLapseVideoJson {
   end_day?: number;
   day_prefix?: string;
   duration_seconds?: number;
+  pacing_mode?: 'linear' | 'slow_start' | 'fast_start' | 'custom';
+  keyframes?: DayKeyframe[];
   bg_music_url?: string;
   bg_music_volume?: number;
   bg_music_enabled?: boolean;
+}
+
+export function calculateDayAtSecond({
+  second,
+  duration,
+  startDay,
+  endDay,
+  pacingMode = 'linear',
+  keyframes,
+}: {
+  second: number;
+  duration: number;
+  startDay: number;
+  endDay: number;
+  pacingMode?: 'linear' | 'slow_start' | 'fast_start' | 'custom' | string;
+  keyframes?: DayKeyframe[];
+}): number {
+  const clampedSecond = Math.max(0, Math.min(duration, second));
+
+  // Custom Keyframes interpolation
+  if (pacingMode === 'custom' && keyframes && keyframes.length >= 2) {
+    const sorted = [...keyframes].sort((a, b) => a.time - b.time);
+    if (clampedSecond <= sorted[0].time) return sorted[0].day;
+    if (clampedSecond >= sorted[sorted.length - 1].time) return sorted[sorted.length - 1].day;
+
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const k1 = sorted[i];
+      const k2 = sorted[i + 1];
+      if (clampedSecond >= k1.time && clampedSecond <= k2.time) {
+        const span = k2.time - k1.time;
+        if (span <= 0.0001) return k2.day;
+        const ratio = (clampedSecond - k1.time) / span;
+        return Math.round(k1.day + ratio * (k2.day - k1.day));
+      }
+    }
+    return sorted[sorted.length - 1].day;
+  }
+
+  const progress = duration > 0 ? clampedSecond / duration : 0;
+  let adjustedProgress = progress;
+
+  if (pacingMode === 'slow_start') {
+    // Ease-in (growth curve): slow start for planting/germination (first 2-3s stays low), then accelerates
+    adjustedProgress = Math.pow(progress, 2.2);
+  } else if (pacingMode === 'fast_start') {
+    // Ease-out: fast initial burst, then settles
+    adjustedProgress = 1 - Math.pow(1 - progress, 2.2);
+  }
+
+  return Math.round(startDay + adjustedProgress * (endDay - startDay));
 }
 
 const resolveAudioUrl = (url?: string) => {
@@ -63,7 +120,7 @@ export const TimeLapseVideo: React.FC<{ data_json: TimeLapseVideoJson; topic?: s
   topic,
 }) => {
   const frame = useCurrentFrame();
-  const { durationInFrames } = useVideoConfig();
+  const { durationInFrames, fps } = useVideoConfig();
 
   const {
     video_url,
@@ -71,6 +128,8 @@ export const TimeLapseVideo: React.FC<{ data_json: TimeLapseVideoJson; topic?: s
     start_day = 0,
     end_day = 90,
     day_prefix = 'Day ',
+    pacing_mode = 'linear',
+    keyframes,
     bg_music_url,
     bg_music_volume = 0.35,
     bg_music_enabled = false,
@@ -78,16 +137,17 @@ export const TimeLapseVideo: React.FC<{ data_json: TimeLapseVideoJson; topic?: s
 
   const resolvedVideoUrl = resolveMediaUrl(video_url);
 
-  // Calculate current day linearly across duration
-  const currentDay = Math.round(
-    interpolate(frame, [0, durationInFrames], [start_day, end_day], {
-      extrapolateRight: 'clamp',
-    })
-  );
-
-  // Calculate day progress percentage for progress bar
-  const totalDays = Math.max(1, end_day - start_day);
-  const currentDayProgress = Math.min(100, Math.max(0, ((currentDay - start_day) / totalDays) * 100));
+  // Calculate current second and day based on pacing mode or keyframes
+  const durationSeconds = durationInFrames / fps;
+  const currentSecond = frame / fps;
+  const currentDay = calculateDayAtSecond({
+    second: currentSecond,
+    duration: durationSeconds,
+    startDay: start_day,
+    endDay: end_day,
+    pacingMode: pacing_mode,
+    keyframes,
+  });
 
   const isVideo = Boolean(
     resolvedVideoUrl && (
@@ -154,7 +214,7 @@ export const TimeLapseVideo: React.FC<{ data_json: TimeLapseVideoJson; topic?: s
           left: 0,
           right: 0,
           height: 380,
-          background: 'linear-gradient(to bottom, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.5) 50%, rgba(0,0,0,0) 100%)',
+          background: 'linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.5) 50%, rgba(0,0,0,0) 100%)',
           pointerEvents: 'none',
         }}
       />
@@ -166,20 +226,20 @@ export const TimeLapseVideo: React.FC<{ data_json: TimeLapseVideoJson; topic?: s
           bottom: 0,
           left: 0,
           right: 0,
-          height: 480,
-          background: 'linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.55) 55%, rgba(0,0,0,0) 100%)',
+          height: 380,
+          background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.5) 50%, rgba(0,0,0,0) 100%)',
           pointerEvents: 'none',
         }}
       />
 
-      {/* Top Title in Quicksand Font */}
+      {/* Top Title in Quicksand Font - Higher up, Larger size, NO border, NO box */}
       {title && title.trim() && (
         <div
           style={{
             position: 'absolute',
-            top: 130,
-            left: 50,
-            right: 50,
+            top: 70,
+            left: 40,
+            right: 40,
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
@@ -190,17 +250,11 @@ export const TimeLapseVideo: React.FC<{ data_json: TimeLapseVideoJson; topic?: s
             style={{
               fontFamily,
               fontWeight: 700,
-              fontSize: 54,
+              fontSize: 70,
               color: '#FFFFFF',
-              lineHeight: 1.25,
+              lineHeight: 1.2,
               letterSpacing: '-0.5px',
-              textShadow: '0 4px 20px rgba(0, 0, 0, 0.95), 0 2px 6px rgba(0, 0, 0, 0.9)',
-              padding: '12px 32px',
-              backgroundColor: 'rgba(0, 0, 0, 0.42)',
-              backdropFilter: 'blur(10px)',
-              borderRadius: 40,
-              border: '1.5px solid rgba(255, 255, 255, 0.25)',
-              boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)',
+              textShadow: '0 4px 24px rgba(0, 0, 0, 0.95), 0 2px 8px rgba(0, 0, 0, 0.9), 0 0 35px rgba(0, 0, 0, 0.8)',
             }}
           >
             {title}
@@ -208,62 +262,29 @@ export const TimeLapseVideo: React.FC<{ data_json: TimeLapseVideoJson; topic?: s
         </div>
       )}
 
-      {/* Bottom Center Day Counter in Quicksand Font */}
+      {/* Bottom Center Day Counter in Quicksand Font - Lower down, Smaller size, NO border, NO capsule, NO progress bar */}
       <div
         style={{
           position: 'absolute',
-          bottom: 180,
+          bottom: 85,
           left: 0,
           right: 0,
           display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
           justifyContent: 'center',
-          gap: 14,
+          alignItems: 'center',
         }}
       >
         <div
           style={{
             fontFamily,
             fontWeight: 700,
-            fontSize: 68,
+            fontSize: 50,
             color: '#FFFFFF',
             letterSpacing: '0.5px',
-            backgroundColor: 'rgba(15, 23, 42, 0.72)',
-            backdropFilter: 'blur(16px)',
-            padding: '16px 52px',
-            borderRadius: 60,
-            border: '2.5px solid rgba(255, 255, 255, 0.35)',
-            boxShadow: '0 14px 40px rgba(0, 0, 0, 0.75), inset 0 1px 2px rgba(255, 255, 255, 0.3)',
-            textShadow: '0 3px 12px rgba(0, 0, 0, 0.9)',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            textShadow: '0 4px 20px rgba(0, 0, 0, 0.95), 0 2px 8px rgba(0, 0, 0, 0.9), 0 0 25px rgba(0, 0, 0, 0.75)',
           }}
         >
           {day_prefix}{currentDay}
-        </div>
-
-        {/* Minimalist Day Progression Bar */}
-        <div
-          style={{
-            width: 320,
-            height: 7,
-            backgroundColor: 'rgba(255, 255, 255, 0.22)',
-            borderRadius: 10,
-            overflow: 'hidden',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
-          }}
-        >
-          <div
-            style={{
-              width: `${currentDayProgress}%`,
-              height: '100%',
-              backgroundColor: '#38BDF8',
-              borderRadius: 10,
-              boxShadow: '0 0 10px #38BDF8',
-            }}
-          />
         </div>
       </div>
 

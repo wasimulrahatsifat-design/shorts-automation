@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { calculateDayAtSecond, DayKeyframe } from '@/remotion/TimeLapseVideo';
 
 interface ChatMessage {
   role: 'user' | 'model';
@@ -39,20 +40,31 @@ export default function VideoFlowPage() {
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
   // Video / Flow settings
-  const [videoTitle, setVideoTitle] = useState('90 Days Transformation');
+  const [videoTitle, setVideoTitle] = useState('90 Days Plant Growth');
   const [videoUrl, setVideoUrl] = useState('');
   const [startDay, setStartDay] = useState<number>(0);
   const [endDay, setEndDay] = useState<number>(90);
   const [dayPrefix, setDayPrefix] = useState('Day ');
   const [durationSeconds, setDurationSeconds] = useState<number>(15);
 
+  // Day Pacing & Milestones state
+  const [pacingMode, setPacingMode] = useState<'slow_start' | 'linear' | 'fast_start' | 'custom'>('slow_start');
+  const [milestones, setMilestones] = useState<DayKeyframe[]>([
+    { time: 0, day: 0 },
+    { time: 2, day: 1 },
+    { time: 3.5, day: 6 },
+    { time: 8, day: 35 },
+    { time: 15, day: 90 },
+  ]);
+
   // Upload & Rendering state
   const [isUploading, setIsUploading] = useState(false);
   const [isQueueing, setIsQueueing] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
-  // Interactive preview scrub slider
-  const [previewProgress, setPreviewProgress] = useState<number>(50); // 0 to 100%
+  // Interactive preview scrub slider & video ref
+  const [previewProgress, setPreviewProgress] = useState<number>(30); // 0 to 100%
+  const previewVideoRef = useRef<HTMLVideoElement>(null);
 
   // 1. Load Categories and Master Prompts from localStorage on mount
   useEffect(() => {
@@ -223,6 +235,8 @@ export default function VideoFlowPage() {
           end_day: Number(endDay) || 90,
           day_prefix: dayPrefix,
           duration_seconds: Number(durationSeconds) || 15,
+          pacing_mode: pacingMode,
+          keyframes: pacingMode === 'custom' ? milestones : undefined,
         },
         duration: Number(durationSeconds) || 15,
         showSubtitles: false,
@@ -250,8 +264,50 @@ export default function VideoFlowPage() {
     }
   };
 
-  // Calculated current day for interactive preview
-  const previewCurrentDay = Math.round(startDay + (endDay - startDay) * (previewProgress / 100));
+  // Milestone management handlers
+  const handleAddMilestone = () => {
+    const newPoint: DayKeyframe = {
+      time: Number(previewSecond.toFixed(1)),
+      day: previewCurrentDay,
+    };
+    const updated = [...milestones.filter((m) => Math.abs(m.time - previewSecond) > 0.1), newPoint].sort(
+      (a, b) => a.time - b.time
+    );
+    setMilestones(updated);
+    setPacingMode('custom');
+  };
+
+  const handleUpdateMilestone = (index: number, field: 'time' | 'day', value: number) => {
+    const updated = [...milestones];
+    updated[index] = { ...updated[index], [field]: value };
+    setMilestones(updated);
+  };
+
+  const handleRemoveMilestone = (index: number) => {
+    if (milestones.length <= 2) {
+      setNotification({ type: 'error', text: 'At least 2 timeline points are required.' });
+      return;
+    }
+    setMilestones(milestones.filter((_, i) => i !== index));
+  };
+
+  // Calculated current second & day for interactive preview
+  const previewSecond = Number(((previewProgress / 100) * (durationSeconds || 15)).toFixed(1));
+  const previewCurrentDay = calculateDayAtSecond({
+    second: previewSecond,
+    duration: durationSeconds || 15,
+    startDay: Number(startDay) || 0,
+    endDay: Number(endDay) || 90,
+    pacingMode,
+    keyframes: milestones,
+  });
+
+  const handleScrubChange = (val: number) => {
+    setPreviewProgress(val);
+    if (previewVideoRef.current && durationSeconds > 0) {
+      previewVideoRef.current.currentTime = (val / 100) * durationSeconds;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8 font-sans selection:bg-cyan-500 selection:text-black">
@@ -610,7 +666,7 @@ export default function VideoFlowPage() {
                 </div>
               </div>
 
-              {/* 3. Day Settings (0 to 90) */}
+              {/* 3. Day Settings (Start Day & End Day) */}
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-300">Start Day</label>
@@ -648,7 +704,7 @@ export default function VideoFlowPage() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-300">Video Duration (Sec)</label>
+                  <label className="text-xs font-bold text-slate-300">Duration (Sec)</label>
                   <input
                     type="number"
                     value={durationSeconds}
@@ -658,6 +714,160 @@ export default function VideoFlowPage() {
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white text-center font-bold focus:outline-none focus:border-sky-500"
                   />
                 </div>
+              </div>
+
+              {/* 4. Day Pacing / Speed Progression Mode */}
+              <div className="space-y-2 pt-2 border-t border-slate-800">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>⏱️ Day Speed & Timing Mode</span>
+                  </label>
+                  <span className="text-[11px] text-sky-400">
+                    {pacingMode === 'slow_start' && '🌱 Plant Growth (Slow Start)'}
+                    {pacingMode === 'linear' && '⚖️ Constant Linear'}
+                    {pacingMode === 'fast_start' && '⚡ Fast Start'}
+                    {pacingMode === 'custom' && '🎯 Custom Milestones'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPacingMode('slow_start')}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      pacingMode === 'slow_start'
+                        ? 'bg-sky-500/15 border-sky-500 text-sky-300 font-bold'
+                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="text-xs font-bold">🌱 Slow Start (Plant)</div>
+                    <div className="text-[10px] text-slate-500 leading-tight mt-0.5">
+                      বীজ রোপনে শুরুতে ধীর, পরে দ্রুত
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPacingMode('custom')}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      pacingMode === 'custom'
+                        ? 'bg-sky-500/15 border-sky-500 text-sky-300 font-bold'
+                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="text-xs font-bold">🎯 Custom Milestones</div>
+                    <div className="text-[10px] text-slate-500 leading-tight mt-0.5">
+                      নির্দিষ্ট সেকেন্ডে নির্দিষ্ট দিন নির্ধারণ
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPacingMode('linear')}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      pacingMode === 'linear'
+                        ? 'bg-sky-500/15 border-sky-500 text-sky-300 font-bold'
+                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="text-xs font-bold">⚖️ Smooth Linear</div>
+                    <div className="text-[10px] text-slate-500 leading-tight mt-0.5">
+                      সমান ধ্রুব গতিতে বৃদ্ধি
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPacingMode('fast_start')}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      pacingMode === 'fast_start'
+                        ? 'bg-sky-500/15 border-sky-500 text-sky-300 font-bold'
+                        : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="text-xs font-bold">⚡ Fast Start</div>
+                    <div className="text-[10px] text-slate-500 leading-tight mt-0.5">
+                      শুরুতেই দ্রুত বৃদ্ধি, পরে ধীর
+                    </div>
+                  </button>
+                </div>
+
+                {/* Custom Milestones Sub-Editor */}
+                {pacingMode === 'custom' && (
+                  <div className="mt-3 p-3.5 bg-slate-950/80 border border-slate-800 rounded-2xl space-y-2.5 animate-fadeIn">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-300">Timeline Points ({milestones.length})</span>
+                      <button
+                        type="button"
+                        onClick={handleAddMilestone}
+                        className="px-2.5 py-1 bg-sky-500/20 hover:bg-sky-500/30 text-sky-400 border border-sky-500/30 rounded-lg text-[11px] font-bold transition-all"
+                      >
+                        📍 Set at Current Time ({previewSecond}s)
+                      </button>
+                    </div>
+
+                    <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                      {milestones.map((k, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl text-xs"
+                        >
+                          <span className="text-slate-500 text-[10px] font-mono">#{idx + 1}</span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-slate-400 text-[11px]">Time:</span>
+                            <input
+                              type="number"
+                              step="0.5"
+                              value={k.time}
+                              onChange={(e) => handleUpdateMilestone(idx, 'time', Number(e.target.value))}
+                              className="w-14 px-1.5 py-0.5 bg-slate-950 border border-slate-700 rounded text-center text-white text-xs font-mono"
+                            />
+                            <span className="text-slate-500 text-[11px]">s</span>
+                          </div>
+
+                          <div className="flex items-center gap-1 ml-auto">
+                            <span className="text-slate-400 text-[11px]">Day:</span>
+                            <input
+                              type="number"
+                              value={k.day}
+                              onChange={(e) => handleUpdateMilestone(idx, 'day', Number(e.target.value))}
+                              className="w-16 px-1.5 py-0.5 bg-slate-950 border border-slate-700 rounded text-center text-white text-xs font-bold"
+                              style={{ fontFamily: 'Quicksand, sans-serif' }}
+                            />
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMilestone(idx)}
+                            className="text-slate-500 hover:text-rose-400 p-1 transition-colors text-xs"
+                            title="Delete Milestone"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex justify-between items-center pt-1 text-[11px] text-slate-500">
+                      <span>Tip: Video scrubber টেনে ঠিক মুহূর্তের ডে সেট করুন</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setMilestones([
+                            { time: 0, day: 0 },
+                            { time: 2, day: 1 },
+                            { time: 3.5, day: 6 },
+                            { time: 8, day: 35 },
+                            { time: 15, day: 90 },
+                          ])
+                        }
+                        className="text-slate-400 hover:text-sky-400 underline"
+                      >
+                        Reset Plant Preset
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Start Rendering Button */}
@@ -693,6 +903,7 @@ export default function VideoFlowPage() {
                 {/* Background Video or Placeholder */}
                 {videoUrl ? (
                   <video
+                    ref={previewVideoRef}
                     src={videoUrl}
                     autoPlay
                     loop
@@ -707,49 +918,52 @@ export default function VideoFlowPage() {
                   </div>
                 )}
 
-                {/* Top Overlay Gradient */}
-                <div className="absolute top-0 left-0 right-0 h-28 bg-gradient-to-b from-black/80 to-transparent pointer-events-none z-10" />
+                {/* Top Overlay Gradient for text readability */}
+                <div className="absolute top-0 left-0 right-0 h-28 bg-gradient-to-b from-black/85 via-black/40 to-transparent pointer-events-none z-10" />
 
-                {/* Bottom Overlay Gradient */}
-                <div className="absolute bottom-0 left-0 right-0 h-36 bg-gradient-to-t from-black/90 to-transparent pointer-events-none z-10" />
+                {/* Bottom Overlay Gradient for text readability */}
+                <div className="absolute bottom-0 left-0 right-0 h-28 bg-gradient-to-t from-black/85 via-black/40 to-transparent pointer-events-none z-10" />
 
-                {/* Top Title in Quicksand Font */}
-                <div className="relative z-20 pt-8 px-4 text-center">
+                {/* Top Title in Quicksand Font - Placed higher up, larger size, NO border, NO capsule */}
+                <div className="relative z-20 pt-4 px-3 text-center pointer-events-none">
                   {videoTitle && (
                     <div
-                      className="inline-block px-3.5 py-1.5 rounded-full bg-black/40 backdrop-blur-md border border-white/20 text-white text-xs font-extrabold shadow-lg"
-                      style={{ fontFamily: 'Quicksand, sans-serif' }}
+                      className="text-white text-base sm:text-lg font-bold leading-tight tracking-tight drop-shadow-md"
+                      style={{
+                        fontFamily: 'Quicksand, sans-serif',
+                        textShadow:
+                          '0 2px 14px rgba(0, 0, 0, 0.95), 0 1px 4px rgba(0, 0, 0, 0.9), 0 0 20px rgba(0, 0, 0, 0.8)',
+                      }}
                     >
                       {videoTitle}
                     </div>
                   )}
                 </div>
 
-                {/* Bottom Day Counter in Quicksand Font */}
-                <div className="relative z-20 pb-10 flex flex-col items-center gap-2">
+                {/* Bottom Center Day Counter in Quicksand Font - Placed lower down, smaller size, NO border, NO capsule, NO progress bar */}
+                <div className="relative z-20 pb-4 flex flex-col items-center pointer-events-none">
                   <div
-                    className="px-5 py-2 rounded-full bg-slate-900/80 backdrop-blur-md border-2 border-white/30 text-white text-lg font-extrabold shadow-2xl"
-                    style={{ fontFamily: 'Quicksand, sans-serif', letterSpacing: '0.5px' }}
+                    className="text-white text-sm sm:text-base font-bold tracking-wide"
+                    style={{
+                      fontFamily: 'Quicksand, sans-serif',
+                      textShadow:
+                        '0 2px 12px rgba(0, 0, 0, 0.95), 0 1px 4px rgba(0, 0, 0, 0.9)',
+                    }}
                   >
                     {dayPrefix}{previewCurrentDay}
-                  </div>
-                  {/* Progress bar */}
-                  <div className="w-24 h-1 bg-white/25 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-sky-400 rounded-full"
-                      style={{ width: `${previewProgress}%` }}
-                    />
                   </div>
                 </div>
 
               </div>
 
-              {/* Interactive Scrub Slider for Day Testing */}
-              <div className="w-full space-y-1">
+              {/* Interactive Scrub Slider for Day & Video Testing */}
+              <div className="w-full space-y-1.5">
                 <div className="flex justify-between text-[11px] text-slate-400">
-                  <span>Scrub Day Progress:</span>
+                  <span>
+                    ⏱️ Time: <b className="text-white">{previewSecond}s</b> / {durationSeconds}s
+                  </span>
                   <span className="font-bold text-sky-400" style={{ fontFamily: 'Quicksand, sans-serif' }}>
-                    {dayPrefix}{previewCurrentDay} ({previewProgress}%)
+                    {dayPrefix}{previewCurrentDay}
                   </span>
                 </div>
                 <input
@@ -757,7 +971,7 @@ export default function VideoFlowPage() {
                   min={0}
                   max={100}
                   value={previewProgress}
-                  onChange={(e) => setPreviewProgress(Number(e.target.value))}
+                  onChange={(e) => handleScrubChange(Number(e.target.value))}
                   className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
                 />
               </div>
