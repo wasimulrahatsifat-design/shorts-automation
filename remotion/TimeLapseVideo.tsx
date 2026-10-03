@@ -53,7 +53,10 @@ export function calculateDayAtSecond({
   pacingMode?: 'linear' | 'slow_start' | 'fast_start' | 'custom' | string;
   keyframes?: DayKeyframe[];
 }): number {
-  const clampedSecond = Math.max(0, Math.min(duration, second));
+  const sDay = Number(startDay) || 0;
+  const eDay = Number(endDay) !== undefined && !isNaN(Number(endDay)) ? Number(endDay) : 90;
+  const dSec = Math.max(0.1, Number(duration) || 15);
+  const clampedSecond = Math.max(0, Math.min(dSec, Number(second) || 0));
 
   // Custom Keyframes interpolation
   if (pacingMode === 'custom' && keyframes && keyframes.length >= 2) {
@@ -74,7 +77,7 @@ export function calculateDayAtSecond({
     return sorted[sorted.length - 1].day;
   }
 
-  const progress = duration > 0 ? clampedSecond / duration : 0;
+  const progress = dSec > 0 ? clampedSecond / dSec : 0;
   let adjustedProgress = progress;
 
   if (pacingMode === 'slow_start') {
@@ -85,7 +88,7 @@ export function calculateDayAtSecond({
     adjustedProgress = 1 - Math.pow(1 - progress, 2.2);
   }
 
-  return Math.round(startDay + adjustedProgress * (endDay - startDay));
+  return Math.round(sDay + adjustedProgress * (eDay - sDay));
 }
 
 const resolveAudioUrl = (url?: string) => {
@@ -122,11 +125,12 @@ export const TimeLapseVideo: React.FC<{ data_json: TimeLapseVideoJson; topic?: s
   const frame = useCurrentFrame();
   const { durationInFrames, fps } = useVideoConfig();
 
+  const sDay = Number(data_json.start_day) || 0;
+  const eDay = data_json.end_day !== undefined && !isNaN(Number(data_json.end_day)) ? Number(data_json.end_day) : 90;
+
   const {
     video_url,
-    title = topic || '90 Days Transformation',
-    start_day = 0,
-    end_day = 90,
+    title = topic || `${eDay} Days Transformation`,
     day_prefix = 'Day ',
     pacing_mode = 'linear',
     keyframes,
@@ -143,8 +147,8 @@ export const TimeLapseVideo: React.FC<{ data_json: TimeLapseVideoJson; topic?: s
   const currentDay = calculateDayAtSecond({
     second: currentSecond,
     duration: durationSeconds,
-    startDay: start_day,
-    endDay: end_day,
+    startDay: sDay,
+    endDay: eDay,
     pacingMode: pacing_mode,
     keyframes,
   });

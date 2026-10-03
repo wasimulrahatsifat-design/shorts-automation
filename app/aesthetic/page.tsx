@@ -42,10 +42,10 @@ export default function VideoFlowPage() {
   // Video / Flow settings
   const [videoTitle, setVideoTitle] = useState('90 Days Plant Growth');
   const [videoUrl, setVideoUrl] = useState('');
-  const [startDay, setStartDay] = useState<number>(0);
-  const [endDay, setEndDay] = useState<number>(90);
+  const [startDay, setStartDay] = useState<number | string>(0);
+  const [endDay, setEndDay] = useState<number | string>(90);
   const [dayPrefix, setDayPrefix] = useState('Day ');
-  const [durationSeconds, setDurationSeconds] = useState<number>(15);
+  const [durationSeconds, setDurationSeconds] = useState<number | string>(15);
 
   // Day Pacing & Milestones state
   const [pacingMode, setPacingMode] = useState<'slow_start' | 'linear' | 'fast_start' | 'custom'>('slow_start');
@@ -56,6 +56,79 @@ export default function VideoFlowPage() {
     { time: 8, day: 35 },
     { time: 15, day: 90 },
   ]);
+
+  const handleStartDayChange = (val: string) => {
+    setStartDay(val);
+    const parsed = parseInt(val, 10);
+    if (!isNaN(parsed)) {
+      setMilestones((prev) => {
+        if (!prev || prev.length === 0) return prev;
+        const copy = [...prev];
+        copy[0] = { ...copy[0], day: parsed };
+        return copy;
+      });
+    }
+  };
+
+  const handleEndDayChange = (val: string) => {
+    setEndDay(val);
+    const parsed = parseInt(val, 10);
+    if (!isNaN(parsed)) {
+      setMilestones((prev) => {
+        if (!prev || prev.length === 0) return prev;
+        const copy = [...prev];
+        copy[copy.length - 1] = { ...copy[copy.length - 1], day: parsed };
+        return copy;
+      });
+    }
+  };
+
+  const handleSetPresetEndDay = (days: number) => {
+    setEndDay(days);
+    setVideoTitle((prev) => {
+      if (/\b\d+\s*Days\b/i.test(prev)) {
+        return prev.replace(/\b\d+\s*Days\b/i, `${days} Days`);
+      }
+      return `${days} Days Plant Growth`;
+    });
+    const s = Number(startDay) || 0;
+    const dur = Number(durationSeconds) || 15;
+    const span = days - s;
+    setMilestones([
+      { time: 0, day: s },
+      { time: Number((dur * 0.13).toFixed(1)), day: Math.round(s + span * 0.02) },
+      { time: Number((dur * 0.25).toFixed(1)), day: Math.round(s + span * 0.08) },
+      { time: Number((dur * 0.55).toFixed(1)), day: Math.round(s + span * 0.4) },
+      { time: dur, day: days },
+    ]);
+  };
+
+  const handleDurationChange = (val: string) => {
+    setDurationSeconds(val);
+    const parsed = parseFloat(val);
+    if (!isNaN(parsed) && parsed > 0) {
+      setMilestones((prev) => {
+        if (!prev || prev.length === 0) return prev;
+        const copy = [...prev];
+        copy[copy.length - 1] = { ...copy[copy.length - 1], time: parsed };
+        return copy;
+      });
+    }
+  };
+
+  const resetPlantPreset = () => {
+    const s = Number(startDay) || 0;
+    const e = Number(endDay) !== undefined && !isNaN(Number(endDay)) ? Number(endDay) : 90;
+    const dur = Number(durationSeconds) || 15;
+    const span = e - s;
+    setMilestones([
+      { time: 0, day: s },
+      { time: Number((dur * 0.13).toFixed(1)), day: Math.round(s + span * 0.02) },
+      { time: Number((dur * 0.25).toFixed(1)), day: Math.round(s + span * 0.08) },
+      { time: Number((dur * 0.55).toFixed(1)), day: Math.round(s + span * 0.4) },
+      { time: dur, day: e },
+    ]);
+  };
 
   // Upload & Rendering state
   const [isUploading, setIsUploading] = useState(false);
@@ -232,7 +305,7 @@ export default function VideoFlowPage() {
           title: videoTitle,
           video_url: videoUrl,
           start_day: Number(startDay) || 0,
-          end_day: Number(endDay) || 90,
+          end_day: Number(endDay) !== undefined && !isNaN(Number(endDay)) ? Number(endDay) : 90,
           day_prefix: dayPrefix,
           duration_seconds: Number(durationSeconds) || 15,
           pacing_mode: pacingMode,
@@ -292,20 +365,21 @@ export default function VideoFlowPage() {
   };
 
   // Calculated current second & day for interactive preview
-  const previewSecond = Number(((previewProgress / 100) * (durationSeconds || 15)).toFixed(1));
+  const previewSecond = Number(((previewProgress / 100) * (Number(durationSeconds) || 15)).toFixed(1));
   const previewCurrentDay = calculateDayAtSecond({
     second: previewSecond,
-    duration: durationSeconds || 15,
+    duration: Number(durationSeconds) || 15,
     startDay: Number(startDay) || 0,
-    endDay: Number(endDay) || 90,
+    endDay: Number(endDay) !== undefined && !isNaN(Number(endDay)) ? Number(endDay) : 90,
     pacingMode,
     keyframes: milestones,
   });
 
   const handleScrubChange = (val: number) => {
     setPreviewProgress(val);
-    if (previewVideoRef.current && durationSeconds > 0) {
-      previewVideoRef.current.currentTime = (val / 100) * durationSeconds;
+    const dur = Number(durationSeconds) || 15;
+    if (previewVideoRef.current && dur > 0) {
+      previewVideoRef.current.currentTime = (val / 100) * dur;
     }
   };
 
@@ -667,26 +741,54 @@ export default function VideoFlowPage() {
               </div>
 
               {/* 3. Day Settings (Start Day & End Day) */}
-              <div className="grid grid-cols-2 gap-3 pt-1">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-300">Start Day</label>
-                  <input
-                    type="number"
-                    value={startDay}
-                    onChange={(e) => setStartDay(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white text-center font-bold focus:outline-none focus:border-sky-500"
-                    style={{ fontFamily: 'Quicksand, sans-serif' }}
-                  />
+              <div className="space-y-2 pt-1">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-300">Start Day</label>
+                    <input
+                      type="number"
+                      value={startDay}
+                      onChange={(e) => handleStartDayChange(e.target.value)}
+                      placeholder="0"
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white text-center font-bold focus:outline-none focus:border-sky-500"
+                      style={{ fontFamily: 'Quicksand, sans-serif' }}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-bold text-slate-300">End Day</label>
+                      <span className="text-[10px] text-sky-400 font-mono">Any number</span>
+                    </div>
+                    <input
+                      type="number"
+                      value={endDay}
+                      onChange={(e) => handleEndDayChange(e.target.value)}
+                      placeholder="90"
+                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white text-center font-bold focus:outline-none focus:border-sky-500"
+                      style={{ fontFamily: 'Quicksand, sans-serif' }}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-300">End Day</label>
-                  <input
-                    type="number"
-                    value={endDay}
-                    onChange={(e) => setEndDay(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white text-center font-bold focus:outline-none focus:border-sky-500"
-                    style={{ fontFamily: 'Quicksand, sans-serif' }}
-                  />
+
+                {/* Quick End Day Presets */}
+                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mr-1">
+                    Presets:
+                  </span>
+                  {[30, 60, 90, 100, 180, 365, 1000].map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => handleSetPresetEndDay(d)}
+                      className={`px-2 py-0.5 rounded-lg text-[11px] font-bold border transition-all ${
+                        Number(endDay) === d
+                          ? 'bg-sky-500 text-white border-sky-400 shadow-sm'
+                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-white'
+                      }`}
+                    >
+                      {d === 365 ? '365d (1 Yr)' : `${d}d`}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -708,9 +810,9 @@ export default function VideoFlowPage() {
                   <input
                     type="number"
                     value={durationSeconds}
-                    onChange={(e) => setDurationSeconds(Number(e.target.value))}
+                    onChange={(e) => handleDurationChange(e.target.value)}
                     min={5}
-                    max={60}
+                    max={120}
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white text-center font-bold focus:outline-none focus:border-sky-500"
                   />
                 </div>
@@ -852,18 +954,10 @@ export default function VideoFlowPage() {
                       <span>Tip: Video scrubber টেনে ঠিক মুহূর্তের ডে সেট করুন</span>
                       <button
                         type="button"
-                        onClick={() =>
-                          setMilestones([
-                            { time: 0, day: 0 },
-                            { time: 2, day: 1 },
-                            { time: 3.5, day: 6 },
-                            { time: 8, day: 35 },
-                            { time: 15, day: 90 },
-                          ])
-                        }
-                        className="text-slate-400 hover:text-sky-400 underline"
+                        onClick={resetPlantPreset}
+                        className="text-slate-400 hover:text-sky-400 underline font-medium"
                       >
-                        Reset Plant Preset
+                        Reset Plant Preset ({startDay} to {endDay} Days)
                       </button>
                     </div>
                   </div>
