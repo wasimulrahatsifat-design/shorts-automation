@@ -289,12 +289,13 @@ async function main() {
   const allowsMetaGlobal = targetPlatform === 'all' || targetPlatform === 'meta' || targetPlatform === 'facebook-instagram';
 
   if (allowsYouTubeGlobal) {
-    const ytClientId = process.env.YOUTUBE_CLIENT_ID;
-    const ytClientSecret = process.env.YOUTUBE_CLIENT_SECRET;
-    const ytRefreshToken = process.env.YOUTUBE_REFRESH_TOKEN;
+    const cleanYt = (val) => (val || '').trim().replace(/^["']|["']$/g, '').trim();
+    const ytClientId = cleanYt(process.env.YOUTUBE_CLIENT_ID);
+    const ytClientSecret = cleanYt(process.env.YOUTUBE_CLIENT_SECRET);
+    const ytRefreshToken = cleanYt(process.env.YOUTUBE_REFRESH_TOKEN);
 
     if (ytClientId && ytClientSecret && ytRefreshToken) {
-      console.log('Authenticating with YouTube API...');
+      console.log(`Authenticating with YouTube API... (ClientId: ${ytClientId.slice(0, 15)}...${ytClientId.slice(-15)}, ClientIdLen: ${ytClientId.length}, SecretLen: ${ytClientSecret.length}, TokenLen: ${ytRefreshToken.length})`);
       try {
         const oauth2Client = new google.auth.OAuth2(
           ytClientId,

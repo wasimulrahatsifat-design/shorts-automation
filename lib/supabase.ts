@@ -188,6 +188,12 @@ export async function executeWithSupabaseFailover<T = any>(
   return { data: null as any, error: lastError || new Error('All Supabase projects failed or exceeded quotas.') };
 }
 
+export function resetExhaustedProjects() {
+  exhaustedIndices.clear();
+  activeProjectIndex = 0;
+  console.log('[Supabase] Exhausted projects tracking reset.');
+}
+
 /**
  * Uploads a file (Buffer or Uint8Array) to Supabase Storage with automatic failover to backup projects.
  */
@@ -211,8 +217,21 @@ export async function uploadToStorageWithFailover(
         });
 
       if (error) {
+        const errorMsg = error.message || '';
+        const isTooLarge =
+          error.status === 413 ||
+          (error as any).statusCode === '413' ||
+          (error as any).code === 'EntityTooLarge' ||
+          errorMsg.toLowerCase().includes('exceeded the maximum allowed size');
+
+        if (isTooLarge) {
+          throw new Error('The video file exceeds Supabase Storage 50MB limit. Please compress the video to under 50MB.');
+        }
+
         console.warn(`[Supabase Storage Failover] Upload failed on [${config.url}]:`, error.message || error);
-        markProjectExhausted(config.index, error.message);
+        if (isQuotaOrRestrictedError(error)) {
+          markProjectExhausted(config.index, error.message);
+        }
         lastError = error;
         continue;
       }
@@ -224,8 +243,20 @@ export async function uploadToStorageWithFailover(
         config,
       };
     } catch (err: any) {
+      const errMsg = err?.message || '';
+      if (
+        err?.status === 413 ||
+        err?.statusCode === '413' ||
+        err?.code === 'EntityTooLarge' ||
+        errMsg.toLowerCase().includes('exceeded the maximum allowed size') ||
+        errMsg.toLowerCase().includes('50mb limit')
+      ) {
+        throw err;
+      }
       console.warn(`[Supabase Storage Failover] Exception on [${config.url}]:`, err.message || err);
-      markProjectExhausted(config.index, err.message);
+      if (isQuotaOrRestrictedError(err)) {
+        markProjectExhausted(config.index, err.message);
+      }
       lastError = err;
       continue;
     }

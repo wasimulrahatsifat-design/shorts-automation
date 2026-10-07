@@ -90,10 +90,16 @@ async function main() {
   else if (formatType === 'Quiz') compName = 'Quiz';
   else if (formatType === 'Arena Clash') compName = 'ArenaClash';
   else if (formatType === 'AestheticVideo') compName = 'AestheticVideo';
-  else if (formatType === 'TimeLapseVideo' || formatType === 'VideoFlow') compName = 'TimeLapseVideo';
+  if (props.data_json?.bg_music_enabled !== false && !props.data_json?.bg_music_url) {
+    if (formatType === 'TimeLapseVideo' || formatType === 'VideoFlow' || formatType === 'AestheticVideo') {
+      props.data_json.bg_music_url = '/audio/lofi_chill.mp3';
+      props.data_json.bg_music_enabled = true;
+    }
+  }
 
+  const frameFlag = frames > 0 ? `--frames=0-${frames - 1}` : '';
   try {
-    execSync(`npx remotion render remotion/index.ts ${compName} ${outPath} --props=${propsPath}`, { stdio: 'inherit' });
+    execSync(`npx remotion render remotion/index.ts ${compName} ${outPath} --props=${propsPath} ${frameFlag}`, { stdio: 'inherit' });
   } catch (error) {
     console.error('Failed to render video:', error);
     process.exit(1);

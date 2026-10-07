@@ -168,7 +168,11 @@ export async function POST(request: Request) {
     // Check if background music is enabled
     const isBgMusicEnabled = body.bg_music_enabled !== false && data_json.bg_music_enabled !== false;
     let finalBgMusicUrl = isBgMusicEnabled ? (body.bg_music_url || data_json.bg_music_url || undefined) : undefined;
-    if (isBgMusicEnabled && !finalBgMusicUrl && data_json.format === 'AestheticVideo') {
+    if (
+      isBgMusicEnabled &&
+      !finalBgMusicUrl &&
+      (data_json.format === 'AestheticVideo' || data_json.format === 'TimeLapseVideo' || data_json.format === 'VideoFlow')
+    ) {
       finalBgMusicUrl = '/audio/lofi_chill.mp3';
     }
     const finalBgMusicVolume = isBgMusicEnabled ? (typeof body.bg_music_volume === 'number' ? body.bg_music_volume : (data_json.bg_music_volume ?? 0.35)) : undefined;

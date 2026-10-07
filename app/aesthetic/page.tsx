@@ -103,15 +103,47 @@ export default function VideoFlowPage() {
     ]);
   };
 
+  const rescaleMilestonesToDuration = (newDur: number) => {
+    setDurationSeconds(newDur);
+    const s = Number(startDay) || 0;
+    const e = Number(endDay) !== undefined && !isNaN(Number(endDay)) ? Number(endDay) : 90;
+    const span = e - s;
+
+    setMilestones((prev) => {
+      if (!prev || prev.length < 2) {
+        return [
+          { time: 0, day: s },
+          { time: Number((newDur * 0.15).toFixed(1)), day: Math.round(s + span * 0.03) },
+          { time: Number((newDur * 0.35).toFixed(1)), day: Math.round(s + span * 0.15) },
+          { time: Number((newDur * 0.65).toFixed(1)), day: Math.round(s + span * 0.50) },
+          { time: newDur, day: e },
+        ];
+      }
+      const oldDur = prev[prev.length - 1].time || 15;
+      if (oldDur <= 0) return prev;
+      const ratio = newDur / oldDur;
+      return prev.map((m, idx) => {
+        if (idx === 0) return { ...m, time: 0 };
+        if (idx === prev.length - 1) return { ...m, time: newDur };
+        return { ...m, time: Number((m.time * ratio).toFixed(1)) };
+      });
+    });
+  };
+
   const handleDurationChange = (val: string) => {
     setDurationSeconds(val);
     const parsed = parseFloat(val);
     if (!isNaN(parsed) && parsed > 0) {
       setMilestones((prev) => {
-        if (!prev || prev.length === 0) return prev;
-        const copy = [...prev];
-        copy[copy.length - 1] = { ...copy[copy.length - 1], time: parsed };
-        return copy;
+        if (!prev || prev.length < 2) return prev;
+        const oldDur = prev[prev.length - 1].time || 15;
+        if (oldDur <= 0) return prev;
+        const ratio = parsed / oldDur;
+        return prev.map((m, idx) => {
+          if (idx === 0) return { ...m, time: 0 };
+          if (idx === prev.length - 1) return { ...m, time: parsed };
+          return { ...m, time: Number((m.time * ratio).toFixed(1)) };
+        });
       });
     }
   };
@@ -123,9 +155,9 @@ export default function VideoFlowPage() {
     const span = e - s;
     setMilestones([
       { time: 0, day: s },
-      { time: Number((dur * 0.13).toFixed(1)), day: Math.round(s + span * 0.02) },
-      { time: Number((dur * 0.25).toFixed(1)), day: Math.round(s + span * 0.08) },
-      { time: Number((dur * 0.55).toFixed(1)), day: Math.round(s + span * 0.4) },
+      { time: Number((dur * 0.15).toFixed(1)), day: Math.round(s + span * 0.03) },
+      { time: Number((dur * 0.35).toFixed(1)), day: Math.round(s + span * 0.15) },
+      { time: Number((dur * 0.65).toFixed(1)), day: Math.round(s + span * 0.50) },
       { time: dur, day: e },
     ]);
   };
@@ -134,6 +166,19 @@ export default function VideoFlowPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [isQueueing, setIsQueueing] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [oversizedFile, setOversizedFile] = useState<File | null>(null);
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [compressProgress, setCompressProgress] = useState(0);
+
+  // Background Music state
+  const [bgMusicEnabled, setBgMusicEnabled] = useState<boolean>(true);
+  const [selectedMusicTrack, setSelectedMusicTrack] = useState<string>('/audio/lofi_chill.mp3');
+  const [bgMusicVolume, setBgMusicVolume] = useState<number>(0.35);
+  const [isPlayingAudioPreview, setIsPlayingAudioPreview] = useState<boolean>(false);
+  const audioPreviewRef = useRef<HTMLAudioElement | null>(null);
+
+  // Auto-detected video metadata
+  const [detectedVideoDuration, setDetectedVideoDuration] = useState<number | null>(null);
 
   // Interactive preview scrub slider & video ref
   const [previewProgress, setPreviewProgress] = useState<number>(30); // 0 to 100%
@@ -255,17 +300,154 @@ export default function VideoFlowPage() {
     }
   };
 
-  // Handle Video Upload directly to Supabase Storage
-  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Browser-side video compression using HTML5 Canvas & MediaRecorder
+  const compressVideoInBrowser = async (
+    file: File,
+    onProgress: (percent: number) => void
+  ): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      const url = URL.createObjectURL(file);
+      video.src = url;
+      video.muted = true;
+      video.playsInline = true;
+      video.crossOrigin = 'anonymous';
 
+      const cleanUp = () => {
+        URL.revokeObjectURL(url);
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+      };
+
+      video.onloadedmetadata = async () => {
+        try {
+          const duration = video.duration || 15;
+          let width = video.videoWidth || 1080;
+          let height = video.videoHeight || 1920;
+
+          // Downscale to max 1080p if video is 4K / 1440p
+          const maxDim = 1920;
+          if (Math.max(width, height) > maxDim) {
+            const scale = maxDim / Math.max(width, height);
+            width = Math.round((width * scale) / 2) * 2;
+            height = Math.round((height * scale) / 2) * 2;
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            cleanUp();
+            return reject(new Error('Canvas context not available for compression.'));
+          }
+
+          let mimeType = 'video/webm;codecs=vp9';
+          if (!MediaRecorder.isTypeSupported(mimeType)) {
+            mimeType = 'video/webm;codecs=vp8';
+          }
+          if (!MediaRecorder.isTypeSupported(mimeType)) {
+            mimeType = 'video/webm';
+          }
+          if (!MediaRecorder.isTypeSupported(mimeType)) {
+            mimeType = 'video/mp4';
+          }
+
+          const stream = canvas.captureStream(30);
+
+          // Preserve original audio from video if present
+          try {
+            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+            if (AudioContextClass) {
+              const audioCtx = new AudioContextClass();
+              video.muted = false;
+              video.volume = 1;
+              const sourceNode = audioCtx.createMediaElementSource(video);
+              const destNode = audioCtx.createMediaStreamDestination();
+              sourceNode.connect(destNode);
+              const audioTracks = destNode.stream.getAudioTracks();
+              if (audioTracks.length > 0) {
+                audioTracks.forEach((track) => stream.addTrack(track));
+              }
+            }
+          } catch (audioErr) {
+            console.warn('Audio capture note:', audioErr);
+          }
+
+          const recorder = new MediaRecorder(stream, {
+            mimeType,
+            videoBitsPerSecond: 4_000_000,
+          });
+
+          const chunks: Blob[] = [];
+          recorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) chunks.push(e.data);
+          };
+
+          recorder.onstop = () => {
+            cleanUp();
+            const blob = new Blob(chunks, { type: mimeType });
+            const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+            const compressedFile = new File(
+              [blob],
+              file.name.replace(/\.[^/.]+$/, `_compressed.${ext}`),
+              { type: mimeType }
+            );
+            resolve(compressedFile);
+          };
+
+          recorder.start(100);
+          video.playbackRate = 2.0;
+
+          const renderFrame = () => {
+            if (video.paused || video.ended) return;
+            ctx.drawImage(video, 0, 0, width, height);
+            if (duration > 0) {
+              const pct = Math.min(99, Math.round((video.currentTime / duration) * 100));
+              onProgress(pct);
+            }
+            requestAnimationFrame(renderFrame);
+          };
+
+          video.onended = () => {
+            onProgress(100);
+            if (recorder.state !== 'inactive') {
+              recorder.stop();
+            }
+          };
+
+          video.onerror = () => {
+            cleanUp();
+            reject(new Error('Playback error during compression.'));
+          };
+
+          await video.play();
+          requestAnimationFrame(renderFrame);
+        } catch (err: any) {
+          cleanUp();
+          reject(err);
+        }
+      };
+
+      video.onerror = () => {
+        cleanUp();
+        reject(new Error('Could not read video file for compression.'));
+      };
+    });
+  };
+
+  // Upload file helper
+  const uploadFileToServer = async (fileToUpload: File) => {
     setIsUploading(true);
-    setNotification({ type: 'info', text: 'Uploading video to cloud storage...' });
+    setNotification({
+      type: 'info',
+      text: `Uploading ${(fileToUpload.size / (1024 * 1024)).toFixed(1)} MB video to cloud storage...`,
+    });
 
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', fileToUpload);
 
       const res = await fetch('/api/upload-media', {
         method: 'POST',
@@ -278,12 +460,127 @@ export default function VideoFlowPage() {
       }
 
       setVideoUrl(data.url);
-      setNotification({ type: 'success', text: 'Video uploaded successfully! Preview updated below.' });
+      setOversizedFile(null);
+      setNotification({
+        type: 'success',
+        text: `🎉 Video uploaded successfully (${(fileToUpload.size / (1024 * 1024)).toFixed(1)} MB)! Preview updated below.`,
+      });
     } catch (err: any) {
       console.error(err);
-      setNotification({ type: 'error', text: err.message || 'Error uploading video file.' });
+      setNotification({
+        type: 'error',
+        text: err.message || 'Error uploading video file.',
+      });
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  // Helper to toggle background audio preview
+  const toggleAudioPreview = (trackUrl: string) => {
+    if (isPlayingAudioPreview) {
+      if (audioPreviewRef.current) {
+        audioPreviewRef.current.pause();
+        audioPreviewRef.current = null;
+      }
+      setIsPlayingAudioPreview(false);
+      return;
+    }
+
+    try {
+      if (audioPreviewRef.current) {
+        audioPreviewRef.current.pause();
+      }
+      const audio = new Audio(trackUrl);
+      audio.volume = bgMusicVolume;
+      audioPreviewRef.current = audio;
+      audio.play().then(() => {
+        setIsPlayingAudioPreview(true);
+      }).catch((e) => {
+        console.warn('Audio preview play error:', e);
+      });
+      audio.onended = () => {
+        setIsPlayingAudioPreview(false);
+      };
+    } catch (e) {
+      console.warn('Audio preview error:', e);
+    }
+  };
+
+  const detectVideoDuration = (file: File): Promise<number> => {
+    return new Promise((resolve) => {
+      const v = document.createElement('video');
+      v.preload = 'metadata';
+      const u = URL.createObjectURL(file);
+      v.src = u;
+      v.onloadedmetadata = () => {
+        URL.revokeObjectURL(u);
+        const dur = v.duration && isFinite(v.duration) && v.duration > 0 ? Number(v.duration.toFixed(1)) : 15;
+        resolve(dur);
+      };
+      v.onerror = () => {
+        URL.revokeObjectURL(u);
+        resolve(15);
+      };
+    });
+  };
+
+  // Handle Video Upload directly to Supabase Storage
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    e.target.value = '';
+
+    // Auto-detect exact video duration and sync timing & milestones!
+    try {
+      const dur = await detectVideoDuration(file);
+      if (dur > 0) {
+        setDetectedVideoDuration(dur);
+        rescaleMilestonesToDuration(Math.round(dur));
+      }
+    } catch (err) {
+      console.warn('Could not auto-detect video duration:', err);
+    }
+
+    const sizeInMB = file.size / (1024 * 1024);
+    if (sizeInMB > 50) {
+      setOversizedFile(file);
+      setNotification({
+        type: 'info',
+        text: `⚠️ Selected file is ${sizeInMB.toFixed(1)} MB (exceeds 50 MB cloud limit). Click "Auto-Compress & Upload" to optimize it.`,
+      });
+      return;
+    }
+
+    setOversizedFile(null);
+    await uploadFileToServer(file);
+  };
+
+  const handleCompressAndUpload = async () => {
+    if (!oversizedFile) return;
+
+    setIsCompressing(true);
+    setCompressProgress(0);
+    setNotification({
+      type: 'info',
+      text: '⚡ Compressing video in browser for cloud upload...',
+    });
+
+    try {
+      const compressedFile = await compressVideoInBrowser(oversizedFile, (p) => {
+        setCompressProgress(p);
+      });
+
+      setIsCompressing(false);
+      await uploadFileToServer(compressedFile);
+    } catch (err: any) {
+      console.error('Compression error:', err);
+      setIsCompressing(false);
+      setNotification({
+        type: 'error',
+        text: `Could not compress video: ${err.message || 'Browser codec error'}. Please choose a video under 50 MB.`,
+      });
     }
   };
 
@@ -309,9 +606,15 @@ export default function VideoFlowPage() {
           day_prefix: dayPrefix,
           duration_seconds: Number(durationSeconds) || 15,
           pacing_mode: pacingMode,
-          keyframes: pacingMode === 'custom' ? milestones : undefined,
+          keyframes: milestones,
+          bg_music_url: bgMusicEnabled ? selectedMusicTrack : undefined,
+          bg_music_volume: bgMusicVolume,
+          bg_music_enabled: bgMusicEnabled,
         },
         duration: Number(durationSeconds) || 15,
+        bg_music_url: bgMusicEnabled ? selectedMusicTrack : undefined,
+        bg_music_volume: bgMusicVolume,
+        bg_music_enabled: bgMusicEnabled,
         showSubtitles: false,
       };
 
@@ -714,30 +1017,87 @@ export default function VideoFlowPage() {
               </div>
 
               {/* 2. Video Upload Box */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                  Upload Timelapse Video
-                </label>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                    Upload Timelapse Video
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-mono">Max: 50 MB</span>
+                </div>
                 <div className="relative border-2 border-dashed border-slate-700 hover:border-sky-500 bg-slate-950/60 rounded-2xl p-4 text-center transition-all">
                   <input
                     type="file"
                     accept="video/mp4,video/webm,video/quicktime,image/*"
                     onChange={handleVideoUpload}
-                    disabled={isUploading}
+                    disabled={isUploading || isCompressing}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
                   />
                   <div className="flex flex-col items-center justify-center gap-1.5">
-                    <span className="text-2xl">{isUploading ? '⏳' : videoUrl ? '✅' : '📤'}</span>
+                    <span className="text-2xl">{isUploading || isCompressing ? '⏳' : videoUrl ? '✅' : '📤'}</span>
                     <span className="text-xs font-bold text-slate-200">
-                      {isUploading
+                      {isCompressing
+                        ? `Compressing video in browser (${compressProgress}%)...`
+                        : isUploading
                         ? 'Uploading media to cloud storage...'
                         : videoUrl
                         ? 'Video Uploaded! Click to replace'
                         : 'Choose or drag & drop video file'}
                     </span>
-                    <span className="text-[11px] text-slate-500">Supports .mp4, .webm (Vertical 9:16 recommended)</span>
+                    <span className="text-[11px] text-slate-500">Supports .mp4, .webm (Vertical 9:16 recommended, max 50 MB)</span>
                   </div>
                 </div>
+
+                {/* Oversized Video Compression Card */}
+                {oversizedFile && (
+                  <div className="p-4 bg-amber-950/50 border border-amber-500/40 rounded-2xl space-y-3 animate-fade-in shadow-lg">
+                    <div className="flex items-start gap-2.5">
+                      <span className="text-xl">⚠️</span>
+                      <div className="flex-1 text-xs">
+                        <div className="font-bold text-amber-300">
+                          Video is {(oversizedFile.size / (1024 * 1024)).toFixed(1)} MB (Exceeds 50 MB Limit)
+                        </div>
+                        <div className="text-slate-400 mt-0.5 leading-relaxed">
+                          Cloud storage restricts single files to 50 MB. Click below to automatically compress and optimize it in your browser before uploading.
+                        </div>
+                      </div>
+                    </div>
+
+                    {isCompressing ? (
+                      <div className="space-y-1.5 pt-1">
+                        <div className="flex justify-between text-xs font-bold text-amber-300">
+                          <span className="flex items-center gap-1.5">
+                            <span className="animate-spin text-sm">⚙️</span> Compressing in browser...
+                          </span>
+                          <span>{compressProgress}%</span>
+                        </div>
+                        <div className="w-full bg-slate-900 rounded-full h-2.5 overflow-hidden border border-slate-700">
+                          <div
+                            className="bg-gradient-to-r from-amber-400 via-sky-400 to-emerald-400 h-full transition-all duration-150"
+                            style={{ width: `${compressProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={handleCompressAndUpload}
+                          disabled={isUploading}
+                          className="flex-1 py-2 px-3 bg-gradient-to-r from-amber-500 to-sky-500 hover:from-amber-400 hover:to-sky-400 text-slate-950 font-bold rounded-xl text-xs shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-95"
+                        >
+                          <span>⚡ Auto-Compress & Upload</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setOversizedFile(null)}
+                          className="py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold"
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* 3. Day Settings (Start Day & End Day) */}
@@ -811,12 +1171,29 @@ export default function VideoFlowPage() {
                     type="number"
                     value={durationSeconds}
                     onChange={(e) => handleDurationChange(e.target.value)}
-                    min={5}
+                    min={3}
                     max={120}
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white text-center font-bold focus:outline-none focus:border-sky-500"
                   />
                 </div>
               </div>
+
+              {/* Detected Video Length & 1-Click Sync */}
+              {detectedVideoDuration && (
+                <div className="p-2.5 bg-sky-950/50 border border-sky-500/30 rounded-xl text-xs flex items-center justify-between text-sky-300 animate-fadeIn">
+                  <div className="flex items-center gap-1.5">
+                    <span>⏱️</span>
+                    <span>Video file length: <b>{detectedVideoDuration}s</b></span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => rescaleMilestonesToDuration(Math.round(detectedVideoDuration))}
+                    className="px-2.5 py-1 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-lg text-[11px] shadow-sm transition-all flex items-center gap-1"
+                  >
+                    <span>🔄 Sync {Math.round(detectedVideoDuration)}s Length</span>
+                  </button>
+                </div>
+              )}
 
               {/* 4. Day Pacing / Speed Progression Mode */}
               <div className="space-y-2 pt-2 border-t border-slate-800">
@@ -964,6 +1341,93 @@ export default function VideoFlowPage() {
                 )}
               </div>
 
+              {/* 5. Background Audio & Music Settings */}
+              <div className="space-y-3 pt-2 border-t border-slate-800">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>🎵 Background Music (আওয়াজ / সাউন্ড)</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setBgMusicEnabled(!bgMusicEnabled)}
+                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold transition-all border ${
+                      bgMusicEnabled
+                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                        : 'bg-slate-800 text-slate-400 border-slate-700'
+                    }`}
+                  >
+                    {bgMusicEnabled ? '✓ Music ON' : '✕ Music Muted'}
+                  </button>
+                </div>
+
+                {bgMusicEnabled && (
+                  <div className="space-y-2.5 p-3.5 bg-slate-950/70 border border-slate-800 rounded-2xl animate-fadeIn">
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-slate-400">Select Music Track:</span>
+                        <button
+                          type="button"
+                          onClick={() => toggleAudioPreview(selectedMusicTrack)}
+                          className={`text-[11px] font-bold px-2 py-0.5 rounded-lg border transition-all flex items-center gap-1 ${
+                            isPlayingAudioPreview
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                              : 'bg-slate-800 text-slate-300 border-slate-700 hover:text-white'
+                          }`}
+                        >
+                          <span>{isPlayingAudioPreview ? '⏸ Pause Preview' : '▶ Play Preview'}</span>
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-1.5">
+                        {[
+                          { id: 'lofi_chill', name: '☕ Lo-Fi Chill (Calm & Relaxing)', url: '/audio/lofi_chill.mp3' },
+                          { id: 'arcade_chill', name: '👾 Arcade Chill (Upbeat & Fun)', url: '/audio/arcade_chill.mp3' },
+                          { id: 'battle_bgm', name: '⚔️ Cinematic Epic (Dramatic)', url: '/audio/battle_bgm.mp3' },
+                        ].map((track) => {
+                          const isSel = selectedMusicTrack === track.url;
+                          return (
+                            <button
+                              key={track.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedMusicTrack(track.url);
+                                if (isPlayingAudioPreview) {
+                                  toggleAudioPreview(track.url);
+                                }
+                              }}
+                              className={`p-2 rounded-xl text-left text-xs font-semibold border transition-all flex items-center justify-between ${
+                                isSel
+                                  ? 'bg-sky-500/15 border-sky-400 text-sky-300 shadow-sm'
+                                  : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                              }`}
+                            >
+                              <span>{track.name}</span>
+                              {isSel && <span className="text-[10px] text-sky-400 font-bold">Selected</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1 pt-1">
+                      <div className="flex justify-between items-center text-[11px]">
+                        <span className="text-slate-400">Music Volume:</span>
+                        <span className="text-white font-mono font-bold">{Math.round(bgMusicVolume * 100)}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0.05}
+                        max={1}
+                        step={0.05}
+                        value={bgMusicVolume}
+                        onChange={(e) => setBgMusicVolume(parseFloat(e.target.value))}
+                        className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Start Rendering Button */}
               <div className="pt-2">
                 <button
@@ -1003,6 +1467,13 @@ export default function VideoFlowPage() {
                     loop
                     muted
                     playsInline
+                    onLoadedMetadata={(e) => {
+                      const dur = (e.target as HTMLVideoElement).duration;
+                      if (dur && isFinite(dur) && dur > 0) {
+                        const rounded = Number(dur.toFixed(1));
+                        setDetectedVideoDuration(rounded);
+                      }
+                    }}
                     className="absolute inset-0 w-full h-full object-cover"
                   />
                 ) : (

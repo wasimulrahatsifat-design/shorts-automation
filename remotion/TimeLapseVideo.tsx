@@ -136,7 +136,7 @@ export const TimeLapseVideo: React.FC<{ data_json: TimeLapseVideoJson; topic?: s
     keyframes,
     bg_music_url,
     bg_music_volume = 0.35,
-    bg_music_enabled = false,
+    bg_music_enabled = true,
   } = data_json;
 
   const resolvedVideoUrl = resolveMediaUrl(video_url);
@@ -164,7 +164,8 @@ export const TimeLapseVideo: React.FC<{ data_json: TimeLapseVideoJson; topic?: s
     )
   );
 
-  const audioSrc = bg_music_enabled ? resolveAudioUrl(bg_music_url) : null;
+  const isBgMusicEnabled = bg_music_enabled !== false;
+  const audioSrc = isBgMusicEnabled ? resolveAudioUrl(bg_music_url || '/audio/lofi_chill.mp3') : null;
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#000000', overflow: 'hidden' }}>
@@ -296,10 +297,12 @@ export const TimeLapseVideo: React.FC<{ data_json: TimeLapseVideoJson; topic?: s
       {audioSrc && (
         <Audio
           src={audioSrc}
+          loop
           volume={(f) => {
-            if (f < 20) return interpolate(f, [0, 20], [0, bg_music_volume]);
-            if (f > durationInFrames - 25) return interpolate(f, [durationInFrames - 25, durationInFrames], [bg_music_volume, 0]);
-            return bg_music_volume;
+            const vol = bg_music_volume ?? 0.35;
+            if (f < 20) return interpolate(f, [0, 20], [0, vol]);
+            if (f > durationInFrames - 25) return interpolate(f, [durationInFrames - 25, durationInFrames], [vol, 0]);
+            return vol;
           }}
         />
       )}
