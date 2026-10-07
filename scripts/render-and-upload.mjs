@@ -97,9 +97,15 @@ async function main() {
     }
   }
 
-  const frameFlag = frames > 0 ? `--frames=0-${frames - 1}` : '';
+  let frameFlag = '';
+  if (compName === 'Quiz' || compName === 'WouldYouRather') {
+    // Dynamic compositions: Remotion's calculateMetadata calculates the exact length of all questions
+    frameFlag = '';
+  } else if (frames > 0) {
+    frameFlag = `--frames=0-${frames - 1}`;
+  }
   try {
-    execSync(`npx remotion render remotion/index.ts ${compName} ${outPath} --props=${propsPath} ${frameFlag}`, { stdio: 'inherit' });
+    execSync(`npx remotion render remotion/index.ts ${compName} ${outPath} --props=${propsPath} ${frameFlag}`.trim(), { stdio: 'inherit' });
   } catch (error) {
     console.error('Failed to render video:', error);
     process.exit(1);

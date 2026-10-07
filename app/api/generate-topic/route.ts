@@ -172,11 +172,28 @@ Your scripts ALWAYS hook viewers in the first 2 seconds, keep them glued until t
           return publicUrl;
         };
 
+        const answer_tts_urls: (string | null)[] = [];
         for (const q of dataPayload.questions) {
           const text = `${q.question} A, ${q.options[0]}, B, ${q.options[1]}, C, ${q.options[2]}.`;
           const url = await generateTTSForText(text);
           tts_urls.push(url);
+
+          // Generate spoken answer audio (e.g. "A, Bamboo")
+          const optIdx = (q.options || []).findIndex(
+            (o: string) => o.trim().toLowerCase() === (q.correct_answer || '').trim().toLowerCase()
+          );
+          const optLetter = optIdx >= 0 ? ['A', 'B', 'C', 'D'][optIdx] : 'A';
+          const answerText = `${optLetter}, ${q.correct_answer}.`;
+          try {
+            const answerUrl = await generateTTSForText(answerText);
+            q.answer_tts_url = answerUrl;
+            answer_tts_urls.push(answerUrl);
+          } catch (e) {
+            console.warn('[Generate Topic] Answer TTS failed:', e);
+            answer_tts_urls.push(null);
+          }
         }
+        dataPayload.answer_tts_urls = answer_tts_urls;
         
         // Add custom end_title outro TTS only if provided
         const outroText = (dataPayload.end_title || '').trim();
