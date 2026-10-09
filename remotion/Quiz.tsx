@@ -54,14 +54,14 @@ const resolveGifUrl = (url?: string) => {
  * Accurate frame timing calculation so audio and voiceovers never get truncated:
  * - readingFrames: Natural comfortable reading rate (~12 chars/sec + 1.8s padding)
  * - timerFrames: 3 seconds countdown
- * - revealFrames: 2.6 seconds to announce answer (e.g. "A, Bamboo") & show celebration
+ * - revealFrames: 2.6 seconds to speak and celebrate the answer
  */
 export const getQuestionTiming = (q: Question, fps: number) => {
   const textLength = (q.question || '').length + (q.options || []).join(' ').length;
   const readingSeconds = Math.max(4.5, (textLength / 12) + 1.8);
   const readingFrames = Math.round(readingSeconds * fps);
   const timerFrames = 3 * fps; // 3 seconds countdown timer
-  const revealFrames = Math.round(2.6 * fps); // 2.6 seconds to speak and celebrate the answer
+  const revealFrames = Math.round(2.6 * fps); // 2.6 seconds to speak the answer
   return {
     readingFrames,
     timerFrames,
@@ -150,18 +150,30 @@ const QuizRound: React.FC<{
   );
   const isTimerDone = frame >= timerStartFrame + timerFrames;
 
-  // Smooth Red Pen / Marker Underline Animation across readingFrames
-  // Hand-drawn stroke draws from left to right as question is read aloud
-  const penProgress = interpolate(
+  // Voiceover Timing Sync for Question Reading:
+  // The TTS speech reads the question first, then proceeds to options (A, B, C...).
+  // We calculate the exact duration proportion spent speaking the question so the underline matches the spoken voice!
+  const questionText = (question || '').trim();
+  const optionsText = options.map((o, i) => `${['A', 'B', 'C', 'D'][i]}, ${o}`).join(' ');
+  const qLen = questionText.length;
+  const optLen = optionsText.length;
+  const totalSpeechLen = Math.max(1, qLen + optLen);
+  const questionRatio = Math.min(0.72, Math.max(0.35, qLen / totalSpeechLen));
+  const questionSpeechFrames = Math.max(fps * 2, Math.round(readingFrames * questionRatio));
+
+  // Progress of question reading from 0 to 1
+  const questionReadProgress = interpolate(
     frame,
-    [3, Math.max(12, Math.round(readingFrames * 0.9))],
+    [3, questionSpeechFrames],
     [0, 1],
     { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
   );
 
+  // Split question into words for word-by-word line-by-line synchronized underline
+  const words = questionText.split(/\s+/).filter(Boolean);
+
   // Find correct answer index
   const correctIdx = options.findIndex(opt => opt.trim().toLowerCase() === (correct_answer || '').trim().toLowerCase());
-  const correctLetter = correctIdx >= 0 ? ['A', 'B', 'C', 'D'][correctIdx] : 'A';
 
   return (
     <AbsoluteFill
@@ -181,11 +193,11 @@ const QuizRound: React.FC<{
         `}
       </style>
 
-      {/* 1. Static Top Title (Clean, Centered, Perfectly Stable) */}
+      {/* 1. Static Top Title (Clean, Centered, Positioned with plenty of top space) */}
       <div
         style={{
           position: 'absolute',
-          top: 65,
+          top: 70,
           left: 60,
           right: 60,
           display: 'flex',
@@ -197,7 +209,7 @@ const QuizRound: React.FC<{
       >
         <div
           style={{
-            fontSize: 54,
+            fontSize: 52,
             fontWeight: 900,
             textAlign: 'center',
             color: '#facc15',
@@ -213,14 +225,14 @@ const QuizRound: React.FC<{
         {partTitle && partTitle.trim() ? (
           <div
             style={{
-              marginTop: 12,
-              fontSize: 26,
+              marginTop: 10,
+              fontSize: 24,
               fontWeight: 800,
               color: '#38bdf8',
               backgroundColor: 'rgba(56, 189, 248, 0.16)',
               border: '2px solid rgba(56, 189, 248, 0.5)',
               borderRadius: 999,
-              padding: '4px 28px',
+              padding: '4px 26px',
               letterSpacing: 2,
               textTransform: 'uppercase',
               boxShadow: '0 4px 15px rgba(0,0,0,0.35)',
@@ -231,11 +243,11 @@ const QuizRound: React.FC<{
         ) : null}
       </div>
 
-      {/* 2. Static Question & Image Frame (Expanded 520px height for Crystal Clear View) */}
+      {/* 2. Static Question & Image Frame (Pushed down with 55px margin below title, No collision) */}
       <div
         style={{
           position: 'absolute',
-          top: partTitle && partTitle.trim() ? 200 : 170,
+          top: partTitle && partTitle.trim() ? 230 : 205,
           left: 65,
           right: 65,
           backgroundColor: '#ffffff',
@@ -248,11 +260,11 @@ const QuizRound: React.FC<{
           zIndex: 10,
         }}
       >
-        {/* Expanded Image Box (520px height) */}
+        {/* Expanded Image Box (Fills full border edge-to-edge, zero left/right gaps) */}
         <div
           style={{
             width: '100%',
-            height: 520,
+            height: 480,
             backgroundColor: '#090d16',
             display: 'flex',
             justifyContent: 'center',
@@ -268,10 +280,10 @@ const QuizRound: React.FC<{
                 style={{
                   width: '100%',
                   height: '100%',
-                  objectFit: 'contain',
+                  objectFit: 'cover',
+                  objectPosition: 'center',
                   transform: isTimerDone ? 'scale(1.04)' : 'scale(1)',
                   transition: 'transform 0.4s ease-out',
-                  filter: isTimerDone ? 'drop-shadow(0 0 30px rgba(74, 222, 128, 0.5))' : 'none',
                 }}
               />
 
@@ -310,7 +322,15 @@ const QuizRound: React.FC<{
           ) : (
             isTimerDone ? (
               image_url ? (
-                <Img src={image_url} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                <Img 
+                  src={image_url} 
+                  style={{ 
+                    width: '100%', 
+                    height: '100%', 
+                    objectFit: 'cover', 
+                    objectPosition: 'center' 
+                  }} 
+                />
               ) : (
                 <div style={{ fontSize: 130, lineHeight: 1 }}>{'\u{1F3AF}'}</div>
               )
@@ -320,102 +340,116 @@ const QuizRound: React.FC<{
           )}
         </div>
 
-        {/* Question Text Box with Hand-Drawn Red Marker Underline */}
+        {/* Question Text Box with Word-by-Word Line-by-Line Synchronized Red Marker Underline */}
         <div
           style={{
             width: '100%',
-            padding: '28px 36px 36px 36px',
+            padding: '24px 32px 30px 32px',
             backgroundColor: '#ffffff',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            position: 'relative',
+            textAlign: 'center',
           }}
         >
           <div
             style={{
-              fontSize: 40,
+              fontSize: 38,
               fontWeight: 800,
               color: '#1e293b',
-              textAlign: 'center',
-              lineHeight: 1.34,
+              lineHeight: 1.38,
               letterSpacing: -0.3,
-              position: 'relative',
-              display: 'inline-block',
               maxWidth: '100%',
-              paddingBottom: 8,
+              display: 'inline',
             }}
           >
-            {question}
+            {words.map((w, idx) => {
+              // Word timing window inside question speech
+              const wordStart = idx / words.length;
+              const wordEnd = (idx + 1) / words.length;
 
-            {/* Hand-Drawn Red Pen/Marker Underline that traces from left to right */}
-            <div
-              style={{
-                position: 'absolute',
-                bottom: -4,
-                left: '2%',
-                width: '96%',
-                height: 18,
-                overflow: 'visible',
-                pointerEvents: 'none',
-              }}
-            >
-              <svg
-                viewBox="0 0 700 18"
-                preserveAspectRatio="none"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  overflow: 'visible',
-                }}
-              >
-                <path
-                  d="M 5,11 Q 175,7 350,12 T 695,10"
-                  fill="none"
-                  stroke="#ef4444"
-                  strokeWidth="9"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  style={{
-                    strokeDasharray: 720,
-                    strokeDashoffset: (1 - penProgress) * 720,
-                    filter: 'drop-shadow(0 2px 6px rgba(239, 68, 68, 0.5))',
-                  }}
-                />
-              </svg>
+              // Individual word underline progress
+              const wordProgress = interpolate(
+                questionReadProgress,
+                [wordStart, wordEnd],
+                [0, 1],
+                { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
+              );
 
-              {/* Glowing Pen Tip Indicator along the active stroke */}
-              {penProgress > 0.02 && penProgress < 0.98 && (
-                <div
+              return (
+                <span
+                  key={idx}
                   style={{
-                    position: 'absolute',
-                    top: 2,
-                    left: `calc(${penProgress * 100}% - 7px)`,
-                    width: 14,
-                    height: 14,
-                    borderRadius: '50%',
-                    backgroundColor: '#dc2626',
-                    boxShadow: '0 0 12px #ef4444, 0 0 4px #ffffff',
-                    transform: 'scale(1.2)',
+                    display: 'inline-block',
+                    position: 'relative',
+                    marginRight: 9,
+                    marginBottom: 4,
                   }}
-                />
-              )}
-            </div>
+                >
+                  {w}
+
+                  {/* Word-level Hand-Drawn Red Marker Line underneath this word */}
+                  <span
+                    style={{
+                      position: 'absolute',
+                      bottom: -2,
+                      left: 0,
+                      width: '100%',
+                      height: 6,
+                      display: 'block',
+                      overflow: 'hidden',
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        height: '100%',
+                        backgroundColor: '#ef4444',
+                        borderRadius: 3,
+                        boxShadow: '0 2px 5px rgba(239, 68, 68, 0.45)',
+                        transform: `scaleX(${wordProgress})`,
+                        transformOrigin: 'left center',
+                      }}
+                    />
+                  </span>
+
+                  {/* Red Marker Tip Indicator while this word is actively being underlined */}
+                  {wordProgress > 0.05 && wordProgress < 0.95 && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        bottom: -4,
+                        left: `calc(${wordProgress * 100}% - 4px)`,
+                        width: 9,
+                        height: 9,
+                        borderRadius: '50%',
+                        backgroundColor: '#dc2626',
+                        boxShadow: '0 0 8px #ef4444, 0 0 3px #ffffff',
+                        pointerEvents: 'none',
+                        zIndex: 2,
+                      }}
+                    />
+                  )}
+                </span>
+              );
+            })}
           </div>
         </div>
       </div>
 
-      {/* 3. Options List with Smooth Staggered Animation & Answer Highlight */}
+      {/* 3. Options List (Positioned with 60px breathing space below question frame, Zero collision!) */}
       <div
         style={{
           position: 'absolute',
-          top: partTitle && partTitle.trim() ? 890 : 860,
+          top: partTitle && partTitle.trim() ? 920 : 895,
           left: 65,
           right: 65,
           display: 'flex',
           flexDirection: 'column',
-          gap: 20,
+          gap: 18,
           zIndex: 10,
         }}
       >
@@ -471,32 +505,22 @@ const QuizRound: React.FC<{
               <span style={{ color: '#ffffff', flex: 1, lineHeight: 1.25 }}>
                 {opt}
               </span>
-              {highlightCorrect && (
-                <span
-                  style={{
-                    fontSize: 32,
-                    marginLeft: 14,
-                  }}
-                >
-                  {'\u{2705}'}
-                </span>
-              )}
+              {/* No tick emoji, clean modern highlight */}
             </div>
           );
         })}
       </div>
 
-      {/* 4. Timer Bar & Answer Announcement Banner (Positioned above Shorts bottom UI zone) */}
+      {/* 4. Timer Bar (Positioned with 60px margin directly below options, Clean & Visible) */}
       <div
         style={{
           position: 'absolute',
-          bottom: 220,
+          top: partTitle && partTitle.trim() ? 1390 : 1365,
           left: 80,
           right: 80,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: 16,
           zIndex: 15,
         }}
       >
@@ -522,29 +546,7 @@ const QuizRound: React.FC<{
             }}
           />
         </div>
-
-        {/* Prominent Correct Answer Pill Badge at Countdown End */}
-        {isTimerDone && (
-          <div
-            style={{
-              backgroundColor: 'rgba(16, 185, 129, 0.95)',
-              color: 'white',
-              padding: '12px 36px',
-              borderRadius: 999,
-              fontSize: 28,
-              fontWeight: 900,
-              letterSpacing: 1,
-              textTransform: 'uppercase',
-              boxShadow: '0 10px 30px rgba(16, 185, 129, 0.6)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-            }}
-          >
-            <span>Answer:</span>
-            <span style={{ textDecoration: 'underline' }}>{correctLetter} • {correct_answer}</span>
-          </div>
-        )}
+        {/* No bottom "Answer: A cow" banner */}
       </div>
 
       {/* 5. Sound Effects & Spoken Reveal Audio */}
