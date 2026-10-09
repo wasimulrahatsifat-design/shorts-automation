@@ -28,8 +28,12 @@ export function formatDataToHumanScript(data: any): string {
       if (q.image_keyword) {
         lines.push(`Image: ${q.image_keyword}`);
       }
-      if (q.show_image_first) {
+      if (q.show_image_first !== undefined) {
+        lines.push(`Show Image First: ${q.show_image_first ? 'Yes' : 'No'}`);
+      } else if (data.show_image_first) {
         lines.push(`Show Image First: Yes`);
+      } else {
+        lines.push(`Show Image First: No`);
       }
       lines.push('');
     });
@@ -118,8 +122,8 @@ export function parseHumanScriptToData(text: string, existingData: any): any {
       data.script = hookMatch[1].trim();
     }
 
-    // Split text into question blocks
-    const qBlocks = text.split(/(?=\n\s*\[?QUESTION\s*\d*\]?|\n\s*Q\d+\s*[:.])/i);
+    // Split text into question blocks (handles [QUESTION 1], Q1:, 1. Question:, etc.)
+    const qBlocks = ('\n' + text.trim()).split(/(?=\n\s*(?:\[?QUESTION\s*\d*\]?|Q\d+\s*[:.]|\d+[\.\)]\s*(?:Question|Q)?))/i);
     const parsedQuestions: any[] = [];
 
     qBlocks.forEach((block) => {
@@ -144,13 +148,18 @@ export function parseHumanScriptToData(text: string, existingData: any): any {
       const imgLineMatch = trimmed.match(/Image(?:\s*Keyword)?\s*[:.]\s*(.*)/i);
       const imageKeyword = imgLineMatch ? imgLineMatch[1].trim() : '';
 
-      const imgFirstMatch = trimmed.match(/(?:Show Image First|Image First)\s*[:.]\s*(.*)/i);
+      const imgFirstMatch = trimmed.match(/(?:Show Image First|Image First|Picture Quiz|Picture Mode)\s*[:.]\s*(.*)/i);
 
       if (question || options.length > 0) {
         const existingQ = (data.questions || [])[parsedQuestions.length] || {};
-        const showImageFirst = imgFirstMatch 
-          ? /yes|true|1/i.test(imgFirstMatch[1].trim())
-          : existingQ.show_image_first;
+        let showImageFirst: boolean | undefined = undefined;
+        if (imgFirstMatch) {
+          showImageFirst = /yes|true|1/i.test(imgFirstMatch[1].trim());
+        } else if (existingQ.show_image_first !== undefined) {
+          showImageFirst = Boolean(existingQ.show_image_first);
+        } else if (data.show_image_first !== undefined) {
+          showImageFirst = Boolean(data.show_image_first);
+        }
 
         parsedQuestions.push({
           ...existingQ,

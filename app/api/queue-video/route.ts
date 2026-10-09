@@ -18,6 +18,7 @@ export async function POST(request: Request) {
     }
     if (
       data_json.format !== 'Would You Rather' &&
+      data_json.format !== 'Quiz' &&
       data_json.format !== 'AestheticVideo' &&
       data_json.format !== 'TimeLapseVideo' &&
       data_json.format !== 'VideoFlow' &&

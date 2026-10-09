@@ -125,18 +125,20 @@ const QuizRound: React.FC<{
 
   const { question, options = [], correct_answer, image_url } = questionData;
 
-  // Smart detection for Picture/Image Guessing Quiz
-  const isImageQuiz = Boolean(
-    questionData.show_image_first ?? 
-    globalShowImageFirst ?? 
-    (questionData.image_url && (
-      /\b(this (image|picture|photo|pic|logo|character|person|flag|celebrity|animal|place|item|thing|silhouette|shadow))\b/i.test(questionData.question) ||
-      /\b(guess the (image|picture|character|logo|flag|celebrity|animal|person|movie|hero|alien|villain|pokemon|brand))\b/i.test(questionData.question) ||
-      /\b(who is this|what is this|name this|identify this|which character|which person|which flag|which logo)\b/i.test(questionData.question) ||
-      /(এই ছবি|ছবিতে কে|ছবিটি কার|চিহ্নিত কর|ছবিটি দেখে বলো)/i.test(questionData.question) ||
-      /\b(guess the|identify the|visual quiz|picture quiz|photo quiz|logo quiz|flag quiz)\b/i.test(topic)
-    ))
-  );
+  // Smart detection for Picture/Image Guessing Quiz (Per-Question setting takes absolute priority!)
+  const isImageQuiz = questionData.show_image_first !== undefined
+    ? Boolean(questionData.show_image_first)
+    : globalShowImageFirst !== undefined
+    ? Boolean(globalShowImageFirst)
+    : Boolean(
+        questionData.image_url && (
+          /\b(this (image|picture|photo|pic|logo|character|person|flag|celebrity|animal|place|item|thing|silhouette|shadow))\b/i.test(questionData.question) ||
+          /\b(guess the (image|picture|character|logo|flag|celebrity|animal|person|movie|hero|alien|villain|pokemon|brand))\b/i.test(questionData.question) ||
+          /\b(who is this|what is this|name this|identify this|which character|which person|which flag|which logo)\b/i.test(questionData.question) ||
+          /(এই ছবি|ছবিতে কে|ছবিটি কার|চিহ্নিত কর|ছবিটি দেখে বলো)/i.test(questionData.question) ||
+          /\b(guess the|identify the|visual quiz|picture quiz|photo quiz|logo quiz|flag quiz)\b/i.test(topic)
+        )
+      );
 
   // Timing Breakdown
   const { readingFrames, timerFrames, revealFrames } = getQuestionTiming(questionData, fps);

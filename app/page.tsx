@@ -723,6 +723,165 @@ export default function Home() {
     }
   };
 
+  const handleUseOwnScript = () => {
+    setMessage(null);
+    let starterData: any = {};
+    const finalVoiceId = selectedVoiceId === 'custom' ? (customVoiceId.trim() || 'pNInz6obpgDQGcFmaJgB') : selectedVoiceId;
+    const currentTopic = topic.trim() || (videoFormat === 'Quiz' ? 'Trivia Challenge' : videoFormat === 'Would You Rather' ? 'Impossible Choices' : 'Data Ranking Comparison');
+
+    if (videoFormat === 'Quiz') {
+      starterData = {
+        format: 'Quiz',
+        topic: currentTopic,
+        part_title: partTitle.trim() || '',
+        end_title: endTitle.trim() || 'Subscribe for more quizzes!',
+        voice_id: finalVoiceId,
+        show_image_first: false,
+        questions: [
+          {
+            question: 'What is the fastest land animal on Earth?',
+            options: ['Cheetah', 'Falcon', 'Sailfish'],
+            correct_answer: 'Cheetah',
+            image_keyword: 'Cheetah',
+            show_image_first: false,
+          },
+          {
+            question: 'Guess the monument shown in this picture?',
+            options: ['Eiffel Tower', 'Colosseum', 'Big Ben'],
+            correct_answer: 'Eiffel Tower',
+            image_keyword: 'Eiffel Tower',
+            show_image_first: true,
+          },
+          {
+            question: 'Which planet in our solar system has the most moons?',
+            options: ['Saturn', 'Jupiter', 'Neptune'],
+            correct_answer: 'Saturn',
+            image_keyword: 'Saturn',
+            show_image_first: false,
+          },
+          {
+            question: 'Identify this cute animal in the picture?',
+            options: ['Giant Panda', 'Polar Bear', 'Grizzly Bear'],
+            correct_answer: 'Giant Panda',
+            image_keyword: 'Giant Panda',
+            show_image_first: true,
+          },
+          {
+            question: 'How many hearts does an octopus have?',
+            options: ['3 Hearts', '1 Heart', '2 Hearts'],
+            correct_answer: '3 Hearts',
+            image_keyword: 'Octopus',
+            show_image_first: false,
+          },
+        ],
+      };
+    } else if (videoFormat === 'Would You Rather') {
+      starterData = {
+        format: 'Would You Rather',
+        topic: currentTopic,
+        part_title: partTitle.trim() || '',
+        end_title: endTitle.trim() || 'Write down in the comment section.',
+        voice_id: finalVoiceId,
+        scenarios: [
+          {
+            option_a: 'Have unlimited free travel forever',
+            option_b: 'Never have to pay for food again',
+            image_keyword_a: 'Airplane travel',
+            image_keyword_b: 'Delicious feast',
+            percent_a: 54,
+            percent_b: 46,
+          },
+          {
+            option_a: 'Be able to speak all human languages',
+            option_b: 'Be able to speak to animals',
+            image_keyword_a: 'World flags',
+            image_keyword_b: 'Cute animals',
+            percent_a: 48,
+            percent_b: 52,
+          },
+          {
+            option_a: 'Know every secret of the universe',
+            option_b: 'Know the future of your own life',
+            image_keyword_a: 'Cosmos universe',
+            image_keyword_b: 'Crystal ball fortune',
+            percent_a: 62,
+            percent_b: 38,
+          },
+          {
+            option_a: 'Live in a luxury mansion alone',
+            option_b: 'Live in a cozy cabin with best friends',
+            image_keyword_a: 'Modern luxury mansion',
+            image_keyword_b: 'Cozy mountain cabin',
+            percent_a: 35,
+            percent_b: 65,
+          },
+        ],
+      };
+    } else {
+      // Data Comparison
+      starterData = {
+        format: 'Data Comparison',
+        topic: currentTopic,
+        script: 'Here is the ranking comparison. Watch who reaches the very top by 2026!',
+        y_axis_label: 'Score / Value',
+        timeline_labels: ['2020', '2022', '2024', '2026'],
+        end_title: endTitle.trim() || 'Subscribe for more stats!',
+        voice_id: finalVoiceId,
+        items: [
+          { label: 'Contender A', values: [100, 250, 450, 800], image_keyword: 'Champion' },
+          { label: 'Contender B', values: [150, 300, 420, 720], image_keyword: 'Runner Up' },
+          { label: 'Contender C', values: [80, 200, 390, 650], image_keyword: 'Third Place' },
+        ],
+      };
+    }
+
+    if (!topic.trim()) {
+      setTopic(currentTopic);
+    }
+
+    setDraftJson(JSON.stringify(starterData, null, 2));
+    setHumanScriptText(formatDataToHumanScript(starterData));
+    setScriptViewMode('normal');
+    setStep(2);
+    setMessage({
+      type: 'success',
+      text: 'Loaded custom script template! Edit or paste your own script below, review your images, and click "Generate Video & Queue" to render directly.',
+    });
+  };
+
+  const handleToggleQuestionImageFirst = (index: number) => {
+    try {
+      const parsed = JSON.parse(draftJson);
+      if (Array.isArray(parsed.questions) && parsed.questions[index]) {
+        const current = parsed.questions[index].show_image_first !== undefined
+          ? Boolean(parsed.questions[index].show_image_first)
+          : Boolean(parsed.show_image_first);
+        parsed.questions[index].show_image_first = !current;
+        setDraftJson(JSON.stringify(parsed, null, 2));
+        setHumanScriptText(formatDataToHumanScript(parsed));
+      }
+    } catch (e) {
+      console.error('Failed to toggle question image first:', e);
+    }
+  };
+
+  const handleSetAllQuestionsImageFirst = (val: boolean) => {
+    try {
+      const parsed = JSON.parse(draftJson);
+      parsed.show_image_first = val;
+      setShowImageFirst(val);
+      if (Array.isArray(parsed.questions)) {
+        parsed.questions.forEach((q: any) => {
+          q.show_image_first = val;
+        });
+      }
+      setDraftJson(JSON.stringify(parsed, null, 2));
+      setHumanScriptText(formatDataToHumanScript(parsed));
+    } catch (e) {
+      console.error('Failed to batch toggle question image first:', e);
+    }
+  };
+
   const handleQueueVideo = async () => {
     setLoading(true);
     setMessage(null);
@@ -1281,7 +1440,7 @@ export default function Home() {
               )}
             </div>
 
-            <div className="pt-4 flex justify-between items-center">
+            <div className="pt-4 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
               <label className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-medium cursor-pointer">
                 <input 
                   type="checkbox" 
@@ -1292,15 +1451,28 @@ export default function Home() {
                 Enable Subtitles
               </label>
 
-              <button
-                onClick={handleGenerateDraft}
-                disabled={loading}
-                className={`px-8 py-3 rounded-xl text-white font-bold transition-all ${
-                  loading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 shadow-lg active:scale-95'
-                }`}
-              >
-                {loading ? 'Generating Draft...' : 'Next: Generate Script →'}
-              </button>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleUseOwnScript}
+                  disabled={loading}
+                  className="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 font-bold border border-slate-300 dark:border-slate-500 transition-all flex items-center gap-2 shadow-sm active:scale-95 text-sm"
+                  title="Skip AI generation and enter or paste your own script directly"
+                >
+                  <span>✍️</span>
+                  <span>I have my own script (Skip AI)</span>
+                </button>
+
+                <button
+                  onClick={handleGenerateDraft}
+                  disabled={loading}
+                  className={`px-8 py-3 rounded-xl text-white font-bold transition-all text-sm ${
+                    loading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 shadow-lg active:scale-95'
+                  }`}
+                >
+                  {loading ? 'Generating Draft...' : 'Next: Generate Script with AI →'}
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -1397,38 +1569,109 @@ export default function Home() {
                   </span>
                 </div>
 
-                <div className="bg-blue-50/60 dark:bg-blue-950/20 p-4 rounded-2xl border border-blue-200 dark:border-blue-900/50 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      id="step2ShowImageFirst"
-                      checked={showImageFirst}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setShowImageFirst(checked);
-                        try {
-                          const parsed = JSON.parse(draftJson);
-                          parsed.show_image_first = checked;
-                          if (Array.isArray(parsed.questions)) {
-                            parsed.questions.forEach((q: any) => {
-                              q.show_image_first = checked;
-                            });
-                          }
-                          setDraftJson(JSON.stringify(parsed, null, 2));
-                          setHumanScriptText(formatDataToHumanScript(parsed));
-                        } catch {}
-                      }}
-                      className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
-                    />
-                    <label htmlFor="step2ShowImageFirst" className="cursor-pointer">
-                      <span className="block text-xs font-bold text-gray-900 dark:text-white">
-                        Picture Quiz Mode (Show Images Upfront from Start)
-                      </span>
-                      <span className="block text-[11px] text-gray-500 dark:text-gray-400">
-                        Shows the question image from the beginning so viewers can inspect and guess.
-                      </span>
-                    </label>
+                {/* Picture Quiz Mode & Per-Question Mix & Match Controls */}
+                <div className="bg-gradient-to-r from-blue-50/90 to-indigo-50/90 dark:from-slate-800/90 dark:to-indigo-950/40 p-4 rounded-2xl border border-blue-200 dark:border-blue-900/60 space-y-3">
+                  <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-xl">🖼️</span>
+                      <div>
+                        <span className="block text-xs font-black text-gray-900 dark:text-white uppercase tracking-wider">
+                          Picture Quiz Settings & Per-Question Modes
+                        </span>
+                        <span className="block text-[11px] text-gray-500 dark:text-gray-400">
+                          Configure whether questions show their image upfront or act as standard trivia.
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleSetAllQuestionsImageFirst(true)}
+                        className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-amber-500 hover:bg-amber-600 text-white shadow-xs transition-all active:scale-95 cursor-pointer"
+                        title="Set all questions to show images upfront"
+                      >
+                        🖼️ All Picture
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSetAllQuestionsImageFirst(false)}
+                        className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition-all active:scale-95 cursor-pointer"
+                        title="Set all questions to standard trivia (Thinking animation)"
+                      >
+                        🤔 All Trivia
+                      </button>
+                    </div>
                   </div>
+
+                  {/* Individual Question Toggles */}
+                  {(() => {
+                    try {
+                      const parsed = draftJson ? JSON.parse(draftJson) : null;
+                      const questions = parsed?.questions;
+                      if (!Array.isArray(questions) || questions.length === 0) return null;
+
+                      return (
+                        <div className="pt-2 border-t border-blue-200/60 dark:border-blue-900/40 space-y-2">
+                          <div className="flex justify-between items-center text-[11px] text-gray-600 dark:text-gray-300">
+                            <span className="font-bold flex items-center gap-1">
+                              <span>🎛️ Mix & Match Questions:</span>
+                              <span className="font-normal text-gray-500 dark:text-gray-400">
+                                (Click any card to toggle between Picture Quiz and Standard Trivia)
+                              </span>
+                            </span>
+                            <span className="text-[10px] text-gray-400">
+                              {questions.filter((q: any) => q.show_image_first !== undefined ? q.show_image_first : parsed.show_image_first).length} of {questions.length} Picture Mode
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                            {questions.map((q: any, idx: number) => {
+                              const isImgFirst = q.show_image_first !== undefined
+                                ? Boolean(q.show_image_first)
+                                : Boolean(parsed.show_image_first);
+
+                              return (
+                                <button
+                                  type="button"
+                                  key={idx}
+                                  onClick={() => handleToggleQuestionImageFirst(idx)}
+                                  className={`p-2.5 rounded-xl border text-left transition-all relative flex flex-col justify-between group cursor-pointer ${
+                                    isImgFirst
+                                      ? 'bg-amber-50/80 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 hover:border-amber-400 shadow-xs'
+                                      : 'bg-white/80 dark:bg-gray-800/80 border-gray-200 dark:border-gray-700 hover:border-blue-300'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between w-full mb-1">
+                                    <span className="text-xs font-black text-gray-800 dark:text-gray-100">
+                                      Q{idx + 1}
+                                    </span>
+                                    <span
+                                      className={`text-[9px] font-black px-1.5 py-0.5 rounded-md ${
+                                        isImgFirst
+                                          ? 'bg-amber-500 text-white'
+                                          : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
+                                      }`}
+                                    >
+                                      {isImgFirst ? '🖼️ Picture' : '🤔 Trivia'}
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-gray-700 dark:text-gray-300 line-clamp-1 italic font-medium w-full">
+                                    {q.question || `Question ${idx + 1}`}
+                                  </p>
+                                  <span className="text-[9px] mt-1 text-gray-400 dark:text-gray-500 flex items-center gap-1">
+                                    <span>{isImgFirst ? '⚡ Upfront Image' : '⏳ Thinking 🤔'}</span>
+                                    <span className="text-[8px] opacity-60 ml-auto group-hover:underline">Toggle</span>
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    } catch {
+                      return null;
+                    }
+                  })()}
                 </div>
               </div>
             )}
