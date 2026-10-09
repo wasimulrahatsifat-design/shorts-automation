@@ -10,6 +10,11 @@ export interface Question {
   image_url?: string;
   show_image_first?: boolean;
   answer_tts_url?: string;
+  question_tts_url?: string;
+  question_duration?: number;
+  options_tts_url?: string;
+  options_duration?: number;
+  reading_duration?: number;
 }
 
 export interface QuizJson {
@@ -51,18 +56,46 @@ const resolveGifUrl = (url?: string) => {
 };
 
 /**
- * Accurate frame timing calculation so audio and voiceovers never get truncated:
- * - readingFrames: Natural comfortable reading rate (~12 chars/sec + 1.8s padding)
+ * Accurate frame timing calculation matching natural speech and exact TTS audio:
+ * - questionFrames: time to speak question text
+ * - optionsStartFrame: crisp 0.13s pause after question finishes
+ * - optionsFrames: time to speak options
+ * - timerStartFrame: starts immediately (~0.20s after options finish)
  * - timerFrames: 3 seconds countdown
  * - revealFrames: 2.6 seconds to speak and celebrate the answer
  */
 export const getQuestionTiming = (q: Question, fps: number) => {
-  const textLength = (q.question || '').length + (q.options || []).join(' ').length;
-  const readingSeconds = Math.max(4.5, (textLength / 12) + 1.8);
-  const readingFrames = Math.round(readingSeconds * fps);
+  let qSec = q.question_duration;
+  let optSec = q.options_duration;
+
+  if (qSec === undefined || optSec === undefined) {
+    if (q.reading_duration !== undefined && q.reading_duration > 0) {
+      const qLen = (q.question || '').length;
+      const optLen = (q.options || []).join(' ').length + 9;
+      const totalLen = Math.max(1, qLen + optLen);
+      qSec = Number(((qLen / totalLen) * (q.reading_duration - 0.2)).toFixed(2));
+      optSec = Number((q.reading_duration - qSec).toFixed(2));
+    } else {
+      const qLen = (q.question || '').length;
+      const optLen = (q.options || []).join(' ').length + 9;
+      qSec = Number(Math.max(1.6, qLen / 16.5).toFixed(2));
+      optSec = Number(Math.max(1.8, optLen / 16.5).toFixed(2));
+    }
+  }
+
+  const questionFrames = Math.max(Math.round(fps * 1.4), Math.round(qSec * fps));
+  const optionsFrames = Math.max(Math.round(fps * 1.5), Math.round(optSec * fps));
+  const pauseBetween = 4; // 0.13s natural breath between question and options
+  const pauseBeforeTimer = 6; // 0.20s natural breath after options -> timer starts IMMEDIATELY!
+
+  const readingFrames = questionFrames + pauseBetween + optionsFrames + pauseBeforeTimer;
   const timerFrames = 3 * fps; // 3 seconds countdown timer
   const revealFrames = Math.round(2.6 * fps); // 2.6 seconds to speak the answer
+
   return {
+    questionFrames,
+    optionsStartFrame: questionFrames + pauseBetween,
+    optionsFrames,
     readingFrames,
     timerFrames,
     revealFrames,
@@ -141,7 +174,7 @@ const QuizRound: React.FC<{
       );
 
   // Timing Breakdown
-  const { readingFrames, timerFrames, revealFrames } = getQuestionTiming(questionData, fps);
+  const { questionFrames, optionsStartFrame, optionsFrames, readingFrames, timerFrames, revealFrames } = getQuestionTiming(questionData, fps);
   const timerStartFrame = readingFrames;
   
   const timerProgress = interpolate(
@@ -153,26 +186,16 @@ const QuizRound: React.FC<{
   const isTimerDone = frame >= timerStartFrame + timerFrames;
 
   // Voiceover Timing Sync for Question Reading:
-  // The TTS speech reads the question first, then proceeds to options (A, B, C...).
-  // We calculate the exact duration proportion spent speaking the question so the underline matches the spoken voice!
-  const questionText = (question || '').trim();
-  const optionsText = options.map((o, i) => `${['A', 'B', 'C', 'D'][i]}, ${o}`).join(' ');
-  const qLen = questionText.length;
-  const optLen = optionsText.length;
-  const totalSpeechLen = Math.max(1, qLen + optLen);
-  const questionRatio = Math.min(0.72, Math.max(0.35, qLen / totalSpeechLen));
-  const questionSpeechFrames = Math.max(fps * 2, Math.round(readingFrames * questionRatio));
-
-  // Progress of question reading from 0 to 1
+  // Starts at frame 2, smoothly covers every word across the exact question reading duration!
   const questionReadProgress = interpolate(
     frame,
-    [3, questionSpeechFrames],
+    [2, questionFrames],
     [0, 1],
     { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
   );
 
   // Split question into words for word-by-word line-by-line synchronized underline
-  const words = questionText.split(/\s+/).filter(Boolean);
+  const words = (question || '').trim().split(/\s+/).filter(Boolean);
 
   // Find correct answer index
   const correctIdx = options.findIndex(opt => opt.trim().toLowerCase() === (correct_answer || '').trim().toLowerCase());
@@ -249,7 +272,7 @@ const QuizRound: React.FC<{
       <div
         style={{
           position: 'absolute',
-          top: partTitle && partTitle.trim() ? 230 : 205,
+          top: partTitle && partTitle.trim() ? 295 : 265,
           left: 65,
           right: 65,
           backgroundColor: '#ffffff',
@@ -446,7 +469,7 @@ const QuizRound: React.FC<{
       <div
         style={{
           position: 'absolute',
-          top: partTitle && partTitle.trim() ? 920 : 895,
+          top: partTitle && partTitle.trim() ? 985 : 955,
           left: 65,
           right: 65,
           display: 'flex',
@@ -517,7 +540,7 @@ const QuizRound: React.FC<{
       <div
         style={{
           position: 'absolute',
-          top: partTitle && partTitle.trim() ? 1390 : 1365,
+          top: partTitle && partTitle.trim() ? 1445 : 1415,
           left: 80,
           right: 80,
           display: 'flex',
@@ -601,13 +624,26 @@ export const Quiz: React.FC<{ data_json: QuizJson, topic: string }> = ({ data_js
 
       <Series>
         {questions.map((q, idx) => {
-          const { totalFrames } = getQuestionTiming(q, fps);
+          const { questionFrames, optionsStartFrame, optionsFrames, totalFrames } = getQuestionTiming(q, fps);
           const answerAudio = q.answer_tts_url || (answer_tts_urls && answer_tts_urls[idx]) || undefined;
 
           return (
             <Series.Sequence key={idx} durationInFrames={totalFrames}>
-              {/* Question Audio */}
-              {tts_urls && tts_urls[idx] && <Audio src={resolveAudioUrl(tts_urls[idx])} volume={0.9} />}
+              {/* Voiceover Audio: Question speech then Options speech */}
+              {q.question_tts_url ? (
+                <>
+                  <Sequence from={0} durationInFrames={questionFrames + 4}>
+                    <Audio src={resolveAudioUrl(q.question_tts_url)} volume={0.9} />
+                  </Sequence>
+                  {q.options_tts_url && (
+                    <Sequence from={optionsStartFrame} durationInFrames={optionsFrames + 4}>
+                      <Audio src={resolveAudioUrl(q.options_tts_url)} volume={0.9} />
+                    </Sequence>
+                  )}
+                </>
+              ) : (
+                tts_urls && tts_urls[idx] && <Audio src={resolveAudioUrl(tts_urls[idx])} volume={0.9} />
+              )}
               <QuizRound 
                 questionData={q} 
                 topic={topic} 
