@@ -3,6 +3,7 @@ import { Octokit } from 'octokit';
 import { generateGeminiJson } from '@/lib/gemini';
 import { fetchElevenLabsTTS } from '@/lib/elevenlabs';
 import { findVideoAcrossProjects, uploadToStorageWithFailover } from '@/lib/supabase';
+import { getMp3Duration } from '@/lib/audio-duration';
 
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 
@@ -93,25 +94,42 @@ export async function POST(request: Request) {
           const audioBuffer = Buffer.from(await elResponse.arrayBuffer());
           const ttsFileName = `tts_${crypto.randomUUID()}.mp3`;
           const { publicUrl } = await uploadToStorageWithFailover('shorts', ttsFileName, audioBuffer, { contentType: 'audio/mpeg', upsert: true });
-          return publicUrl;
+          const duration = getMp3Duration(audioBuffer);
+          return { publicUrl, duration };
         };
 
         const answer_tts_urls: (string | null)[] = [];
         for (const q of newItems) {
-          const text = `${q.question} A, ${q.options[0]}, B, ${q.options[1]}, C, ${q.options[2]}.`;
-          const url = await generateTTSForText(text);
-          tts_urls.push(url);
+          // 1. Generate Question voiceover (precise duration for synchronized red marker line)
+          const qTTS = await generateTTSForText(q.question);
+          q.question_tts_url = qTTS.publicUrl;
+          q.question_duration = qTTS.duration;
 
-          // Generate spoken answer audio (e.g. "A, Bamboo")
+          // 2. Generate Options voiceover with colon format (A: Option A. B: Option B. C: Option C.)
+          const letters = ['A', 'B', 'C', 'D'];
+          const optionsText = (q.options || [])
+            .map((opt: string, idx: number) => `${letters[idx] || ''}: ${opt}.`)
+            .join(' ');
+          const optTTS = await generateTTSForText(optionsText);
+          q.options_tts_url = optTTS.publicUrl;
+          q.options_duration = optTTS.duration;
+
+          // Combined reading duration
+          q.reading_duration = Number((qTTS.duration + 0.15 + optTTS.duration).toFixed(2));
+
+          // Also add to tts_urls as fallback single-track audio
+          tts_urls.push(qTTS.publicUrl);
+
+          // 3. Generate spoken answer audio (e.g. "A: Bamboo")
           const optIdx = (q.options || []).findIndex(
             (o: string) => o.trim().toLowerCase() === (q.correct_answer || '').trim().toLowerCase()
           );
           const optLetter = optIdx >= 0 ? ['A', 'B', 'C', 'D'][optIdx] : 'A';
-          const answerText = `${optLetter}, ${q.correct_answer}.`;
+          const answerText = `${optLetter}: ${q.correct_answer}.`;
           try {
-            const answerUrl = await generateTTSForText(answerText);
-            q.answer_tts_url = answerUrl;
-            answer_tts_urls.push(answerUrl);
+            const answerTTS = await generateTTSForText(answerText);
+            q.answer_tts_url = answerTTS.publicUrl;
+            answer_tts_urls.push(answerTTS.publicUrl);
           } catch (e) {
             console.warn('[Rewrite Script] Answer TTS failed:', e);
             answer_tts_urls.push(null);
@@ -124,8 +142,8 @@ export async function POST(request: Request) {
         // Add custom end_title outro TTS only if provided
         const outroText = (row.data_json?.end_title || '').trim();
         if (outroText) {
-          const outroUrl = await generateTTSForText(outroText);
-          tts_urls.push(outroUrl);
+          const outroTTS = await generateTTSForText(outroText);
+          tts_urls.push(outroTTS.publicUrl);
         }
       } else if (videoFormat === 'Would You Rather' && newItems && newItems.length > 0 && newItems[0].option_a) {
         const generateTTSForText = async (text: string) => {

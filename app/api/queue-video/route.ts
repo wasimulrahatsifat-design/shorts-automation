@@ -59,8 +59,12 @@ export async function POST(request: Request) {
           q.question_tts_url = qTTS.publicUrl;
           q.question_duration = qTTS.duration;
 
-          // 2. Generate Options voiceover (A, Option A. B, Option B. C, Option C.)
-          const optionsText = `A, ${q.options[0]}, B, ${q.options[1]}, C, ${q.options[2]}.`;
+          // 2. Generate Options voiceover with colon format (A: Option A. B: Option B. C: Option C.)
+          // Using colon ensures TTS engines pronounce "A:" as "Ay" and never as "uh"
+          const letters = ['A', 'B', 'C', 'D'];
+          const optionsText = (q.options || [])
+            .map((opt: string, idx: number) => `${letters[idx] || ''}: ${opt}.`)
+            .join(' ');
           const optTTS = await generateTTSForText(optionsText);
           q.options_tts_url = optTTS.publicUrl;
           q.options_duration = optTTS.duration;
@@ -71,12 +75,12 @@ export async function POST(request: Request) {
           // Also add to tts_urls as fallback single-track audio
           tts_urls.push(qTTS.publicUrl);
 
-          // 3. Generate spoken answer audio (e.g. "A, Bamboo")
+          // 3. Generate spoken answer audio (e.g. "A: Bamboo")
           const optIdx = (q.options || []).findIndex(
             (o: string) => o.trim().toLowerCase() === (q.correct_answer || '').trim().toLowerCase()
           );
           const optLetter = optIdx >= 0 ? ['A', 'B', 'C', 'D'][optIdx] : 'A';
-          const answerText = `${optLetter}, ${q.correct_answer}.`;
+          const answerText = `${optLetter}: ${q.correct_answer}.`;
           try {
             const answerTTS = await generateTTSForText(answerText);
             q.answer_tts_url = answerTTS.publicUrl;

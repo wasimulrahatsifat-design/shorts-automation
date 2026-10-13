@@ -268,11 +268,11 @@ const QuizRound: React.FC<{
         ) : null}
       </div>
 
-      {/* 2. Static Question & Image Frame (Pushed down with 55px margin below title, No collision) */}
+      {/* 2. Static Question & Image Frame (Comfortable spacing below title, Zero collision) */}
       <div
         style={{
           position: 'absolute',
-          top: partTitle && partTitle.trim() ? 295 : 265,
+          top: partTitle && partTitle.trim() ? 320 : 290,
           left: 65,
           right: 65,
           backgroundColor: '#ffffff',
@@ -289,7 +289,7 @@ const QuizRound: React.FC<{
         <div
           style={{
             width: '100%',
-            height: 480,
+            height: 450,
             backgroundColor: '#090d16',
             display: 'flex',
             justifyContent: 'center',
@@ -369,7 +369,7 @@ const QuizRound: React.FC<{
         <div
           style={{
             width: '100%',
-            padding: '24px 32px 30px 32px',
+            padding: '20px 32px 24px 32px',
             backgroundColor: '#ffffff',
             display: 'flex',
             flexDirection: 'column',
@@ -380,10 +380,10 @@ const QuizRound: React.FC<{
         >
           <div
             style={{
-              fontSize: 38,
+              fontSize: 36,
               fontWeight: 800,
               color: '#1e293b',
-              lineHeight: 1.38,
+              lineHeight: 1.34,
               letterSpacing: -0.3,
               maxWidth: '100%',
               display: 'inline',
@@ -465,11 +465,11 @@ const QuizRound: React.FC<{
         </div>
       </div>
 
-      {/* 3. Options List (Positioned with 60px breathing space below question frame, Zero collision!) */}
+      {/* 3. Options List (Clear gap below question frame, Zero collision!) */}
       <div
         style={{
           position: 'absolute',
-          top: partTitle && partTitle.trim() ? 985 : 955,
+          top: partTitle && partTitle.trim() ? 1045 : 1015,
           left: 65,
           right: 65,
           display: 'flex',
@@ -536,11 +536,11 @@ const QuizRound: React.FC<{
         })}
       </div>
 
-      {/* 4. Timer Bar (Positioned with 60px margin directly below options, Clean & Visible) */}
+      {/* 4. Timer Bar (Lower down, Clean & Visible) */}
       <div
         style={{
           position: 'absolute',
-          top: partTitle && partTitle.trim() ? 1445 : 1415,
+          top: partTitle && partTitle.trim() ? 1480 : 1450,
           left: 80,
           right: 80,
           display: 'flex',
